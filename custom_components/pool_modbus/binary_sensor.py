@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -26,6 +27,8 @@ async def async_setup_entry(
 
 class PoolModbusBinarySensor(PoolModbusEntity, BinarySensorEntity):
     """An on/off state or alarm."""
+
+    entity_domain = Platform.BINARY_SENSOR
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)

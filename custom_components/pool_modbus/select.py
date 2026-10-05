@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import Enum
 
 from homeassistant.components.select import SelectEntity
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -26,6 +27,8 @@ async def async_setup_entry(
 
 class PoolModbusSelect(PoolModbusEntity, SelectEntity):
     """A setting picked from the choices its device type lists."""
+
+    entity_domain = Platform.SELECT
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)

@@ -36,7 +36,7 @@ from homeassistant.helpers import entity_registry as er
 from .conftest import fake_unit
 from .test_init import add, state
 
-CLIMATE = "climate.pool_thermostat_thermostat"
+CLIMATE = "climate.pool_thermostat"
 DELAYING = "switch.pool_thermostat_heating_delay"
 OFFSET = "number.pool_thermostat_temperature_offset"
 DELAY = "number.pool_thermostat_delay_setting"

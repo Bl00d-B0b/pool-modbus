@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from enum import Enum
+from typing import ClassVar
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
@@ -15,6 +17,7 @@ from homeassistant.const import (
 )
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 from modbus_connection import ModbusError
 
 from .coordinator import PoolModbusCoordinator, PoolModbusData
@@ -53,10 +56,22 @@ async def async_write(
     await data.async_refresh_all()
 
 
+def entity_id(domain: str, entry: ConfigEntry, name: str | None) -> str:
+    """The entity id to register: the device's name, then the entity's (none for a
+    device's main entity), e.g. ``sensor.dosing_pump_ph_level``.
+
+    Home Assistant puts the device's area in front of the entity ids it makes up;
+    an id the integration suggests is taken as it is (with ``_2`` added if it is in
+    use), so the area never becomes part of an id.
+    """
+    return f"{domain}.{slugify(f'{entry.title} {name}' if name else entry.title)}"
+
+
 class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
     """An entity showing one of a device type's values, updated with its scan group."""
 
     _attr_has_entity_name = True
+    entity_domain: ClassVar[str]
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data.coordinators[value.group])
@@ -66,6 +81,7 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
         entry = self.coordinator.config_entry
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{value.key}"
         self._attr_name = value.name
+        self.entity_id = entity_id(self.entity_domain, entry, value.name)
         self._attr_device_info = data.device_info
         if value.category == "setting":
             self._attr_entity_category = (

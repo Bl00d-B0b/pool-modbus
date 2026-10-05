@@ -9,7 +9,9 @@ from unittest.mock import patch
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PORT, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.pool_modbus.const import (
@@ -35,6 +37,14 @@ async def add(
     unit: FakeUnit,
     options: dict[str, Any] | None = None,
 ) -> MockConfigEntry:
+    entry = make_entry(hass, device_type, options)
+    await setup(hass, entry, unit)
+    return entry
+
+
+def make_entry(
+    hass: HomeAssistant, device_type: str, options: dict[str, Any] | None = None
+) -> MockConfigEntry:
     unit_id = UNIT_IDS[device_type]
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -50,10 +60,13 @@ async def add(
         options=options or {},
     )
     entry.add_to_hass(hass)
+    return entry
+
+
+async def setup(hass: HomeAssistant, entry: MockConfigEntry, unit: FakeUnit) -> None:
     with patch("custom_components.pool_modbus.async_get_unit", return_value=unit):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-    return entry
 
 
 def state(hass: HomeAssistant, entity_id: str) -> str:
@@ -70,13 +83,13 @@ async def test_pool_controller_entities(hass: HomeAssistant) -> None:
     assert state(hass, "switch.pool_controller_filtration") == "on"
     assert state(hass, "sensor.pool_controller_water_level") == "Normal"
     assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Friday 06:00"
-    assert state(hass, "sensor.pool_controller_clock").startswith("2026-10-05T")
+    assert state(hass, "sensor.pool_controller_rtc").startswith("2026-10-05T")
 
 
 async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
     entry = await add(hass, "t010", fake_unit("t010"))
 
-    thermostat = hass.states.get("climate.pool_thermostat_thermostat")
+    thermostat = hass.states.get("climate.pool_thermostat")
     assert thermostat.state == "off"
     assert thermostat.attributes["current_temperature"] == 19.0
     assert thermostat.attributes["heating_power"] == 0
@@ -104,18 +117,56 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "number.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
 
 
+async def test_entity_ids_leave_out_the_area(hass: HomeAssistant) -> None:
+    """Home Assistant puts a device's area in front of the ids it makes up; the
+    integration's ids are the device's name and the entity's only."""
+    garden = ar.async_get(hass).async_create("Garden")
+    for device_type in ("t010", "emec_ld"):
+        entry = make_entry(hass, device_type)
+        dr.async_get(hass).async_get_or_create(
+            config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.unique_id)}
+        )
+        device = dr.async_get(hass).async_get_device({(DOMAIN, entry.unique_id)})
+        dr.async_get(hass).async_update_device(device.id, area_id=garden.id)
+        await setup(hass, entry, fake_unit(device_type))
+
+    assert state(hass, "climate.pool_thermostat") == "off"
+    assert hass.states.get("climate.pool_thermostat").name == "Pool thermostat"
+    assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
+    assert hass.states.get("sensor.dosing_pump_ph_level").name == "Dosing pump pH Level"
+    assert not [e for e in hass.states.async_entity_ids() if "garden" in e]
+
+
+async def test_renamed_keys_keep_their_entities(hass: HomeAssistant) -> None:
+    entry = make_entry(hass, "pool_controller")
+    registry = er.async_get(hass)
+    old = registry.async_get_or_create(
+        "button",
+        DOMAIN,
+        f"{entry.unique_id}_sync_clock",
+        config_entry=entry,
+        suggested_object_id="controller_set_clock",
+    )
+    await setup(hass, entry, fake_unit("pool_controller"))
+
+    moved = registry.async_get(old.entity_id)
+    assert moved.unique_id == f"{entry.unique_id}_sync_rtc"
+    assert hass.states.get(old.entity_id) is not None
+    assert registry.async_get("button.pool_controller_sync_rtc") is None  # no duplicate
+
+
 async def test_entities_go_unavailable_when_the_device_stops_answering(
     hass: HomeAssistant,
 ) -> None:
     unit = fake_unit("t010")
     entry = await add(hass, "t010", unit)
-    assert state(hass, "climate.pool_thermostat_thermostat") == "off"
+    assert state(hass, "climate.pool_thermostat") == "off"
 
     unit.fail = TimeoutError("no answer")
     await entry.runtime_data.async_refresh_all()
     await hass.async_block_till_done()
 
-    assert state(hass, "climate.pool_thermostat_thermostat") == STATE_UNAVAILABLE
+    assert state(hass, "climate.pool_thermostat") == STATE_UNAVAILABLE
     assert state(hass, "number.pool_thermostat_temperature_offset") == STATE_UNAVAILABLE
 
 

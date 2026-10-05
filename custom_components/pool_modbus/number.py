@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -26,6 +27,8 @@ async def async_setup_entry(
 
 class PoolModbusNumber(PoolModbusEntity, NumberEntity):
     """A numeric setting within the range the device accepts."""
+
+    entity_domain = Platform.NUMBER
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)

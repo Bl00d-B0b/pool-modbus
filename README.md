@@ -94,6 +94,17 @@ also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
 read-only settings are diagnostic.
 
+Entity ids are the device's name followed by the entity's, as in
+`sensor.dosing_pump_ph_level` or `switch.pool_controller_filtration`; the
+thermostat, the T010's main entity, is named after the device alone
+(`climate.pool_thermostat`). The device's area is never part of an id, although
+Home Assistant puts it in front of the ids it makes up by default, so moving a
+device to another area changes no id. A second device of a type you already
+added is offered the first one's name with a number, e.g. "Pool thermostat 2",
+which gives its ids their own suffix (`climate.pool_thermostat_2`,
+`number.pool_thermostat_2_temperature_offset`). The clocks are named as in
+other integrations: RTC, and Sync RTC on the pool controller to set it.
+
 Before a write, the integration checks the value against the range the device
 accepts and reads the device again; a value the device already holds is not
 written. The T010 stores every write in its EEPROM, so this keeps automations
@@ -152,7 +163,7 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
   Backwash Day             Friday
   Backwash Time            06:00
   Saved Backwash Schedule  Friday 06:00
-  Clock                    2026-10-05 12:16:03
+  RTC                      2026-10-05 12:16:03
   Cover                    closed
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
@@ -177,7 +188,7 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Pulse Rate      0 p/min
   pH Probe Voltage   -27 mV
   Cl Probe Voltage   34 mV
-  Clock              2026-10-01 20:32:00
+  RTC                2026-10-01 20:32:00
   pH Dosing Mode     Proportional
   pH Max Value       10.0 pH
   pH Min Value       7.5 pH

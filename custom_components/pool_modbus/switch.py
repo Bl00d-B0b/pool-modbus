@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -28,6 +29,8 @@ async def async_setup_entry(
 
 class PoolModbusSwitch(PoolModbusEntity, SwitchEntity):
     """An on/off setting, written to the device."""
+
+    entity_domain = Platform.SWITCH
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)

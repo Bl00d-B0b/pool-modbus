@@ -400,8 +400,8 @@ VALUES = (
         icon="mdi:calendar-check",
     ),
     Value(
-        "clock",
-        "Clock",
+        "rtc",
+        "RTC",
         lambda d: d.clock,
         category="diagnostic",
         device_class="timestamp",
@@ -426,8 +426,8 @@ ACTIONS = (
         icon="mdi:restore-alert",
     ),
     Action(
-        "sync_clock",
-        "Set Clock",
+        "sync_rtc",
+        "Sync RTC",
         sync_clock,
         category="diagnostic",
         scan_group="slow",

@@ -71,12 +71,12 @@ Register 40025 (address 24):
 - **Backwash Day / Time:** the schedule as written (40018–40020).
 - **Saved Backwash Schedule:** what the controller keeps (40028–40030), e.g.
   "Friday 06:00", or "Off".
-- **Clock:** the clock from 40037–40040.
+- **RTC:** the clock from 40037–40040.
 
 Read groups in Home Assistant: the switches and status bits fast (40017 and
 40025, one request); the backwash schedule and the clock slow. Optional parts,
 both on by default: **backwash schedule** (Backwash Day, Backwash Time, Saved
-Backwash Schedule) and **clock** (Clock, Set Clock).
+Backwash Schedule) and **clock** (RTC, Sync RTC).
 
 ## Writing
 
@@ -117,5 +117,5 @@ read-modify-writes of 40017.
 | Start Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
 | Backwash Day, Backwash Time | Selects (time in 5 minute steps) | | `calendar-clock`, `clock-edit` | 40018–40020, 40017 bit 15 | Slow |
 | Saved Backwash Schedule | Sensor | | `calendar-check` | 40028–40030 | Slow |
-| Clock | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
-| Set Clock | Diagnostic button | | `home-clock` | 40033–40036 | Slow |
+| RTC | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
+| Sync RTC | Diagnostic button | | `home-clock` | 40033–40036 | Slow |

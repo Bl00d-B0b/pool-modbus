@@ -11,13 +11,13 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-from homeassistant.const import ATTR_TEMPERATURE, PRECISION_TENTHS, UnitOfTemperature
+from homeassistant.const import ATTR_TEMPERATURE, PRECISION_TENTHS, Platform, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator, PoolModbusData
-from .entity import async_write
+from .entity import async_write, entity_id
 from .library import Thermostat
 
 
@@ -50,7 +50,9 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
         self.thermostat = thermostat
         entry = self.coordinator.config_entry
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{thermostat.key}"
-        self._attr_name = thermostat.name
+        # The device's main entity: named, and its id made, after the device alone.
+        self._attr_name = None
+        self.entity_id = entity_id(Platform.CLIMATE, entry, None)
         self._attr_device_info = data.device_info
         self._attr_hvac_modes = [HVACMode(mode) for mode in thermostat.modes]
         self._attr_min_temp = thermostat.minimum

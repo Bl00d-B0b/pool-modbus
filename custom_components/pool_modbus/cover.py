@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.cover import CoverDeviceClass, CoverEntity, CoverEntityFeature
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator, PoolModbusData
-from .entity import async_write
+from .entity import async_write, entity_id
 from .library import Cover
 
 
@@ -38,6 +39,7 @@ class PoolModbusCover(CoordinatorEntity[PoolModbusCoordinator], CoverEntity):
         entry = self.coordinator.config_entry
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{cover.key}"
         self._attr_name = cover.name
+        self.entity_id = entity_id(Platform.COVER, entry, cover.name)
         self._attr_device_info = data.device_info
         if cover.device_class:
             self._attr_device_class = CoverDeviceClass(cover.device_class)

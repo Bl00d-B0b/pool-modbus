@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.light import ColorMode, LightEntity
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -25,6 +26,8 @@ async def async_setup_entry(
 
 class PoolModbusLight(PoolModbusEntity, LightEntity):
     """A light that is only on or off."""
+
+    entity_domain = Platform.LIGHT
 
     _attr_color_mode = ColorMode.ONOFF
     _attr_supported_color_modes = {ColorMode.ONOFF}

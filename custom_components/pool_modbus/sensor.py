@@ -7,6 +7,7 @@ from enum import Enum
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -31,6 +32,8 @@ async def async_setup_entry(
 
 class PoolModbusSensor(PoolModbusEntity, SensorEntity):
     """A measurement, state or setting shown as text or a number."""
+
+    entity_domain = Platform.SENSOR
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from modbus_connection import ModbusError
 
 from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID
@@ -30,6 +31,9 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
 ]
+
+RENAMED_KEYS = {"clock": "rtc", "sync_clock": "sync_rtc"}
+"""Value and action keys renamed to the names other integrations use (RTC, Sync RTC)."""
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> bool:
@@ -65,8 +69,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
         device_type, features, coordinators, device_info(entry, device_type, full)
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+    await er.async_migrate_entries(hass, entry.entry_id, _renamed_unique_id(entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+def _renamed_unique_id(entry: PoolModbusConfigEntry):
+    """Give entities of a renamed key their new unique id, keeping entity id and history."""
+    prefix = f"{entry.unique_id or entry.entry_id}_"
+
+    @callback
+    def migrate(registered: er.RegistryEntry) -> dict[str, str] | None:
+        key = registered.unique_id.removeprefix(prefix)
+        if key == registered.unique_id or key not in RENAMED_KEYS:
+            return None
+        return {"new_unique_id": prefix + RENAMED_KEYS[key]}
+
+    return migrate
 
 
 async def _async_reload(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> None:

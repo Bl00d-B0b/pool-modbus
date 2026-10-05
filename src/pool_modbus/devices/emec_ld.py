@@ -377,8 +377,8 @@ VALUES = (
         icon="mdi:sine-wave",
     ),
     Value(
-        "clock",
-        "Clock",
+        "rtc",
+        "RTC",
         lambda d: d.clock,
         category="diagnostic",
         device_class="timestamp",

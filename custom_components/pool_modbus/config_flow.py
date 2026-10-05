@@ -125,6 +125,24 @@ def _identity(data: Mapping[str, Any]) -> str | None:
         return None
 
 
+def suggested_title(hass: HomeAssistant, device_type: DeviceType) -> str:
+    """The name offered for a new device. For a type already added it is the first
+    device's name numbered from 2 ("Pool thermostat 2"), so the new device's entity
+    ids get a suffix of their own; otherwise the type's name."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    taken = {entry.title for entry in entries}
+    same_type = [
+        entry.title for entry in entries if entry.data.get(CONF_DEVICE_TYPE) == device_type.key
+    ]
+    base = same_type[0] if same_type else device_type.name
+    if base not in taken:
+        return base
+    number = 2
+    while f"{base} {number}" in taken:
+        number += 1
+    return f"{base} {number}"
+
+
 def connection_schema(
     device_type: DeviceType, transport: str, current: Mapping[str, Any], *, with_name: bool
 ) -> vol.Schema:
@@ -232,7 +250,8 @@ class PoolModbusConfigFlow(ConfigFlow, domain=DOMAIN):
             if not errors:
                 self._data, self._title = data, title
                 return await self.async_step_settings()
-        schema = connection_schema(device_type, transport, user_input or {}, with_name=True)
+        current = user_input or {CONF_NAME: suggested_title(self.hass, device_type)}
+        schema = connection_schema(device_type, transport, current, with_name=True)
         return self.async_show_form(
             step_id=step_id,
             data_schema=schema,
