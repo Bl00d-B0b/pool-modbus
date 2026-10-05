@@ -184,11 +184,11 @@ async def test_value_the_firmware_refuses(hass: HomeAssistant) -> None:
     assert unit.writes == []
 
 
-async def test_read_only_devices_get_no_controls(hass: HomeAssistant) -> None:
+async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert hass.states.async_entity_ids(SWITCH_DOMAIN) == []
-    assert hass.states.async_entity_ids(NUMBER_DOMAIN) == []
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
+    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 5  # its dosing settings
 
 
 async def test_entity_shows_the_new_value_behind_a_caching_gateway(

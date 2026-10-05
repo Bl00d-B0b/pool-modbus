@@ -85,3 +85,48 @@ the clock and the channel 1 dosing settings slow (40044–40078, one request).
 Optional parts, all on by default: **dosing settings** (pH Dosing Mode
 and the five settings above), **probe voltages** and **clock**. A part that is
 off is not read.
+
+## Writing
+
+Channel 1's dosing settings (40068–40078) are written one value per request
+with function 06, at the value's odd wire address. Each value is checked
+against its range first, not written when the controller already holds it, and
+confirmed by reading it back.
+
+| Setting | Register | Range |
+|---|---|---|
+| pH Max Value, pH Min Value (val1, val2) | 40068, 40070 | 0.00–14.00 pH |
+| pH Max Pulse Rate, pH Min Pulse Rate (perc1, perc2) | 40072, 40074 | 0–180 p/min |
+| pH Pulse Speed (wait) | 40076 | 0–99 min |
+| pH Dosing Mode | 40078 | ON/OFF, Proportional, Disabled |
+
+In proportional mode the controller doses from 0 p/min at one pH value to the
+set rate at the other, so setting one end's rate sets the other end's to 0:
+pH Max Pulse Rate writes perc1, then perc2 = 0; pH Min Pulse Rate writes perc2,
+then perc1 = 0. A working mode is entered by writing its settings in this
+order:
+
+| Mode | Writes, in order |
+|---|---|
+| ON/OFF | perc1 = 100, perc2 = 0, wait = 1, mode = 0 |
+| Proportional | wait = 0, mode = 1 |
+| Disabled | mode = 2 |
+
+Values the controller already holds are skipped. Channel 2's settings
+(40154–40164) are read but not written.
+
+## In Home Assistant
+
+| Entity | Type | Device class | Icon | Registers | Read |
+|---|---|---|---|---|---|
+| pH Level | Sensor | `ph` | `ph` | 40002–40004 | Medium |
+| Cl Level | Sensor, ppm | | `flask-outline` | 40006–40008 | Medium |
+| Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
+| pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
+| pH Pulse Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40030 | Medium |
+| pH Probe Voltage, Cl Probe Voltage | Sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
+| Clock | Diagnostic sensor | `timestamp` | `clock` | 40044–40048 | Slow |
+| pH Dosing Mode | Select | | `tune-variant` | 40078 | Slow |
+| pH Max Value, pH Min Value | Numbers (input box), 0.01 steps | `ph` | `ph` | 40068, 40070 | Slow |
+| pH Max Pulse Rate, pH Min Pulse Rate | Numbers (input box) | | `pulse` | 40072, 40074 | Slow |
+| pH Pulse Speed | Number (input box), minutes | `duration` | `timer-cog-outline` | 40076 | Slow |

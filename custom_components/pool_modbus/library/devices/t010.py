@@ -95,11 +95,11 @@ class T010(Component):
         return None if self.heating_power is None else self.heating_power > 0
 
     @property
-    def delay_remaining(self) -> int | None:
-        """Heating delay still to run, in seconds."""
+    def delay_remaining(self) -> str | None:
+        """Heating delay still to run, as mm:ss (the delay is set in whole minutes)."""
         if self.delay_minutes is None or self.delay_seconds is None:
             return None
-        return self.delay_minutes * 60 + self.delay_seconds
+        return f"{self.delay_minutes:02d}:{self.delay_seconds:02d}"
 
     @property
     def hvac_mode(self) -> str | None:
@@ -159,8 +159,6 @@ VALUES = (
         "delay_remaining",
         "Delay Remaining",
         lambda d: d.delay_remaining,
-        "s",
-        device_class="duration",
         icon="mdi:timer-sand",
     ),
     Value(

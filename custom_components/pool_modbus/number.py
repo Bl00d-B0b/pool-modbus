@@ -31,7 +31,8 @@ class PoolModbusNumber(PoolModbusEntity, NumberEntity):
         super().__init__(data, value)
         if value.device_class:
             self._attr_device_class = NumberDeviceClass(value.device_class)
-        if value.unit is not None:
+        # Home Assistant's pH device class has no unit.
+        if value.unit is not None and value.device_class != NumberDeviceClass.PH:
             self._attr_native_unit_of_measurement = UNITS.get(value.unit, value.unit)
         assert value.minimum is not None and value.maximum is not None and value.step is not None
         self._attr_native_min_value = value.minimum

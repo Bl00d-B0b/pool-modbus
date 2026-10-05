@@ -34,6 +34,16 @@ class FakeEmecPump:
         assert address % 2 == 1, f"a read from even address {address} returns byte-shifted data"
         return [self.registers.get(address + 2 * i, 0) for i in range(count)]
 
+    async def write_register(self, address: int, value: int) -> None:
+        """Function 06 at a value's odd wire address."""
+        self.requests.append(("write", address, value))
+        assert address % 2 == 1, f"a write to even address {address} lands between two values"
+        self.registers[address] = value
+
+    @property
+    def writes(self) -> list[tuple[int, int]]:
+        return [(address, value) for kind, address, value in self.requests if kind == "write"]
+
 
 class FakeUnit:
     """Answer like a device with standard addressing: N registers from a are a ... a+N-1.

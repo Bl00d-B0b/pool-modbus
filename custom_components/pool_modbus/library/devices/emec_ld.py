@@ -25,6 +25,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, enum, gauge, integer
 
 from .base import DeviceType, Feature, Value
+from .writing import write_if_changed
 
 # A pulse rate reads 0xFF for a single poll while it sits at zero.
 _PULSE_RATE_TRANSIENT = 0xFF
@@ -38,8 +39,10 @@ def wire_address(index: int) -> int:
 class EmecUnit:
     """A ``ModbusUnit`` view that maps EMEC value indices to odd wire addresses.
 
-    Coils use normal bit addressing and pass straight through. Writes are
-    refused until write support is implemented and tested.
+    Coils use normal bit addressing and pass straight through. A value is
+    written with function 06 at its odd wire address, one value per request;
+    writing several values in one request and writing coils are refused, as
+    they are untested.
     """
 
     def __init__(self, unit: ModbusUnit) -> None:
@@ -59,10 +62,10 @@ class EmecUnit:
         return await self._unit.read_coils(address, count)
 
     async def write_register(self, address: int, value: int) -> None:
-        raise NotImplementedError("writing to EMEC LD controllers is not supported yet")
+        await self._unit.write_register(wire_address(address), value)
 
     async def write_registers(self, address: int, values: list[int]) -> None:
-        raise NotImplementedError("writing to EMEC LD controllers is not supported yet")
+        raise NotImplementedError("EMEC LD controllers are written one value per request")
 
     async def write_coil(self, address: int, value: bool) -> None:
         raise NotImplementedError("writing to EMEC LD controllers is not supported yet")
@@ -96,6 +99,32 @@ class PulseMode(IntEnum):
     @property
     def label(self) -> str:
         return "ON/OFF" if self is PulseMode.ON_OFF else self.name.capitalize()
+
+
+PH_RANGE = (0.0, 14.0)
+RATE_RANGE = (0, 180)
+"""Pulses per minute; the controller's maximum."""
+SPEED_RANGE = (0, 99)
+"""Minutes between pulses in ON/OFF mode."""
+
+
+def _hundredths(low: float, high: float):
+    def check(value: Any) -> float:
+        rounded = round(float(value), 2)
+        if not low <= rounded <= high:
+            raise ValueError(f"{value} is outside {low} to {high}")
+        return rounded
+
+    return check
+
+
+def _whole(low: int, high: int):
+    def check(value: Any) -> int:
+        if value != int(value) or not low <= value <= high:
+            raise ValueError(f"{value} is not a whole number from {low} to {high}")
+        return int(value)
+
+    return check
 
 
 def high_byte(index: int) -> PackedBitsField:
@@ -136,13 +165,13 @@ class EmecLD(Component):
     probe_mv_ch1 = integer(27, unit="mV")  # 40056
     probe_mv_ch2 = integer(28, unit="mV")  # 40058
 
-    # Channel 1 proportional dosing, pulse output 1 (40068-40078).
-    ch1_pulse_val1 = gauge(33, 0.01)
-    ch1_pulse_val2 = gauge(34, 0.01)
-    ch1_pulse_perc1 = integer(35, unit="p/min")
-    ch1_pulse_perc2 = integer(36, unit="p/min")
-    ch1_pulse_wait = integer(37, unit="min")
-    ch1_pulse_mode = enum(38, PulseMode)
+    # Channel 1 dosing, pulse output 1 (40068-40078); written one value at a time.
+    ch1_pulse_val1 = gauge(33, 0.01, writable=_hundredths(*PH_RANGE))
+    ch1_pulse_val2 = gauge(34, 0.01, writable=_hundredths(*PH_RANGE))
+    ch1_pulse_perc1 = integer(35, unit="p/min", writable=_whole(*RATE_RANGE))
+    ch1_pulse_perc2 = integer(36, unit="p/min", writable=_whole(*RATE_RANGE))
+    ch1_pulse_wait = integer(37, unit="min", writable=_whole(*SPEED_RANGE))
+    ch1_pulse_mode = enum(38, PulseMode, writable=PulseMode)
 
     # Channel 2 proportional dosing (40154-40164).
     ch2_pulse_val1 = gauge(76, 0.01)
@@ -228,6 +257,45 @@ def _create(unit: ModbusUnit, variant: str | None) -> EmecLD:
     return EmecLD(EmecUnit(unit))
 
 
+# -- writes -------------------------------------------------------------------
+# The controller's proportional mode runs from 0 pulses per minute at one pH value
+# to the set rate at the other, so setting one end's rate sets the other end's to
+# 0, and a working mode is entered by writing its settings in a fixed order.
+
+_MODE_STEPS = {
+    PulseMode.ON_OFF: (
+        ("ch1_pulse_perc1", 100),
+        ("ch1_pulse_perc2", 0),
+        ("ch1_pulse_wait", 1),
+        ("ch1_pulse_mode", PulseMode.ON_OFF),
+    ),
+    PulseMode.PROPORTIONAL: (("ch1_pulse_wait", 0), ("ch1_pulse_mode", PulseMode.PROPORTIONAL)),
+    PulseMode.DISABLED: (("ch1_pulse_mode", PulseMode.DISABLED),),
+}
+
+
+async def set_ph_mode(device: EmecLD, label: str) -> None:
+    """Switch channel 1's pulse output to ON/OFF, Proportional or Disabled."""
+    mode = next((m for m in PulseMode if m.label == label), None)
+    if mode is None:
+        raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in PulseMode)}")
+    await device.async_update()
+    if device.ch1_pulse_mode is mode:
+        return
+    for field, value in _MODE_STEPS[mode]:
+        await write_if_changed(device, field, value)
+
+
+async def set_max_rate(device: EmecLD, rate: float) -> None:
+    await write_if_changed(device, "ch1_pulse_perc1", rate)
+    await write_if_changed(device, "ch1_pulse_perc2", 0)
+
+
+async def set_min_rate(device: EmecLD, rate: float) -> None:
+    await write_if_changed(device, "ch1_pulse_perc2", rate)
+    await write_if_changed(device, "ch1_pulse_perc1", 0)
+
+
 # Named as on an LDPHCL: channel 1 is pH, channel 2 is free chlorine.
 VALUES = (
     Value(
@@ -237,8 +305,16 @@ VALUES = (
         "pH",
         category="measurement",
         device_class="ph",
+        icon="mdi:ph",
     ),
-    Value("chlorine", "Cl Level", lambda d: d.ch2_value, "ppm", category="measurement"),
+    Value(
+        "chlorine",
+        "Cl Level",
+        lambda d: d.ch2_value,
+        "ppm",
+        category="measurement",
+        icon="mdi:flask-outline",
+    ),
     Value(
         "temperature",
         "Temperature",
@@ -246,15 +322,31 @@ VALUES = (
         "°C",
         category="measurement",
         device_class="temperature",
+        icon="mdi:thermometer",
     ),
-    Value("relay_ph", "pH Relay", lambda d: d.relay_ch1),
-    Value("relay_cl", "Cl Relay", lambda d: d.relay_ch2),
+    Value(
+        "relay_ph",
+        "pH Relay",
+        lambda d: d.relay_ch1,
+        device_class="enum",
+        options=("On", "Off", "Disabled"),
+        icons={"On": "mdi:pump", "Off": "mdi:pump-off", "Disabled": "mdi:pump-off"},
+    ),
+    Value(
+        "relay_cl",
+        "Cl Relay",
+        lambda d: d.relay_ch2,
+        device_class="enum",
+        options=("On", "Off", "Disabled"),
+        icons={"On": "mdi:pump", "Off": "mdi:pump-off", "Disabled": "mdi:pump-off"},
+    ),
     Value(
         "pulse_rate_ph",
         "pH Pulse Rate",
         lambda d: d.pulse_rate_ch1,
         "p/min",
         category="measurement",
+        icon="mdi:pulse",
     ),
     Value(
         "pulse_rate_cl",
@@ -262,6 +354,7 @@ VALUES = (
         lambda d: d.pulse_rate_ch2,
         "p/min",
         category="measurement",
+        icon="mdi:pulse",
     ),
     Value(
         "probe_ph",
@@ -271,6 +364,7 @@ VALUES = (
         category="measurement",
         device_class="voltage",
         feature="probe_voltages",
+        icon="mdi:sine-wave",
     ),
     Value(
         "probe_cl",
@@ -280,6 +374,7 @@ VALUES = (
         category="measurement",
         device_class="voltage",
         feature="probe_voltages",
+        icon="mdi:sine-wave",
     ),
     Value(
         "clock",
@@ -288,6 +383,7 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
+        icon="mdi:clock",
     ),
     Value(
         "ph_mode",
@@ -295,6 +391,10 @@ VALUES = (
         lambda d: d.ch1_pulse_mode,
         category="setting",
         feature="dosing_settings",
+        write=set_ph_mode,
+        options=tuple(mode.label for mode in PulseMode),
+        fields=("ch1_pulse_perc1", "ch1_pulse_perc2", "ch1_pulse_wait"),
+        icon="mdi:tune-variant",
     ),
     # The pump only uses each dosing setting in some working modes.
     Value(
@@ -306,6 +406,12 @@ VALUES = (
         category="setting",
         device_class="ph",
         feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "ch1_pulse_val1", v),
+        minimum=PH_RANGE[0],
+        maximum=PH_RANGE[1],
+        step=0.01,
+        number_mode="box",
+        icon="mdi:ph",
     ),
     Value(
         "ph_min",
@@ -316,6 +422,12 @@ VALUES = (
         category="setting",
         device_class="ph",
         feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "ch1_pulse_val2", v),
+        minimum=PH_RANGE[0],
+        maximum=PH_RANGE[1],
+        step=0.01,
+        number_mode="box",
+        icon="mdi:ph",
     ),
     Value(
         "ph_max_rate",
@@ -325,6 +437,13 @@ VALUES = (
         available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
         category="setting",
         feature="dosing_settings",
+        write=set_max_rate,
+        minimum=RATE_RANGE[0],
+        maximum=RATE_RANGE[1],
+        step=1,
+        number_mode="box",
+        fields=("ch1_pulse_perc2",),
+        icon="mdi:pulse",
     ),
     Value(
         "ph_min_rate",
@@ -334,6 +453,13 @@ VALUES = (
         available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
         category="setting",
         feature="dosing_settings",
+        write=set_min_rate,
+        minimum=RATE_RANGE[0],
+        maximum=RATE_RANGE[1],
+        step=1,
+        number_mode="box",
+        fields=("ch1_pulse_perc1",),
+        icon="mdi:pulse",
     ),
     Value(
         "ph_pulse_speed",
@@ -344,6 +470,12 @@ VALUES = (
         category="setting",
         device_class="duration",
         feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "ch1_pulse_wait", v),
+        minimum=SPEED_RANGE[0],
+        maximum=SPEED_RANGE[1],
+        step=1,
+        number_mode="box",
+        icon="mdi:timer-cog-outline",
     ),
 )
 

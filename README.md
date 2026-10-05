@@ -9,7 +9,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 
 > **Status: early development.** The Python library and the Home Assistant
 > integration read all three device types below and control the T010 and the
-> pool controller; writing to the EMEC LD comes next. See the [roadmap](#roadmap).
+> pool controller and the EMEC LD's dosing settings. See the [roadmap](#roadmap).
 
 ## Supported devices
 
@@ -17,7 +17,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 |---|---|---|---|
 | Pool controller (filtration, cover, light, water level) | `pool_controller` | Read and write | [register map](docs/devices/pool_controller.md) |
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
-| EMEC LD series pH/Cl controller | `emec_ld` | Read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
+| EMEC LD series pH/Cl controller | `emec_ld` | Read and write (channel 1 dosing settings) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
 Each device type also defines the values a user sees, with generic names (in
 Home Assistant they follow the device's name, e.g. "Pool thermostat Heating
@@ -92,8 +92,7 @@ Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches, numbers, selects or lights; the T010
 also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
-read-only settings are diagnostic. The EMEC LD is read-only for now; see the
-[roadmap](#roadmap).
+read-only settings are diagnostic.
 
 Before a write, the integration checks the value against the range the device
 accepts and reads the device again; a value the device already holds is not
@@ -156,7 +155,7 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
   Thermostat           off, 19.0 °C, target 20.0 °C
   Heating Delay        off
-  Delay Remaining      0 s
+  Delay Remaining      00:00
   Temperature Offset   0.0 °C
   Delay Setting        3 min
   Menu Mode            off
@@ -206,7 +205,7 @@ await connection.close()
    device, each with its own connection settings (done).
 3. Writes, one device at a time, each with tests: thermostat settings on the
    T010 (done), switches, commands and the backwash schedule on the pool
-   controller (done), then dosing settings on the EMEC LD.
+   controller (done), channel 1 dosing settings on the EMEC LD (done).
 4. EMEC LD alarm coils.
 
 ## Development
@@ -238,10 +237,11 @@ pytest tests_ha
 ## Safety
 
 This software talks to equipment that doses chemicals, heats water and moves a
-pool cover. It writes the T010's thermostat settings and the pool
-controller's switches and commands, which run the filter pump, the backwash,
-the cover and the light. Test changes carefully and keep each device's own
-safety settings in place. You are responsible for your installation.
+pool cover. It writes the T010's thermostat settings, the pool controller's
+switches and commands, which run the filter pump, the backwash, the cover and
+the light, and the EMEC LD's pH dosing settings. Test changes carefully and
+keep each device's own safety settings in place. You are responsible for your
+installation.
 
 This is an independent project, not affiliated with or endorsed by EMEC or
 any other manufacturer named here. Product names belong to their owners.

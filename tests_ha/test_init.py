@@ -99,9 +99,9 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
     assert state(hass, "sensor.dosing_pump_cl_level") == "0.46"
     assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
-    assert state(hass, "sensor.dosing_pump_ph_dosing_mode") == "Proportional"
+    assert state(hass, "select.dosing_pump_ph_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
-    assert state(hass, "sensor.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
+    assert state(hass, "number.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
 
 
 async def test_entities_go_unavailable_when_the_device_stops_answering(
@@ -169,7 +169,7 @@ async def test_an_older_entry_keeps_its_interval_as_the_slow_one(hass: HomeAssis
 async def test_optional_parts_are_on_by_default(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
-    assert state(hass, "sensor.dosing_pump_ph_dosing_mode") == "Proportional"
+    assert state(hass, "select.dosing_pump_ph_dosing_mode") == "Proportional"
 
 
 async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:

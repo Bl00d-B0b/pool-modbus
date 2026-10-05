@@ -102,10 +102,13 @@ async def test_invalid_clock_reads_as_none(make_pump, ldphcl_snapshot) -> None:
     assert device.clock is None
 
 
-async def test_writes_are_refused(make_pump, ldphcl_snapshot) -> None:
-    unit = EmecUnit(make_pump(ldphcl_snapshot))
+async def test_a_write_goes_to_the_odd_wire_address(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(ldphcl_snapshot)
+    unit = EmecUnit(pump)
+    await unit.write_register(33, 755)  # 40068, ch1 pulse1 val1
+    assert pump.writes == [(67, 755)]
     with pytest.raises(NotImplementedError):
-        await unit.write_register(33, 1000)
+        await unit.write_registers(33, [755, 750])  # one value per request
 
 
 @pytest.mark.parametrize(
@@ -142,3 +145,93 @@ async def test_dosing_settings_follow_the_working_mode(
     device = await read(make_pump(registers))
     texts = {v.name: value_text(v, device) for v in get_device_type("emec_ld").values}
     assert {name for name in available | unavailable if texts[name] == "unavailable"} == unavailable
+
+
+# -- writes --------------------------------------------------------------------
+# The snapshot: proportional mode, pH Max 10.00 (wire 67 = 1000), pH Min 7.50
+# (69 = 750), max rate 30 (71), min rate 0 (73), speed 0 (75), mode 1 (77).
+
+WRITE_VALUES = {value.key: value for value in get_device_type("emec_ld").values}
+
+
+@pytest.fixture(autouse=True)
+def quick_confirm(monkeypatch):
+    from pool_modbus.devices import writing
+
+    monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0)
+    monkeypatch.setattr(writing, "CONFIRM_TIMEOUT", 0.05)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "writes"),
+    [
+        ("ph_max", 9.9, [(67, 990)]),
+        ("ph_min", 7.55, [(69, 755)]),
+        ("ph_max_rate", 29, [(71, 29)]),  # min rate already 0
+        ("ph_min_rate", 5, [(73, 5), (71, 0)]),  # the other end goes to 0, as on the pump
+        ("ph_pulse_speed", 3, [(75, 3)]),
+    ],
+)
+async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, writes) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    await WRITE_VALUES[key].write(device, value)
+    assert pump.writes == writes
+
+
+async def test_a_setting_the_pump_holds_is_not_written(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    await WRITE_VALUES["ph_max"].write(device, 10.0)
+    await WRITE_VALUES["ph_max_rate"].write(device, 30)
+    await WRITE_VALUES["ph_mode"].write(device, "Proportional")
+    assert pump.writes == []
+
+
+@pytest.mark.parametrize(
+    ("label", "writes"),
+    [
+        # rate 100 (min rate already 0), one pulse a minute, then the mode
+        ("ON/OFF", [(71, 100), (75, 1), (77, 0)]),
+        ("Disabled", [(77, 2)]),
+    ],
+)
+async def test_mode_switch_writes_its_settings_in_order(
+    make_pump, ldphcl_snapshot, label, writes
+) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    await WRITE_VALUES["ph_mode"].write(device, label)
+    assert pump.writes == writes
+    assert device.ch1_pulse_mode.label == label
+
+
+async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
+    registers = dict(ldphcl_snapshot)
+    registers[75], registers[77] = 1, 0  # ON/OFF, one pulse a minute
+    pump = make_pump(registers)
+    device = await read(pump)
+    await WRITE_VALUES["ph_mode"].write(device, "Proportional")
+    assert pump.writes == [(75, 0), (77, 1)]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("ph_max", 14.01),
+        ("ph_min", -0.1),
+        ("ph_max_rate", 181),
+        ("ph_min_rate", 2.5),
+        ("ph_pulse_speed", 100),
+        ("ph_mode", "Turbo"),
+    ],
+)
+async def test_values_the_pump_does_not_take_are_refused(
+    make_pump, ldphcl_snapshot, key, value
+) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    pump.requests.clear()
+    with pytest.raises(ValueError):
+        await WRITE_VALUES[key].write(device, value)
+    assert pump.writes == []

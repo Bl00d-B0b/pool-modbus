@@ -39,7 +39,7 @@ async def test_decodes_snapshot(make_unit, t010_snapshot) -> None:
     assert device.temperature == pytest.approx(19.0)
     assert device.heating_power == 0
     assert device.heating is False
-    assert device.delay_remaining == 0
+    assert device.delay_remaining == "00:00"
     assert device.setpoint == pytest.approx(20.0)
     assert device.offset == pytest.approx(0.0)
     assert device.set_delay == 3
@@ -70,7 +70,7 @@ async def test_heating_and_delay(make_unit, t010_snapshot) -> None:
     registers[8] = 1 << 9  # delaying, heating not blocked
     device = await read(make_unit(registers))
     assert device.heating is True
-    assert device.delay_remaining == 150  # 2 min 30 s
+    assert device.delay_remaining == "02:30"
     assert device.delaying is True
     assert device.heating_enabled is True
 
@@ -308,6 +308,7 @@ def test_every_value_has_an_icon_and_a_device_class_where_one_fits() -> None:
         assert value.icon and value.icon.startswith("mdi:"), value.name
     classes = {value.key: value.device_class for value in get_device_type("t010").values}
     assert classes["offset"] == "temperature_delta"
-    assert classes["delay_remaining"] == "duration" and classes["set_delay"] == "duration"
+    assert classes["delay_remaining"] is None  # mm:ss text, like the device shows it
+    assert classes["set_delay"] == "duration"
     assert classes["delaying"] == "switch"
     assert THERMOSTAT.icon == "mdi:pool-thermometer"
