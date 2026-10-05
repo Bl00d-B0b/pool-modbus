@@ -5,7 +5,7 @@ from .connection import ConnectionConfig, Transport
 from .devices import DEVICE_TYPES, DeviceType, Thermostat, Value, Variant, get_device_type
 from .reader import DeviceResult, read_devices
 
-__version__ = "0.4.1"
+__version__ = "2026.10.0"
 
 __all__ = [
     "DEVICE_TYPES",

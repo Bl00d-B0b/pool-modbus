@@ -34,6 +34,13 @@ serial numbers or anything else private.
 
 Start read-only. Writes come later, one setting at a time, each with tests.
 
+## Versions
+
+Versions follow Home Assistant's calendar scheme, `YEAR.MONTH.PATCH`, for
+example `2026.10.0`. The version is set in `pyproject.toml`,
+`src/pool_modbus/__init__.py` and `custom_components/pool_modbus/manifest.json`,
+and changes only when a release is made.
+
 ## Code style
 
 ```bash
