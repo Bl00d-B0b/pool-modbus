@@ -54,6 +54,9 @@ async def test_settings_are_config_entities(hass: HomeAssistant) -> None:
     assert hass.states.get(SETPOINT).attributes["min"] == 5.0
     assert hass.states.get(SETPOINT).attributes["max"] == 40.0
     assert hass.states.get(OFFSET).attributes["min"] == -3.1
+    assert hass.states.get(OFFSET).attributes["mode"] == "box"
+    assert hass.states.get(DELAY).attributes["mode"] == "box"
+    assert hass.states.get(SETPOINT).attributes["mode"] == "auto"
 
 
 async def test_heating_switch(hass: HomeAssistant) -> None:

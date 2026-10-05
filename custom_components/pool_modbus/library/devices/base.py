@@ -43,6 +43,9 @@ class Value:
     step: float | None = None
     """The range and resolution a writable number accepts."""
 
+    number_mode: Literal["box", "slider"] | None = None
+    """How Home Assistant shows a writable number: an input box or a slider; None lets it pick."""
+
     @property
     def writable(self) -> bool:
         return self.write is not None

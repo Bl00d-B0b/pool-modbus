@@ -1,6 +1,6 @@
 {
   "domain": "pool_modbus",
-  "name": "Pool equipment (Modbus)",
+  "name": "Pool equipment",
   "codeowners": ["@Bl00d-B0b"],
   "config_flow": true,
   "dependencies": ["modbus"],

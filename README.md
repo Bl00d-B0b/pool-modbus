@@ -54,10 +54,10 @@ Requires Home Assistant **2026.9** or later, which shares Modbus connections
 between integrations. Tested with Home Assistant 2026.9.4.
 
 1. In HACS, add `https://github.com/Bl00d-B0b/pool-modbus` as a custom
-   repository of type *Integration*, install *Pool equipment (Modbus)* and
-   restart Home Assistant.
+   repository of type *Integration*, install *Pool equipment* and restart
+   Home Assistant.
 2. Go to **Settings → Devices & services → Add integration** and pick *Pool
-   equipment (Modbus)*.
+   equipment*.
 3. Choose the device type and connection (Modbus TCP, RTU over TCP, UDP or
    serial), then the address and Modbus ID. Before saving, the integration reads
    the device and checks it is the chosen type.
@@ -202,6 +202,10 @@ ruff check . && ruff format --check .
 The integration under `custom_components/pool_modbus/` carries a copy of the
 library in `library/`. After changing `src/pool_modbus`, run
 `python script/vendor_library.py`; a test fails while the copy is out of date.
+
+The integration's icon, in `custom_components/pool_modbus/brand/`, is drawn by
+`python script/make_icon.py` (needs Pillow). Home Assistant 2026.9 and later
+show it from there.
 
 The integration's own tests need Home Assistant, which runs on Linux and macOS
 but not Windows (CI runs them on every push):

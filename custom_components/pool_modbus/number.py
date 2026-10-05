@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from homeassistant.components.number import NumberDeviceClass, NumberEntity
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -37,6 +37,8 @@ class PoolModbusNumber(PoolModbusEntity, NumberEntity):
         self._attr_native_min_value = value.minimum
         self._attr_native_max_value = value.maximum
         self._attr_native_step = value.step
+        if value.number_mode is not None:
+            self._attr_mode = NumberMode(value.number_mode)
 
     @property
     def native_value(self) -> float | None:

@@ -195,6 +195,7 @@ VALUES = (
         minimum=OFFSET_RANGE[0],
         maximum=OFFSET_RANGE[1],
         step=0.1,
+        number_mode="box",
     ),
     Value(
         "set_delay",
@@ -207,6 +208,7 @@ VALUES = (
         minimum=DELAY_RANGE[0],
         maximum=DELAY_RANGE[1],
         step=1,
+        number_mode="box",
     ),
     Value("menu_mode", "Menu Mode", lambda d: d.menu_mode, binary=True, category="diagnostic"),
     Value(

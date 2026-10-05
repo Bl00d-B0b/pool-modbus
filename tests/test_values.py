@@ -45,3 +45,6 @@ def test_writable_numbers_declare_their_range(key: str) -> None:
         if value.writable and not value.binary:
             assert None not in (value.minimum, value.maximum, value.step), value.name
             assert value.minimum < value.maximum, value.name
+        assert value.number_mode in (None, "box", "slider"), value.name
+        if value.number_mode is not None:
+            assert value.writable and not value.binary, value.name

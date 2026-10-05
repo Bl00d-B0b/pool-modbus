@@ -1,4 +1,4 @@
-"""Constants for the Pool equipment (Modbus) integration."""
+"""Constants for the Pool equipment integration."""
 
 from typing import Final
 
