@@ -1,0 +1,16 @@
+{
+  "source": "T010 thermostat, software version 1.7, read 2026-10-05",
+  "note": "Holding registers keyed by address (standard addressing).",
+  "holding": {
+    "0": 5393,
+    "1": 190,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 200,
+    "6": 0,
+    "7": 3,
+    "8": 256,
+    "9": 40705
+  }
+}

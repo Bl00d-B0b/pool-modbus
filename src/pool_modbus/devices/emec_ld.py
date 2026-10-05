@@ -25,7 +25,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, enum, gauge, integer
 
-from .base import DeviceType
+from .base import DeviceType, Value
 
 # A pulse rate reads 0xFF for a single poll while it sits at zero.
 _PULSE_RATE_TRANSIENT = 0xFF
@@ -82,6 +82,10 @@ class OutputState(IntEnum):
     ON = 1
     OFF = 2
 
+    @property
+    def label(self) -> str:
+        return self.name.capitalize()
+
 
 class PulseMode(IntEnum):
     """Working mode of a pulse output (40078, 40150, 40164)."""
@@ -89,6 +93,10 @@ class PulseMode(IntEnum):
     ON_OFF = 0
     PROPORTIONAL = 1
     DISABLED = 2
+
+    @property
+    def label(self) -> str:
+        return "ON/OFF" if self is PulseMode.ON_OFF else self.name.capitalize()
 
 
 def high_byte(index: int) -> PackedBitsField:
@@ -220,12 +228,65 @@ def _create(unit: ModbusUnit, variant: str | None) -> EmecLD:
     return EmecLD(EmecUnit(unit))
 
 
+# Named as on an LDPHCL: channel 1 is pH, channel 2 is free chlorine.
+VALUES = (
+    Value("ph", "Pool pH Level", lambda d: d.ch1_value, "pH"),
+    Value("chlorine", "Pool Cl Level", lambda d: d.ch2_value, "ppm"),
+    Value("temperature", "Dispenser Temperature", lambda d: d.temperature, "°C"),
+    Value("relay_ph", "Out Relay pH", lambda d: d.relay_ch1),
+    Value("relay_cl", "Out Relay Cl", lambda d: d.relay_ch2),
+    Value("pulse_rate_ph", "pH Pump Pulse Rate", lambda d: d.pulse_rate_ch1, "p/min"),
+    Value("pulse_rate_cl", "Cl Pump Pulse Rate", lambda d: d.pulse_rate_ch2, "p/min"),
+    Value("probe_ph", "pH Probe Voltage", lambda d: d.probe_mv_ch1, "mV"),
+    Value("probe_cl", "Cl Probe Voltage", lambda d: d.probe_mv_ch2, "mV"),
+    Value("clock", "Dispenser Last Update", lambda d: d.clock),
+    Value("ph_mode", "Ch1 pH pulse1 Mode", lambda d: d.ch1_pulse_mode),
+    # The pump only uses each dosing setting in some working modes.
+    Value(
+        "ph_max",
+        "pH Max Value",
+        lambda d: d.ch1_pulse_val1,
+        "pH",
+        available=lambda d: d.ch1_pulse_mode is not PulseMode.DISABLED,
+    ),
+    Value(
+        "ph_min",
+        "pH Min Value",
+        lambda d: d.ch1_pulse_val2,
+        "pH",
+        available=lambda d: d.ch1_pulse_mode is not PulseMode.DISABLED,
+    ),
+    Value(
+        "ph_max_rate",
+        "Max Pulse Rate",
+        lambda d: d.ch1_pulse_perc1,
+        "p/min",
+        available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
+    ),
+    Value(
+        "ph_min_rate",
+        "Min Pulse Rate",
+        lambda d: d.ch1_pulse_perc2,
+        "p/min",
+        available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
+    ),
+    Value(
+        "ph_pulse_speed",
+        "Pulse Speed",
+        lambda d: d.ch1_pulse_wait,
+        "min",
+        available=lambda d: d.ch1_pulse_mode is PulseMode.ON_OFF,
+    ),
+)
+
+
 DEVICE_TYPE = DeviceType(
     key="emec_ld",
     name="EMEC LD series pH/Cl controller",
     manufacturer="EMEC",
     models=("LDPHCL",),
     create=_create,
+    values=VALUES,
     default_unit_id=1,
     message_spacing=0.1,  # the protocol notes ask for at least 100 ms between requests
 )

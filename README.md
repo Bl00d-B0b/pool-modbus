@@ -7,17 +7,21 @@ have no Home Assistant integration. This project models each device type as
 typed Python (registers, scaling, byte layout) and tests it against data
 recorded from real hardware, so the decoding is right once and stays right.
 
-> **Status: early development.** The Python library reads EMEC LD
-> controllers today. The Home Assistant integration is the next step; see the
+> **Status: early development.** The Python library reads all three device
+> types below. The Home Assistant integration is the next step; see the
 > [roadmap](#roadmap).
 
 ## Supported devices
 
 | Device type | Key | Status | Tested with |
 |---|---|---|---|
-| EMEC LD series pH/Cl controller | `emec_ld` | Library, read-only | LDPHCL, firmware 5.1.4 |
-| T010 pool thermostat | | Planned | |
-| Pool controller (filtration, cover, light, water level) | | Planned | |
+| Pool controller (filtration, cover, light, water level) | `pool_controller` | Library, read-only | [register map](docs/devices/pool_controller.md) |
+| T010 pool thermostat | `t010` | Library, read-only | Firmware 1.7, [register map](docs/devices/t010.md) |
+| EMEC LD series pH/Cl controller | `emec_ld` | Library, read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
+
+Each device type also defines the values a user sees, named like the matching
+Home Assistant entities, and the rules that go with them (for example, which
+dosing settings apply in which working mode).
 
 Want your device here? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -50,8 +54,77 @@ Read a device and print its values (read-only):
 ```bash
 pip install "pool-modbus[cli] @ git+https://github.com/Bl00d-B0b/pool-modbus"
 python -m pool_modbus types
-python -m pool_modbus read emec_ld --host 192.168.1.50 --unit 3
+python -m pool_modbus read t010 --host 192.168.1.50 --unit 2
 python -m pool_modbus read emec_ld --transport serial --serial-port /dev/ttyUSB0 --baudrate 38400 --unit 3
+```
+
+Add `--raw` to print every register field instead of the user-facing values.
+
+### Several devices
+
+List the devices in a TOML file, one `[[device]]` table each, with their own
+connection settings ([example](examples/devices.toml)), and read them all:
+
+```bash
+python -m pool_modbus read-config devices.toml
+```
+
+Devices with identical connection settings share one connection. A device that
+does not answer is reported as unavailable, and the others are still read.
+Output from a test installation, three devices behind one gateway:
+
+```text
+Pool controller (unit 1, tcp 192.168.1.50:502)
+  Pool Filtration          on
+  Block Filling Up         off
+  Filtration Mode          Filtering
+  Filter Pump Running      on
+  Water Level              Normal
+  Water Level Monitoring   on
+  Pool Filling Up          off
+  Pool Cover               closed
+  Pool Light               off
+  Room Flooding Alarm      off
+  Backwash Day             Friday
+  Backwash Time            06:00
+  Saved Backwash Schedule  Friday 06:00
+  Controller Last Update   2026-10-05 12:42:52
+
+T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
+  Pool Thermostat         off
+  Thermostat Action       off
+  Pool Temperature        19.0 °C
+  Pool Heating            off
+  Heating Mode            Off
+  Heating Power           0 %
+  Pool Delaying           off
+  Delay Time              00:00
+  Set Temperature         20.0 °C
+  Offset Temperature      0.0 °C
+  Set Delay Time          3 min
+  Menu Mode               off
+  Thermometer Alarm       off
+  Short Connection Alarm  off
+  EEPROM Alarm            off
+  Thermostat Firmware     1.7
+
+EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
+  Pool pH Level          7.52 pH
+  Pool Cl Level          0.46 ppm
+  Dispenser Temperature  19.2 °C
+  Out Relay pH           On
+  Out Relay Cl           On
+  pH Pump Pulse Rate     0 p/min
+  Cl Pump Pulse Rate     0 p/min
+  pH Probe Voltage       -29 mV
+  Cl Probe Voltage       34 mV
+  Dispenser Last Update  2026-10-05 12:44:00
+  Ch1 pH pulse1 Mode     Proportional
+  pH Max Value           10.0 pH
+  pH Min Value           7.5 pH
+  Max Pulse Rate         30 p/min
+  Min Pulse Rate         0 p/min
+  Pulse Speed            unavailable
 ```
 
 ## Python
@@ -71,11 +144,13 @@ await connection.close()
 
 ## Roadmap
 
-1. EMEC LD: register model and tests (done).
+1. Read-only models and tests for the pool controller, T010 and EMEC LD (done).
 2. Home Assistant custom integration, installable through HACS: one entry per
-   device, each with its own connection settings; read-only sensors first.
-3. EMEC LD: alarm coils, relay and alarm settings, then writes.
-4. T010 thermostat and pool controller device types.
+   device, each with its own connection settings; read-only entities first.
+3. Writes, one setting at a time, each with tests: switches and pulses on the
+   pool controller, thermostat settings on the T010, dosing settings on the
+   EMEC LD.
+4. EMEC LD alarm coils.
 
 ## Development
 
@@ -89,10 +164,10 @@ ruff check . && ruff format --check .
 
 ## Safety
 
-This software talks to equipment that doses chemicals. It is read-only for
-now. When write support arrives, test changes carefully and keep the
-controller's own safety settings in place. You are responsible for your
-installation.
+This software talks to equipment that doses chemicals, heats water and moves a
+pool cover. It is read-only for now. When write support arrives, test changes
+carefully and keep each device's own safety settings in place. You are
+responsible for your installation.
 
 This is an independent project, not affiliated with or endorsed by EMEC or
 any other manufacturer named here. Product names belong to their owners.

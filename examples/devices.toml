@@ -1,0 +1,24 @@
+# Devices to read with:  python -m pool_modbus read-config examples/devices.toml
+#
+# One [[device]] table per device. Every device has its own connection settings:
+#   transport    tcp (default), rtu_over_tcp, udp or serial
+#   host, port   for tcp, rtu_over_tcp and udp (port defaults to 502)
+#   serial_port, baudrate, bytesize, parity, stopbits   for serial
+#   unit         the device's Modbus ID
+#   name         optional label for the output
+# Devices with identical connection settings share one connection.
+
+[[device]]
+type = "pool_controller"
+host = "192.168.1.50"
+unit = 1
+
+[[device]]
+type = "t010"
+host = "192.168.1.50"
+unit = 2
+
+[[device]]
+type = "emec_ld"
+host = "192.168.1.50"
+unit = 3

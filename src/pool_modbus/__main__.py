@@ -1,7 +1,8 @@
-"""Read a device from the command line. Read-only.
+"""Read devices from the command line. Read-only.
 
 python -m pool_modbus types
-python -m pool_modbus read emec_ld --host 192.168.1.50 --unit 3
+python -m pool_modbus read t010 --host 192.168.1.50 --unit 2
+python -m pool_modbus read-config devices.toml
 """
 
 from __future__ import annotations
@@ -9,22 +10,23 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from enum import Enum
-from typing import Any
 
-from modbus_connection.model import Component
-
+from .config import DeviceEntry, load_devices, parse_device
 from .connection import ConnectionConfig, Transport
-from .devices import DEVICE_TYPES, get_device_type
+from .devices import DEVICE_TYPES
+from .reader import Connection, read_devices, render
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m pool_modbus", description="Read pool equipment over Modbus (read-only)."
     )
+    parser.add_argument("--timeout", type=float, default=3.0, help="seconds per request")
+    parser.add_argument("--raw", action="store_true", help="print every register field")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("types", help="list supported device types")
-    read = commands.add_parser("read", help="read one device and print its values")
+
+    read = commands.add_parser("read", help="read one device")
     read.add_argument("device_type", choices=sorted(DEVICE_TYPES))
     read.add_argument("--transport", choices=[t.value for t in Transport], default="tcp")
     read.add_argument("--host", help="gateway or device address (TCP, RTU over TCP, UDP)")
@@ -34,17 +36,31 @@ def _parser() -> argparse.ArgumentParser:
     read.add_argument("--parity", choices=["N", "E", "O"], default="N")
     read.add_argument("--stopbits", type=int, choices=[1, 2], default=1)
     read.add_argument("--unit", type=int, help="Modbus ID; defaults to the device type's")
-    read.add_argument("--timeout", type=float, default=3.0, help="seconds per request")
+
+    config = commands.add_parser("read-config", help="read every device in a TOML device list")
+    config.add_argument("path", help="TOML file with one [[device]] table per device")
     return parser
 
 
-def _values(device: Component) -> list[tuple[str, Any]]:
-    names = list(type(device).declared_fields)
-    names += [name for name, attr in vars(type(device)).items() if isinstance(attr, property)]
-    return [(name, getattr(device, name)) for name in names]
+def _entry_from_args(args: argparse.Namespace) -> DeviceEntry:
+    raw = {
+        "type": args.device_type,
+        "transport": args.transport,
+        "port": args.port,
+        "baudrate": args.baudrate,
+        "parity": args.parity,
+        "stopbits": args.stopbits,
+    }
+    if args.host:
+        raw["host"] = args.host
+    if args.serial_port:
+        raw["serial_port"] = args.serial_port
+    if args.unit is not None:
+        raw["unit"] = args.unit
+    return parse_device(raw)
 
 
-async def _read(args: argparse.Namespace) -> int:
+async def _run(entries: list[DeviceEntry], timeout: float, raw: bool) -> int:
     try:
         from modbus_connection.pymodbus import ModbusConnection
     except ImportError:
@@ -52,28 +68,15 @@ async def _read(args: argparse.Namespace) -> int:
             "the command-line tool needs a backend: pip install 'pool-modbus[cli]'", file=sys.stderr
         )
         return 2
-    device_type = get_device_type(args.device_type)
-    config = ConnectionConfig(
-        transport=Transport(args.transport),
-        host=args.host,
-        port=args.port,
-        serial_port=args.serial_port,
-        baudrate=args.baudrate,
-        parity=args.parity,
-        stopbits=args.stopbits,
-    )
-    unit_id = args.unit if args.unit is not None else device_type.default_unit_id
-    connection = ModbusConnection(config.params(), timeout=args.timeout)
-    try:
+
+    async def connect(config: ConnectionConfig) -> Connection:
+        connection = ModbusConnection(config.params(), timeout=timeout)
         await connection.connect()
-        device = device_type.model(connection.for_unit(unit_id))
-        await device.async_update()
-    finally:
-        await connection.close()
-    for name, value in _values(device):
-        shown = value.name if isinstance(value, Enum) else value
-        print(f"{name:22} {shown}")
-    return 0
+        return connection
+
+    results = await read_devices(entries, connect)
+    print(render(results, raw=raw), end="")
+    return 0 if all(result.device is not None for result in results) else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,9 +84,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "types":
         for device_type in DEVICE_TYPES.values():
             maker, tested = device_type.manufacturer, ", ".join(device_type.models)
-            print(f"{device_type.key:12} {device_type.name} ({maker}; tested: {tested})")
+            print(f"{device_type.key:16} {device_type.name} ({maker}; tested: {tested})")
         return 0
-    return asyncio.run(_read(args))
+    try:
+        entries = (
+            load_devices(args.path) if args.command == "read-config" else [_entry_from_args(args)]
+        )
+    except (ValueError, KeyError, OSError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 2
+    return asyncio.run(_run(entries, args.timeout, args.raw))
 
 
 if __name__ == "__main__":

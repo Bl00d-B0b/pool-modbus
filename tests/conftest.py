@@ -34,13 +34,57 @@ class FakeEmecPump:
         return [self.registers.get(address + 2 * i, 0) for i in range(count)]
 
 
+class FakeUnit:
+    """Answer like a device with standard addressing: N registers from a are a ... a+N-1.
+
+    ``fail`` makes every read raise that exception, like a device that does not answer.
+    """
+
+    def __init__(self, registers: dict[int, int], fail: Exception | None = None) -> None:
+        self.registers = registers
+        self.fail = fail
+        self.requests: list[tuple[str, int, int]] = []
+        self.message_spacing = 0.0
+        self.connected = True
+
+    def set_message_spacing(self, seconds: float) -> None:
+        self.message_spacing = seconds
+
+    async def read_holding_registers(self, address: int, count: int) -> list[int]:
+        self.requests.append(("holding", address, count))
+        if self.fail is not None:
+            raise self.fail
+        return [self.registers.get(address + i, 0) for i in range(count)]
+
+
+def load_snapshot(name: str) -> dict[int, int]:
+    data = json.loads((FIXTURES / f"{name}_snapshot.json").read_text(encoding="utf-8"))
+    return {int(address): value for address, value in data["holding"].items()}
+
+
 @pytest.fixture
 def ldphcl_snapshot() -> dict[int, int]:
     """Registers read from a real LDPHCL on 2026-10-01, keyed by wire address."""
-    data = json.loads((FIXTURES / "ldphcl_snapshot.json").read_text(encoding="utf-8"))
-    return {int(address): value for address, value in data["holding"].items()}
+    return load_snapshot("ldphcl")
+
+
+@pytest.fixture
+def t010_snapshot() -> dict[int, int]:
+    """Registers 0-9 read from a real T010 on 2026-10-05."""
+    return load_snapshot("t010")
+
+
+@pytest.fixture
+def controller_snapshot() -> dict[int, int]:
+    """Registers 16-39 read from the real pool controller on 2026-10-05."""
+    return load_snapshot("pool_controller")
 
 
 @pytest.fixture
 def make_pump() -> Callable[[dict[int, int]], FakeEmecPump]:
     return FakeEmecPump
+
+
+@pytest.fixture
+def make_unit() -> Callable[..., FakeUnit]:
+    return FakeUnit

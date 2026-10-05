@@ -4,9 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component
+
+
+@dataclass(frozen=True)
+class Value:
+    """One user-facing value of a device: what Home Assistant shows as an entity."""
+
+    key: str
+    name: str
+    get: Callable[[Any], Any]
+    """Read the value from an updated device model; None when unknown."""
+
+    unit: str | None = None
+    binary: bool = False
+    """An on/off value."""
+
+    available: Callable[[Any], bool] | None = None
+    """When the value applies, e.g. a setting only used in one working mode."""
 
 
 @dataclass(frozen=True)
@@ -29,6 +47,9 @@ class DeviceType:
 
     create: Callable[[ModbusUnit, str | None], Component]
     """Build the device model on a unit; the second argument is the variant key."""
+
+    values: tuple[Value, ...] = ()
+    """User-facing values, in display order."""
 
     variants: tuple[Variant, ...] = ()
     default_unit_id: int = 1

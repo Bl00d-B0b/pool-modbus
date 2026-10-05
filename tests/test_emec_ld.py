@@ -8,6 +8,7 @@ import pytest
 
 from pool_modbus.devices import get_device_type
 from pool_modbus.devices.emec_ld import EmecLD, EmecUnit, OutputState, PulseMode, wire_address
+from pool_modbus.reader import value_text
 
 
 async def read(pump) -> EmecLD:
@@ -105,3 +106,33 @@ async def test_writes_are_refused(make_pump, ldphcl_snapshot) -> None:
     unit = EmecUnit(make_pump(ldphcl_snapshot))
     with pytest.raises(NotImplementedError):
         await unit.write_register(33, 1000)
+
+
+@pytest.mark.parametrize(
+    ("mode", "available", "unavailable"),
+    [
+        (
+            PulseMode.PROPORTIONAL,
+            {"pH Max Value", "pH Min Value", "Max Pulse Rate", "Min Pulse Rate"},
+            {"Pulse Speed"},
+        ),
+        (
+            PulseMode.ON_OFF,
+            {"pH Max Value", "pH Min Value", "Pulse Speed"},
+            {"Max Pulse Rate", "Min Pulse Rate"},
+        ),
+        (
+            PulseMode.DISABLED,
+            set(),
+            {"pH Max Value", "pH Min Value", "Max Pulse Rate", "Min Pulse Rate", "Pulse Speed"},
+        ),
+    ],
+)
+async def test_dosing_settings_follow_the_working_mode(
+    make_pump, ldphcl_snapshot, mode, available: set[str], unavailable: set[str]
+) -> None:
+    registers = dict(ldphcl_snapshot)
+    registers[wire_address(38)] = mode  # 40078, channel 1 pulse output mode
+    device = await read(make_pump(registers))
+    texts = {v.name: value_text(v, device) for v in get_device_type("emec_ld").values}
+    assert {name for name in available | unavailable if texts[name] == "unavailable"} == unavailable

@@ -6,10 +6,14 @@ To add a device type, write a module in this package that defines a
 
 from __future__ import annotations
 
-from . import emec_ld
-from .base import DeviceType, Variant
+from . import emec_ld, pool_controller, t010
+from .base import DeviceType, Value, Variant
 
-_TYPES: tuple[DeviceType, ...] = (emec_ld.DEVICE_TYPE,)
+_TYPES: tuple[DeviceType, ...] = (
+    pool_controller.DEVICE_TYPE,
+    t010.DEVICE_TYPE,
+    emec_ld.DEVICE_TYPE,
+)
 
 DEVICE_TYPES: dict[str, DeviceType] = {device_type.key: device_type for device_type in _TYPES}
 
@@ -26,4 +30,4 @@ def get_device_type(key: str) -> DeviceType:
         raise KeyError(f"unknown device type {key!r}; known: {known}") from None
 
 
-__all__ = ["DEVICE_TYPES", "DeviceType", "Variant", "get_device_type"]
+__all__ = ["DEVICE_TYPES", "DeviceType", "Value", "Variant", "get_device_type"]
