@@ -17,7 +17,7 @@ from typing import Any
 
 from modbus_connection.model import Component
 
-from .base import SCAN_GROUPS, DeviceType, ScanGroup, Thermostat, Value
+from .base import SCAN_GROUPS, Action, Cover, DeviceType, ScanGroup, Thermostat, Value
 
 
 class _Recorder:
@@ -72,6 +72,15 @@ def thermostat_fields(model: type[Component], thermostat: Thermostat) -> frozens
     return frozenset(_fields_read(model, getters))
 
 
+def action_fields(model: type[Component], action: Action) -> frozenset[str]:
+    getters = [action.available] if action.available else []
+    return frozenset(_fields_read(model, getters) | set(action.fields))
+
+
+def cover_fields(model: type[Component], cover: Cover) -> frozenset[str]:
+    return frozenset(_fields_read(model, [cover.is_closed]) | set(cover.fields))
+
+
 def read_plan(
     device_type: DeviceType, model: type[Component], features: Iterable[str]
 ) -> dict[ScanGroup, frozenset[str]]:
@@ -80,9 +89,13 @@ def read_plan(
     plan: dict[ScanGroup, set[str]] = {group: set() for group in SCAN_GROUPS}
     for value in device_type.enabled_values(features):
         plan[value.group] |= value_fields(model, value)
+    for action in device_type.enabled_actions(features):
+        plan[action.scan_group] |= action_fields(model, action)
     if device_type.thermostat is not None:
         thermostat = device_type.thermostat
         plan[thermostat.scan_group] |= thermostat_fields(model, thermostat)
+    if device_type.cover is not None:
+        plan[device_type.cover.scan_group] |= cover_fields(model, device_type.cover)
     return {group: frozenset(fields) for group, fields in plan.items() if fields}
 
 

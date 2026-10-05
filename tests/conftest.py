@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -78,9 +79,18 @@ class FakeUnit:
             self._stale[address] = [self.registers.get(address, 0), self.stale_reads]
         self.registers[address] = value
 
+    async def write_registers(self, address: int, values: list[int]) -> None:
+        """Function 16."""
+        self.requests.append(("write_many", address, list(values)))
+        if self.fail is not None:
+            raise self.fail
+        for offset, value in enumerate(values):
+            self.registers[address + offset] = value
+
     @property
-    def writes(self) -> list[tuple[int, int]]:
-        return [(address, value) for kind, address, value in self.requests if kind == "write"]
+    def writes(self) -> list[tuple[int, Any]]:
+        """Every write in order: (address, value) for function 06, (address, [values]) for 16."""
+        return [(address, value) for kind, address, value in self.requests if kind != "holding"]
 
 
 def load_snapshot(name: str) -> dict[int, int]:

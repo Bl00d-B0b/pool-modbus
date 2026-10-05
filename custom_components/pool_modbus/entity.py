@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from enum import Enum
 
 from homeassistant.const import (
     PERCENTAGE,
@@ -35,9 +36,14 @@ async def async_write(
     what: str,
     write: Callable[[], Awaitable[None]],
 ) -> None:
-    """Write to the device, then read every group so all entities show the result."""
+    """Write to the device, then read every group so all entities show the result.
+
+    Writes to one device run one at a time, so two commands cannot interleave
+    their read-modify-writes of a shared register.
+    """
     try:
-        await write()
+        async with data.write_lock:
+            await write()
     except ValueError as err:
         raise ServiceValidationError(f"{what}: {err}") from err
     except (ModbusError, OSError, TimeoutError) as err:
@@ -70,9 +76,15 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
 
     @property
     def icon(self) -> str | None:
-        """The value's icon; an on/off value can have its own icon while off."""
+        """The value's icon: by its text for a value with a few states, or its own
+        icon while off for an on/off value."""
         value = self.device_value
-        if value.icon_off is not None and not value.get(self.coordinator.device):
+        raw = value.get(self.coordinator.device)
+        if value.icons is not None and raw is not None:
+            text = getattr(raw, "label", raw.name) if isinstance(raw, Enum) else str(raw)
+            if text in value.icons:
+                return value.icons[text]
+        if value.icon_off is not None and not raw:
             return value.icon_off
         return value.icon
 

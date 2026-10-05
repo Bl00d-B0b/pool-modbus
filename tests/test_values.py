@@ -42,7 +42,7 @@ def test_value_keys_and_names_are_unique(key: str) -> None:
 @pytest.mark.parametrize("key", sorted(DEVICE_TYPES))
 def test_writable_numbers_declare_their_range(key: str) -> None:
     for value in DEVICE_TYPES[key].values:
-        if value.writable and not value.binary:
+        if value.writable and not value.binary and value.options is None:
             assert None not in (value.minimum, value.maximum, value.step), value.name
             assert value.minimum < value.maximum, value.name
         assert value.number_mode in (None, "box", "slider"), value.name

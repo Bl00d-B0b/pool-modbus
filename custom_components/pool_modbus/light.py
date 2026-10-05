@@ -1,16 +1,15 @@
-"""Switches: every on/off value a device lets you change."""
+"""Lights: on/off values a device switches as a light."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.light import ColorMode, LightEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import PoolModbusConfigEntry, PoolModbusData
+from .coordinator import PoolModbusConfigEntry
 from .entity import PoolModbusEntity
-from .library import Value
 
 
 async def async_setup_entry(
@@ -20,19 +19,15 @@ async def async_setup_entry(
 ) -> None:
     data = entry.runtime_data
     async_add_entities(
-        PoolModbusSwitch(data, value)
-        for value in data.values
-        if value.binary and value.writable and not value.light
+        PoolModbusLight(data, value) for value in data.values if value.light and value.writable
     )
 
 
-class PoolModbusSwitch(PoolModbusEntity, SwitchEntity):
-    """An on/off setting, written to the device."""
+class PoolModbusLight(PoolModbusEntity, LightEntity):
+    """A light that is only on or off."""
 
-    def __init__(self, data: PoolModbusData, value: Value) -> None:
-        super().__init__(data, value)
-        if value.device_class:
-            self._attr_device_class = SwitchDeviceClass(value.device_class)
+    _attr_color_mode = ColorMode.ONOFF
+    _attr_supported_color_modes = {ColorMode.ONOFF}
 
     @property
     def is_on(self) -> bool | None:

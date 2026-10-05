@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
 
 from modbus_connection import ModbusUnit
@@ -76,6 +77,16 @@ class Value:
     icon_off: str | None = None
     """The icon of an on/off value while off; None keeps ``icon``."""
 
+    icons: Mapping[str, str] | None = None
+    """Icons by the value's text, for a value with a few states (e.g. a mode)."""
+
+    options: tuple[str, ...] | None = None
+    """The choices of a writable value picked from a list (Home Assistant shows a
+    select), or the states of a read-only value with device class "enum"."""
+
+    light: bool = False
+    """A writable on/off value that switches a light; Home Assistant shows a light."""
+
     @property
     def writable(self) -> bool:
         return self.write is not None
@@ -115,6 +126,47 @@ class Thermostat:
 
 
 @dataclass(frozen=True)
+class Action:
+    """Something a device does when told, with no state of its own; Home Assistant
+    shows a button."""
+
+    key: str
+    name: str
+    press: Callable[[Any, datetime], Awaitable[None]]
+    """Do it; the second argument is the local time now, for a device that is
+    told the time. Raises ``ValueError`` when it cannot be done now."""
+
+    available: Callable[[Any], bool] | None = None
+    category: Category = "status"
+    scan_group: ScanGroup = "fast"
+    """The group whose model it uses; that model reads ``fields``."""
+
+    fields: tuple[str, ...] = ()
+    """Model fields it writes or checks."""
+
+    feature: str | None = None
+    icon: str | None = None
+
+
+@dataclass(frozen=True)
+class Cover:
+    """A cover that opens and closes on command; Home Assistant shows a cover."""
+
+    key: str
+    name: str
+    is_closed: Callable[[Any], bool | None]
+    open: Callable[[Any], Awaitable[None]]
+    close: Callable[[Any], Awaitable[None]]
+    device_class: str | None = None
+    scan_group: ScanGroup = "fast"
+    fields: tuple[str, ...] = ()
+    """Model fields it writes, beyond those ``is_closed`` reads."""
+
+    icon: str | None = None
+    icon_closed: str | None = None
+
+
+@dataclass(frozen=True)
 class Feature:
     """An optional part of a device type, switched on or off per device.
 
@@ -151,6 +203,8 @@ class DeviceType:
     """User-facing values, in display order."""
 
     thermostat: Thermostat | None = None
+    cover: Cover | None = None
+    actions: tuple[Action, ...] = ()
 
     features: tuple[Feature, ...] = ()
     """Optional parts, each switched on or off per device."""
@@ -189,9 +243,15 @@ class DeviceType:
         on = set(features)
         return tuple(v for v in self.values if v.feature is None or v.feature in on)
 
+    def enabled_actions(self, features: Iterable[str]) -> tuple[Action, ...]:
+        on = set(features)
+        return tuple(a for a in self.actions if a.feature is None or a.feature in on)
+
     def scan_groups(self) -> tuple[ScanGroup, ...]:
         """The scan groups this type's values use, with every optional part on."""
         used = {value.group for value in self.values}
-        if self.thermostat is not None:
-            used.add(self.thermostat.scan_group)
+        used |= {action.scan_group for action in self.actions}
+        for spec in (self.thermostat, self.cover):
+            if spec is not None:
+                used.add(spec.scan_group)
         return tuple(group for group in SCAN_GROUPS if group in used)

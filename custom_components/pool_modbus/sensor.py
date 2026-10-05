@@ -41,6 +41,8 @@ class PoolModbusSensor(PoolModbusEntity, SensorEntity):
             self._attr_native_unit_of_measurement = UNITS.get(value.unit, value.unit)
         if value.category == "measurement":
             self._attr_state_class = SensorStateClass.MEASUREMENT
+        if device_class is SensorDeviceClass.ENUM and value.options:
+            self._attr_options = list(value.options)
 
     @property
     def native_value(self) -> Any:

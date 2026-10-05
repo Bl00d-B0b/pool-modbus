@@ -76,10 +76,46 @@ Register 40025 (address 24):
 Read groups in Home Assistant: the switches and status bits fast (40017 and
 40025, one request); the backwash schedule and the clock slow. Optional parts,
 both on by default: **backwash schedule** (Backwash Day, Backwash Time, Saved
-Backwash Schedule) and **clock** (Controller Last Update).
+Backwash Schedule) and **clock** (Controller Last Update, Controller Sync RTC).
 
-## Writing (not supported yet)
+## Writing
 
-Switch bits must be written as a read-modify-write of 40017, so the other bits
-are kept. Pulses set a bit, wait, and clear it: the cover and backwash need
-more than 3 s, the light, alarm reset and schedule save about 0.5 s.
+- **Switches** (40017 bits 0 and 5) are written as a read-modify-write of 40017,
+  so the other bits are kept, and confirmed by reading them back.
+- **Commands** are pulses: the bit is set, held, then cleared, each with a
+  read-modify-write. Open and close the cover (bits 2 and 3) and the manual
+  backwash (bit 1) are held 3.1 s, as the controller needs more than 3 s; the
+  light toggle (bit 4), alarm reset (bit 14) and schedule save (bit 15) 0.5 s.
+- **The cover** is only told to move when it is not already open or closed as
+  asked; it takes a while to move, so the status is not waited for.
+- **The light** toggles, so it is only pulsed when it is not already as asked,
+  then confirmed in 40025 bit 11. The controller switches it only while the
+  cover is open, so the integration refuses it while the cover is closed.
+- **The backwash schedule**: the day is written to 40018 (one day bit, or 0 for
+  off), the time to 40019–40020 in one request, then the save pulse; the write
+  is confirmed when the controller shows it in 40028–40030.
+- **The clock** is set by writing the local time to 40033–40036 in one request
+  (second/weekday with 1 = Monday, hour/minute, month/day, century/year) and
+  confirmed in 40037–40040.
+
+Writes to one device run one at a time, so two commands cannot interleave their
+read-modify-writes of 40017.
+
+## In Home Assistant
+
+| Entity | Type | Device class | Icon | Registers | Read |
+|---|---|---|---|---|---|
+| Pool Filtration | Switch | `switch` | `air-filter` / `water-pump-off` | 40017 bit 0 | Fast |
+| Block Filling Up | Switch | `switch` | `water-off` / `water-plus-outline` | 40017 bit 5 | Fast |
+| Pool Cover | Cover: open/close | `gate` | `pool` / `gate` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
+| Pool Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
+| Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `air-filter`, `water-pump-off` | 40025 bits 1–2 | Fast |
+| Water Level | Sensor: Off, Minimum, Low, Normal, Maximum, Unknown | `enum` | `water-off`, `water-alert`, `water-minus`, `water-check`, `water-plus` | 40025 bits 6–10 | Fast |
+| Filter Pump Running, Pool Filling Up | Binary sensors | `running` | `water-pump`, `water-plus` | 40025 bits 0, 4 | Fast |
+| Room Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
+| Water Level Monitoring | Binary sensor | | `water` / `water-off` | 40025 bit 10 | Fast |
+| Manual Filter Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
+| Backwash Day, Backwash Time | Selects (time in 5 minute steps) | | `calendar-clock`, `clock-edit` | 40018–40020, 40017 bit 15 | Slow |
+| Saved Backwash Schedule | Sensor | | `calendar-check` | 40028–40030 | Slow |
+| Controller Last Update | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
+| Controller Sync RTC | Diagnostic button | | `home-clock` | 40033–40036 | Slow |

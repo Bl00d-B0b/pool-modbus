@@ -140,6 +140,11 @@ def _value_rows(device_type: DeviceType, device: Component) -> list[tuple[str, s
     thermostat = device_type.thermostat
     if thermostat is not None:
         rows.insert(0, (thermostat.name, thermostat_text(thermostat, device)))
+    cover = device_type.cover
+    if cover is not None:
+        closed = cover.is_closed(device)
+        text = "unknown" if closed is None else ("closed" if closed else "open")
+        rows.append((cover.name, text))
     return rows
 
 

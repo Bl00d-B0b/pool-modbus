@@ -67,7 +67,7 @@ async def test_pool_controller_entities(hass: HomeAssistant) -> None:
 
     assert state(hass, "sensor.pool_controller_filtration_mode") == "Filtering"
     assert state(hass, "binary_sensor.pool_controller_filter_pump_running") == "on"
-    assert state(hass, "binary_sensor.pool_controller_pool_filtration") == "on"
+    assert state(hass, "switch.pool_controller_pool_filtration") == "on"
     assert state(hass, "sensor.pool_controller_water_level") == "Normal"
     assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Friday 06:00"
     assert state(hass, "sensor.pool_controller_controller_last_update").startswith("2026-10-05T")

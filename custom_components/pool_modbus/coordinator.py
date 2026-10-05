@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any
 
@@ -28,7 +29,7 @@ from .const import (
     FEATURE_PREFIX,
     SCAN_INTERVAL_KEYS,
 )
-from .library import ConnectionConfig, DeviceType, ScanGroup, Transport, Value
+from .library import Action, ConnectionConfig, DeviceType, ScanGroup, Transport, Value
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,10 +100,15 @@ class PoolModbusData:
     features: frozenset[str]
     coordinators: dict[ScanGroup, PoolModbusCoordinator]
     device_info: DeviceInfo
+    write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     @property
     def values(self) -> tuple[Value, ...]:
         return self.device_type.enabled_values(self.features)
+
+    @property
+    def actions(self) -> tuple[Action, ...]:
+        return self.device_type.enabled_actions(self.features)
 
     async def async_refresh_all(self) -> None:
         """Read every group now, e.g. after a write."""

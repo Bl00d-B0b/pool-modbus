@@ -25,7 +25,10 @@ serial numbers or anything else private.
    - its `values`: each is read fast, medium or slow by its category (status,
      measurement, setting or diagnostic) unless `scan_group` says otherwise,
      and may belong to an optional part (`feature`, listed in `features`) that
-     users switch on or off;
+     users switch on or off. A writable value becomes a switch, number, select
+     (`options`) or light (`light=True`); give each an `icon` and a
+     `device_class` where one fits;
+   - for a thermostat, cover or commands: `thermostat`, `cover` and `actions`;
    - an adapter like `EmecUnit` only if the device addresses registers in a
      non-standard way.
 2. List it in `_TYPES` in `src/pool_modbus/devices/__init__.py`.

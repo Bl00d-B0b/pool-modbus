@@ -14,6 +14,34 @@ CONFIRM_INTERVAL = 0.25
 """Seconds between reads while waiting."""
 
 
+async def pulse(device: Component, field: str, seconds: float) -> None:
+    """Set a command bit, hold it for ``seconds``, then clear it.
+
+    Both writes read the register back and merge, so the register's other bits
+    stay as they are. The bit is cleared even if the wait is interrupted.
+    """
+    await device.write(field, True)
+    try:
+        await asyncio.sleep(seconds)
+    finally:
+        await device.write(field, False)
+
+
+async def wait_until(device: Component, done: Any, what: str, timeout: float | None = None) -> None:
+    """Read the device until ``done(device)`` is true; ``TimeoutError`` naming ``what``
+    if it is not within ``timeout`` seconds (``CONFIRM_TIMEOUT`` by default)."""
+    loop = asyncio.get_running_loop()
+    limit = CONFIRM_TIMEOUT if timeout is None else timeout
+    deadline = loop.time() + limit
+    while True:
+        await device.async_update()
+        if done(device):
+            return
+        if loop.time() >= deadline:
+            raise TimeoutError(f"{what} {limit:g} s later")
+        await asyncio.sleep(CONFIRM_INTERVAL)
+
+
 async def write_if_changed(device: Component, field: str, value: Any) -> None:
     """Write ``field`` unless the device already holds ``value``, then confirm it.
 

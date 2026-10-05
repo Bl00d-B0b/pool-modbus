@@ -69,8 +69,44 @@ class FakeUnit:
             self._stale[address] = [self.registers.get(address, 0), self.stale_reads]
         self.registers[address] = value
 
+    async def write_registers(self, address: int, values: list[int]) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.writes.append((address, list(values)))
+        for offset, value in enumerate(values):
+            self.registers[address + offset] = value
+
+
+class FakeController(FakeUnit):
+    """The pool controller's reactions: the save pulse keeps the written backwash
+    schedule, the light pulse toggles the light while the cover is open, and the
+    clock registers 32-35 set the clock read at 36-39."""
+
+    async def write_register(self, address: int, value: int) -> None:
+        before = self.registers.get(address, 0)
+        await super().write_register(address, value)
+        if address != 16:
+            return
+        rising = value & ~before
+        if rising & 1 << 15:
+            for written, saved in ((17, 27), (18, 28), (19, 29)):
+                self.registers[saved] = self.registers.get(written, 0)
+        if rising & 1 << 4 and self.registers[24] & 1 << 3:
+            self.registers[24] ^= 1 << 11
+
+    async def write_registers(self, address: int, values: list[int]) -> None:
+        await super().write_registers(address, values)
+        if address == 32:
+            sec_wd, hour_min, month_day, cent_year = values
+            self.registers[36] = (sec_wd >> 8) << 8 | hour_min & 0xFF
+            self.registers[37] = (hour_min >> 8) << 8 | sec_wd & 0xFF
+            self.registers[38] = (month_day & 0xFF) << 8 | month_day >> 8
+            self.registers[39] = (cent_year & 0xFF) << 8 | cent_year >> 8
+
 
 def fake_unit(device_type: str) -> FakeUnit:
     if device_type == "emec_ld":
         return FakeUnit(snapshot("ldphcl"), odd_step=True)
+    if device_type == "pool_controller":
+        return FakeController(snapshot(device_type))
     return FakeUnit(snapshot(device_type))
