@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -12,6 +12,18 @@ from modbus_connection.model import Component
 type Category = Literal["measurement", "status", "setting", "diagnostic"]
 """What kind of value it is: a measured quantity, a state, a device setting, or
 information about the device itself."""
+
+type ScanGroup = Literal["fast", "medium", "slow"]
+"""How often a value is read. Each group has its own interval, set per device."""
+
+SCAN_GROUPS: tuple[ScanGroup, ...] = ("fast", "medium", "slow")
+
+_DEFAULT_GROUP: dict[Category, ScanGroup] = {
+    "status": "fast",
+    "measurement": "medium",
+    "setting": "slow",
+    "diagnostic": "slow",
+}
 
 
 @dataclass(frozen=True)
@@ -46,12 +58,25 @@ class Value:
     number_mode: Literal["box", "slider"] | None = None
     """How Home Assistant shows a writable number: an input box or a slider; None lets it pick."""
 
-    enabled_default: bool = True
-    """False for a value most installations do not need: Home Assistant adds it disabled."""
+    scan_group: ScanGroup | None = None
+    """How often it is read; None picks by category: status fast, measurements
+    medium, settings and diagnostics slow."""
+
+    feature: str | None = None
+    """The optional part of the device type it belongs to; None for a value every
+    device has."""
+
+    fields: tuple[str, ...] = ()
+    """Model fields to read for this value beyond those ``get`` and ``available``
+    use, e.g. a field only written."""
 
     @property
     def writable(self) -> bool:
         return self.write is not None
+
+    @property
+    def group(self) -> ScanGroup:
+        return self.scan_group or _DEFAULT_GROUP[self.category]
 
 
 @dataclass(frozen=True)
@@ -74,6 +99,19 @@ class Thermostat:
     maximum: float
     step: float
     modes: tuple[str, ...] = ("heat", "off")
+    scan_group: ScanGroup = "fast"
+
+
+@dataclass(frozen=True)
+class Feature:
+    """An optional part of a device type, switched on or off per device.
+
+    Its values only exist while it is on, and their registers are only read then.
+    """
+
+    key: str
+    name: str
+    default: bool = True
 
 
 @dataclass(frozen=True)
@@ -102,6 +140,9 @@ class DeviceType:
 
     thermostat: Thermostat | None = None
 
+    features: tuple[Feature, ...] = ()
+    """Optional parts, each switched on or off per device."""
+
     identify: Callable[[Any], bool] | None = None
     """Whether an updated model looks like this device type; None accepts any."""
 
@@ -127,3 +168,11 @@ class DeviceType:
     def matches(self, device: Component) -> bool:
         """Whether an updated model is really this device type."""
         return True if self.identify is None else bool(self.identify(device))
+
+    def default_features(self) -> frozenset[str]:
+        return frozenset(f.key for f in self.features if f.default)
+
+    def enabled_values(self, features: Iterable[str]) -> tuple[Value, ...]:
+        """The values that exist with ``features`` switched on."""
+        on = set(features)
+        return tuple(v for v in self.values if v.feature is None or v.feature in on)

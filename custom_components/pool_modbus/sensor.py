@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator
+from .coordinator import PoolModbusConfigEntry, PoolModbusData
 from .entity import UNITS, PoolModbusEntity
 from .library import Value
 
@@ -21,10 +21,10 @@ async def async_setup_entry(
     entry: PoolModbusConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
+    data = entry.runtime_data
     async_add_entities(
-        PoolModbusSensor(coordinator, value)
-        for value in coordinator.device_type.values
+        PoolModbusSensor(data, value)
+        for value in data.values
         if not value.binary and not value.writable
     )
 
@@ -32,8 +32,8 @@ async def async_setup_entry(
 class PoolModbusSensor(PoolModbusEntity, SensorEntity):
     """A measurement, state or setting shown as text or a number."""
 
-    def __init__(self, coordinator: PoolModbusCoordinator, value: Value) -> None:
-        super().__init__(coordinator, value)
+    def __init__(self, data: PoolModbusData, value: Value) -> None:
+        super().__init__(data, value)
         device_class = SensorDeviceClass(value.device_class) if value.device_class else None
         self._attr_device_class = device_class
         # Home Assistant's pH device class has no unit.

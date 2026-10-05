@@ -294,6 +294,6 @@ async def test_two_flag_writes_in_a_row_keep_each_other(
 
 def test_values_the_thermostat_covers_are_not_repeated() -> None:
     assert not {"setpoint", "heating_enabled", "heating"} & set(VALUES)
-    assert (
-        VALUES["heating_power"].enabled_default is False
-    )  # adds to the thermostat in PWM mode only
+    # Heating power adds to the thermostat in PWM mode only: an optional part, off by default.
+    assert VALUES["heating_power"].feature == "heating_power"
+    assert "heating_power" not in get_device_type("t010").default_features()

@@ -59,17 +59,38 @@ between integrations. Tested with Home Assistant 2026.9.4.
 2. Go to **Settings → Devices & services → Add integration** and pick *Pool
    equipment*.
 3. Choose the device type and connection (Modbus TCP, RTU over TCP, UDP or
-   serial), then the address and Modbus ID. Before saving, the integration reads
-   the device and checks it is the chosen type.
-4. Repeat for each device. Devices behind the same gateway share one
+   serial), then the address and Modbus ID. The integration reads the device
+   and checks it is the chosen type.
+4. Choose how often it is read and which of its optional parts to read (below).
+5. Repeat for each device. Devices behind the same gateway share one
    connection.
+
+**Configure** on a device changes all of it later: the connection, the
+address and Modbus ID, the intervals and the optional parts. A new address is
+read before it is saved, and the device keeps its entities.
+
+Values are read in three groups, each on its own interval, as in
+solax-modbus. Each group reads only the registers of its own values.
+
+| Group | Default | Values |
+|---|---|---|
+| Fast | 5 s | States and alarms, the thermostat |
+| Medium | 10 s | Measurements: temperatures, pH, chlorine, pulse rates |
+| Slow | 15 s | Settings, clocks, firmware |
+
+Optional parts, each a checkbox:
+
+| Device | Optional part | Default |
+|---|---|---|
+| Pool controller | Backwash schedule, clock | On |
+| T010 | Heating power (PWM output) | Off |
+| EMEC LD | Dosing settings (pH channel), probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches and numbers, and the T010 also gets a
 thermostat (climate) entity. Settings you can change are configuration
 entities; read-only settings are diagnostic. For now only the T010 is
-writable; see the [roadmap](#roadmap). Each device's read interval can be
-changed under the integration's options (default 15 s).
+writable; see the [roadmap](#roadmap).
 
 Before a write, the integration checks the value against the range the device
 accepts and reads the device again; a value the device already holds is not

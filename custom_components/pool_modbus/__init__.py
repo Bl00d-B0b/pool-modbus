@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 from homeassistant.components.modbus import async_get_unit
-from homeassistant.const import CONF_SCAN_INTERVAL, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryError, HomeAssistantError
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
+from modbus_connection import ModbusError
 
-from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID, DEFAULT_SCAN_INTERVAL
-from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator, connection_config
-from .library import get_device_type
+from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID
+from .coordinator import (
+    PoolModbusConfigEntry,
+    PoolModbusCoordinator,
+    PoolModbusData,
+    connection_config,
+    device_info,
+    enabled_features,
+)
+from .library import get_device_type, group_model, read_plan
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -23,7 +29,11 @@ PLATFORMS: list[Platform] = [
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> bool:
-    """Set up one device; devices with identical connection settings share a connection."""
+    """Set up one device; devices with identical connection settings share a connection.
+
+    Each scan group (fast, medium, slow) gets a model narrowed to the registers its
+    entities use, read on that group's interval.
+    """
     device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
     try:
         unit = async_get_unit(
@@ -32,15 +42,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
     except HomeAssistantError as err:
         raise ConfigEntryError(str(err)) from err
 
-    coordinator = PoolModbusCoordinator(
-        hass,
-        entry,
-        device_type,
-        device_type.model(unit),
-        timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)),
+    # One full read: it identifies the firmware for the device info.
+    full = device_type.model(unit)
+    try:
+        await full.async_update()
+    except (ModbusError, OSError, TimeoutError) as err:
+        raise ConfigEntryNotReady(f"{entry.title} did not answer: {err}") from err
+
+    features = enabled_features(device_type, entry.options)
+    coordinators = {}
+    for group, fields in read_plan(device_type, type(full), features).items():
+        model = group_model(device_type, unit, fields)
+        coordinator = PoolModbusCoordinator(hass, entry, model, group)
+        await coordinator.async_config_entry_first_refresh()
+        coordinators[group] = coordinator
+
+    entry.runtime_data = PoolModbusData(
+        device_type, features, coordinators, device_info(entry, device_type, full)
     )
-    await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

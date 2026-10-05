@@ -11,7 +11,7 @@ from datetime import datetime
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, integer
 
-from .base import DeviceType, Value
+from .base import DeviceType, Feature, Value
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 
@@ -181,13 +181,26 @@ VALUES = (
         binary=True,
         device_class="moisture",
     ),
-    Value("backwash_day", "Backwash Day", lambda d: d.backwash_day_written, category="setting"),
-    Value("backwash_time", "Backwash Time", lambda d: d.backwash_time_written, category="setting"),
+    Value(
+        "backwash_day",
+        "Backwash Day",
+        lambda d: d.backwash_day_written,
+        category="setting",
+        feature="backwash_schedule",
+    ),
+    Value(
+        "backwash_time",
+        "Backwash Time",
+        lambda d: d.backwash_time_written,
+        category="setting",
+        feature="backwash_schedule",
+    ),
     Value(
         "saved_backwash_schedule",
         "Saved Backwash Schedule",
         lambda d: d.saved_backwash_schedule,
         category="setting",
+        feature="backwash_schedule",
     ),
     Value(
         "clock",
@@ -195,6 +208,7 @@ VALUES = (
         lambda d: d.clock,
         category="diagnostic",
         device_class="timestamp",
+        feature="clock",
     ),
 )
 
@@ -210,5 +224,9 @@ DEVICE_TYPE = DeviceType(
     models=("Pool controller",),
     create=_create,
     values=VALUES,
+    features=(
+        Feature("backwash_schedule", "Backwash schedule"),
+        Feature("clock", "Clock"),
+    ),
     default_unit_id=1,
 )

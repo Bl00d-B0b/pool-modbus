@@ -6,7 +6,7 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass, Bina
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator
+from .coordinator import PoolModbusConfigEntry, PoolModbusData
 from .entity import PoolModbusEntity
 from .library import Value
 
@@ -16,10 +16,10 @@ async def async_setup_entry(
     entry: PoolModbusConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
+    data = entry.runtime_data
     async_add_entities(
-        PoolModbusBinarySensor(coordinator, value)
-        for value in coordinator.device_type.values
+        PoolModbusBinarySensor(data, value)
+        for value in data.values
         if value.binary and not value.writable
     )
 
@@ -27,8 +27,8 @@ async def async_setup_entry(
 class PoolModbusBinarySensor(PoolModbusEntity, BinarySensorEntity):
     """An on/off state or alarm."""
 
-    def __init__(self, coordinator: PoolModbusCoordinator, value: Value) -> None:
-        super().__init__(coordinator, value)
+    def __init__(self, data: PoolModbusData, value: Value) -> None:
+        super().__init__(data, value)
         if value.device_class:
             self._attr_device_class = BinarySensorDeviceClass(value.device_class)
 

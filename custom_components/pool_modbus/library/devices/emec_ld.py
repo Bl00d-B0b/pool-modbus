@@ -24,7 +24,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, enum, gauge, integer
 
-from .base import DeviceType, Value
+from .base import DeviceType, Feature, Value
 
 # A pulse rate reads 0xFF for a single poll while it sits at zero.
 _PULSE_RATE_TRANSIENT = 0xFF
@@ -270,6 +270,7 @@ VALUES = (
         "mV",
         category="measurement",
         device_class="voltage",
+        feature="probe_voltages",
     ),
     Value(
         "probe_cl",
@@ -278,6 +279,7 @@ VALUES = (
         "mV",
         category="measurement",
         device_class="voltage",
+        feature="probe_voltages",
     ),
     Value(
         "clock",
@@ -285,8 +287,15 @@ VALUES = (
         lambda d: d.clock,
         category="diagnostic",
         device_class="timestamp",
+        feature="clock",
     ),
-    Value("ph_mode", "Ch1 pH pulse1 Mode", lambda d: d.ch1_pulse_mode, category="setting"),
+    Value(
+        "ph_mode",
+        "Ch1 pH pulse1 Mode",
+        lambda d: d.ch1_pulse_mode,
+        category="setting",
+        feature="dosing_settings",
+    ),
     # The pump only uses each dosing setting in some working modes.
     Value(
         "ph_max",
@@ -296,6 +305,7 @@ VALUES = (
         available=lambda d: d.ch1_pulse_mode is not PulseMode.DISABLED,
         category="setting",
         device_class="ph",
+        feature="dosing_settings",
     ),
     Value(
         "ph_min",
@@ -305,6 +315,7 @@ VALUES = (
         available=lambda d: d.ch1_pulse_mode is not PulseMode.DISABLED,
         category="setting",
         device_class="ph",
+        feature="dosing_settings",
     ),
     Value(
         "ph_max_rate",
@@ -313,6 +324,7 @@ VALUES = (
         "p/min",
         available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
         category="setting",
+        feature="dosing_settings",
     ),
     Value(
         "ph_min_rate",
@@ -321,6 +333,7 @@ VALUES = (
         "p/min",
         available=lambda d: d.ch1_pulse_mode is PulseMode.PROPORTIONAL,
         category="setting",
+        feature="dosing_settings",
     ),
     Value(
         "ph_pulse_speed",
@@ -330,6 +343,7 @@ VALUES = (
         available=lambda d: d.ch1_pulse_mode is PulseMode.ON_OFF,
         category="setting",
         device_class="duration",
+        feature="dosing_settings",
     ),
 )
 
@@ -348,6 +362,11 @@ DEVICE_TYPE = DeviceType(
     models=("LDPHCL",),
     create=_create,
     values=VALUES,
+    features=(
+        Feature("dosing_settings", "Dosing settings (pH channel)"),
+        Feature("probe_voltages", "Probe voltages"),
+        Feature("clock", "Clock"),
+    ),
     identify=_identify,
     default_unit_id=1,
     message_spacing=0.1,  # the protocol notes ask for at least 100 ms between requests

@@ -11,7 +11,7 @@
       },
       "network": {
         "title": "Network connection",
-        "description": "The address of the device, or of the Modbus gateway it is wired to.",
+        "description": "The address of the device, or of the Modbus gateway it is wired to. The device is read before the settings are saved.",
         "data": {
           "name": "Name",
           "host": "Host",
@@ -21,7 +21,7 @@
       },
       "serial": {
         "title": "Serial connection",
-        "description": "The RS-485 or RS-232 adapter on this machine and the device's line settings.",
+        "description": "The RS-485 or RS-232 adapter on this machine and the device's line settings. The device is read before the settings are saved.",
         "data": {
           "name": "Name",
           "serial_port": "Serial port",
@@ -30,6 +30,26 @@
           "parity": "Parity",
           "stopbits": "Stop bits",
           "unit_id": "Modbus ID"
+        }
+      },
+      "settings": {
+        "title": "Reading",
+        "description": "How often each group of values is read, and which optional parts of the device to read. Configure changes these later.",
+        "data": {
+          "scan_interval_fast": "Fast polling interval (s)",
+          "scan_interval_medium": "Medium polling interval (s)",
+          "scan_interval": "Slow polling interval (s)",
+          "read_heating_power": "Read heating power (PWM output)",
+          "read_dosing_settings": "Read dosing settings (pH channel)",
+          "read_probe_voltages": "Read probe voltages",
+          "read_clock": "Read the clock",
+          "read_backwash_schedule": "Read the backwash schedule"
+        },
+        "data_description": {
+          "scan_interval_fast": "States and alarms.",
+          "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
+          "scan_interval": "Settings, clocks and firmware.",
+          "read_heating_power": "Only adds to the thermostat when the T010 runs in PWM mode."
         }
       }
     },
@@ -45,11 +65,53 @@
   "options": {
     "step": {
       "init": {
-        "title": "Polling",
+        "title": "Configure",
+        "description": "The connection, how often each group of values is read, and which optional parts to read. The next step asks for the address.",
         "data": {
-          "scan_interval": "Seconds between reads"
+          "transport": "Connection",
+          "scan_interval_fast": "Fast polling interval (s)",
+          "scan_interval_medium": "Medium polling interval (s)",
+          "scan_interval": "Slow polling interval (s)",
+          "read_heating_power": "Read heating power (PWM output)",
+          "read_dosing_settings": "Read dosing settings (pH channel)",
+          "read_probe_voltages": "Read probe voltages",
+          "read_clock": "Read the clock",
+          "read_backwash_schedule": "Read the backwash schedule"
+        },
+        "data_description": {
+          "scan_interval_fast": "States and alarms.",
+          "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
+          "scan_interval": "Settings, clocks and firmware.",
+          "read_heating_power": "Only adds to the thermostat when the T010 runs in PWM mode."
+        }
+      },
+      "network": {
+        "title": "Network connection",
+        "description": "The address of the device, or of the Modbus gateway it is wired to. The device is read before the settings are saved.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus ID"
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "description": "The RS-485 or RS-232 adapter on this machine and the device's line settings. The device is read before the settings are saved.",
+        "data": {
+          "serial_port": "Serial port",
+          "baudrate": "Baud rate",
+          "bytesize": "Data bits",
+          "parity": "Parity",
+          "stopbits": "Stop bits",
+          "unit_id": "Modbus ID"
         }
       }
+    },
+    "error": {
+      "cannot_connect": "The device did not answer: {error}",
+      "wrong_device": "A device answered, but it does not look like the selected device type. Check the Modbus ID.",
+      "invalid_settings": "The connection settings are not valid: {error}",
+      "already_configured": "Another entry already reaches this device."
     }
   },
   "selector": {

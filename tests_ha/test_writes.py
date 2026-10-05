@@ -64,9 +64,8 @@ async def test_the_thermostat_is_not_repeated_by_other_entities(hass: HomeAssist
         "sensor.pool_thermostat_heating_mode",
     ):
         assert registry.async_get(entity_id) is None, entity_id
-    # Heating power adds to the thermostat in PWM mode only, so it starts disabled.
-    assert registry.async_get(POWER).disabled_by == er.RegistryEntryDisabler.INTEGRATION
-    assert hass.states.get(POWER) is None
+    # Heating power adds to the thermostat in PWM mode only: an optional part, off by default.
+    assert registry.async_get(POWER) is None
 
 
 async def test_delaying_switch_keeps_the_heating_bit(hass: HomeAssistant) -> None:

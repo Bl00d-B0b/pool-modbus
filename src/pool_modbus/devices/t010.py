@@ -19,7 +19,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, gauge, integer
 
-from .base import DeviceType, Thermostat, Value
+from .base import DeviceType, Feature, Thermostat, Value
 from .writing import write_if_changed
 
 INSTRUMENT_TYPE = 0x15
@@ -154,7 +154,8 @@ VALUES = (
         lambda d: d.heating_power,
         "%",
         category="measurement",
-        enabled_default=False,
+        scan_group="fast",
+        feature="heating_power",
     ),
     Value(
         "delaying",
@@ -232,6 +233,7 @@ DEVICE_TYPE = DeviceType(
     create=_create,
     values=VALUES,
     thermostat=THERMOSTAT,
+    features=(Feature("heating_power", "Heating power (PWM output)", default=False),),
     identify=lambda d: d.is_t010,
     software_version=lambda d: d.software_version,
     default_unit_id=1,  # factory default in the firmware

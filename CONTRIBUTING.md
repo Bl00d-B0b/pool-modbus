@@ -22,6 +22,10 @@ serial numbers or anything else private.
      the right type (`integer`, `gauge`, `bits`, `enum`, `coil`, ...);
    - a `DEVICE_TYPE = DeviceType(...)` with the manufacturer, tested models,
      default Modbus ID and any bus requirements such as `message_spacing`;
+   - its `values`: each is read fast, medium or slow by its category (status,
+     measurement, setting or diagnostic) unless `scan_group` says otherwise,
+     and may belong to an optional part (`feature`, listed in `features`) that
+     users switch on or off;
    - an adapter like `EmecUnit` only if the device addresses registers in a
      non-standard way.
 2. List it in `_TYPES` in `src/pool_modbus/devices/__init__.py`.

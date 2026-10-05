@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator
+from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator, PoolModbusData
 from .entity import async_write
 from .library import Thermostat
 
@@ -26,10 +26,10 @@ async def async_setup_entry(
     entry: PoolModbusConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
-    thermostat = coordinator.device_type.thermostat
+    data = entry.runtime_data
+    thermostat = data.device_type.thermostat
     if thermostat is not None:
-        async_add_entities([PoolModbusClimate(coordinator, thermostat)])
+        async_add_entities([PoolModbusClimate(data, thermostat)])
 
 
 class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity):
@@ -44,13 +44,14 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
         | ClimateEntityFeature.TURN_OFF
     )
 
-    def __init__(self, coordinator: PoolModbusCoordinator, thermostat: Thermostat) -> None:
-        super().__init__(coordinator)
+    def __init__(self, data: PoolModbusData, thermostat: Thermostat) -> None:
+        super().__init__(data.coordinators[thermostat.scan_group])
+        self.data = data
         self.thermostat = thermostat
-        entry = coordinator.config_entry
+        entry = self.coordinator.config_entry
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{thermostat.key}"
         self._attr_name = thermostat.name
-        self._attr_device_info = coordinator.device_info
+        self._attr_device_info = data.device_info
         self._attr_hvac_modes = [HVACMode(mode) for mode in thermostat.modes]
         self._attr_min_temp = thermostat.minimum
         self._attr_max_temp = thermostat.maximum
@@ -80,6 +81,7 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             device = self.coordinator.device
             await async_write(
+                self.data,
                 self.coordinator,
                 "the target temperature",
                 lambda: self.thermostat.set_target_temperature(device, temperature),
@@ -88,6 +90,7 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         device = self.coordinator.device
         await async_write(
+            self.data,
             self.coordinator,
             "the thermostat mode",
             lambda: self.thermostat.set_mode(device, str(hvac_mode)),

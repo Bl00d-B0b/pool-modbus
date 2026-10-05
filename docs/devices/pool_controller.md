@@ -73,6 +73,11 @@ Register 40025 (address 24):
   "Friday 06:00", or "Off".
 - **Controller Last Update:** the clock from 40037–40040.
 
+Read groups in Home Assistant: the switches and status bits fast (40017 and
+40025, one request); the backwash schedule and the clock slow. Optional parts,
+both on by default: **backwash schedule** (Backwash Day, Backwash Time, Saved
+Backwash Schedule) and **clock** (Controller Last Update).
+
 ## Writing (not supported yet)
 
 Switch bits must be written as a read-modify-write of 40017, so the other bits

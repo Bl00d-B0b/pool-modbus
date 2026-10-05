@@ -78,3 +78,10 @@ controller:
   disabled.
 - **Max Pulse Rate / Min Pulse Rate** (perc1, perc2): proportional mode only.
 - **Pulse Speed** (wait): ON/OFF mode only.
+
+Read groups in Home Assistant: the relay states fast (40024, 40032); readings,
+temperature, pulse rates and probe voltages medium (40002–40058, one request);
+the clock and the channel 1 dosing settings slow (40044–40078, one request).
+Optional parts, all on by default: **dosing settings** (Ch1 pH pulse1 Mode
+and the five settings above), **probe voltages** and **clock**. A part that is
+off is not read.

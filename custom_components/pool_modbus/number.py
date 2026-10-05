@@ -6,7 +6,7 @@ from homeassistant.components.number import NumberDeviceClass, NumberEntity, Num
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator
+from .coordinator import PoolModbusConfigEntry, PoolModbusData
 from .entity import UNITS, PoolModbusEntity
 from .library import Value
 
@@ -16,10 +16,10 @@ async def async_setup_entry(
     entry: PoolModbusConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
+    data = entry.runtime_data
     async_add_entities(
-        PoolModbusNumber(coordinator, value)
-        for value in coordinator.device_type.values
+        PoolModbusNumber(data, value)
+        for value in data.values
         if value.writable and not value.binary
     )
 
@@ -27,8 +27,8 @@ async def async_setup_entry(
 class PoolModbusNumber(PoolModbusEntity, NumberEntity):
     """A numeric setting within the range the device accepts."""
 
-    def __init__(self, coordinator: PoolModbusCoordinator, value: Value) -> None:
-        super().__init__(coordinator, value)
+    def __init__(self, data: PoolModbusData, value: Value) -> None:
+        super().__init__(data, value)
         if value.device_class:
             self._attr_device_class = NumberDeviceClass(value.device_class)
         if value.unit is not None:

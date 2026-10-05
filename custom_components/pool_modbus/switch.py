@@ -17,11 +17,9 @@ async def async_setup_entry(
     entry: PoolModbusConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    coordinator = entry.runtime_data
+    data = entry.runtime_data
     async_add_entities(
-        PoolModbusSwitch(coordinator, value)
-        for value in coordinator.device_type.values
-        if value.binary and value.writable
+        PoolModbusSwitch(data, value) for value in data.values if value.binary and value.writable
     )
 
 

@@ -1,4 +1,4 @@
-"""Adding a device through the UI."""
+"""Adding a device through the UI, and changing it with Configure."""
 
 from __future__ import annotations
 
@@ -55,6 +55,18 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
     assert result["step_id"] == "network"
 
     result = await finish(hass, result["flow_id"], fake_unit("t010"), NETWORK)
+    assert result["step_id"] == "settings"  # the device answered; now how to read it
+    result = await finish(
+        hass,
+        result["flow_id"],
+        fake_unit("t010"),
+        {
+            "scan_interval_fast": 5,
+            "scan_interval_medium": 10,
+            "scan_interval": 15,
+            "read_heating_power": False,
+        },
+    )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Pool thermostat"
@@ -66,6 +78,12 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         CONF_UNIT_ID: 2,
     }
     assert result["result"].unique_id == "t010_tcp_192.168.1.50:502_2"
+    assert result["options"] == {
+        "scan_interval_fast": 5,
+        "scan_interval_medium": 10,
+        "scan_interval": 15,
+        "read_heating_power": False,
+    }
 
 
 async def test_serial_asks_for_line_settings(hass: HomeAssistant) -> None:
@@ -86,8 +104,12 @@ async def test_serial_asks_for_line_settings(hass: HomeAssistant) -> None:
             CONF_UNIT_ID: 3,
         },
     )
+    assert result["step_id"] == "settings"
+    result = await finish(hass, result["flow_id"], fake_unit("emec_ld"), {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["baudrate"] == "38400"
+    # The pump's optional parts are all on unless switched off.
+    assert result["options"]["read_dosing_settings"] is True
 
 
 async def test_wrong_device_type(hass: HomeAssistant) -> None:
@@ -119,3 +141,102 @@ async def test_same_device_twice(hass: HomeAssistant) -> None:
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+# -- Configure ------------------------------------------------------------------
+
+DATA = {
+    CONF_DEVICE_TYPE: "t010",
+    CONF_TRANSPORT: "tcp",
+    CONF_HOST: "192.168.1.50",
+    CONF_PORT: 502,
+    CONF_UNIT_ID: 2,
+}
+SETTINGS = {
+    CONF_TRANSPORT: "tcp",
+    "scan_interval_fast": 3,
+    "scan_interval_medium": 10,
+    "scan_interval": 30,
+    "read_heating_power": True,
+}
+
+
+def existing(hass: HomeAssistant, data: dict | None = None) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pool thermostat",
+        unique_id="t010_tcp_192.168.1.50:502_2",
+        data=data or DATA,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+async def configure(hass: HomeAssistant, entry: MockConfigEntry, unit: FakeUnit, address: dict):
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["step_id"] == "init"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], SETTINGS)
+    assert result["step_id"] == "network"
+    with patch(
+        "custom_components.pool_modbus.config_flow.async_get_temporary_unit",
+        temporary_unit(unit),
+    ):
+        return await hass.config_entries.options.async_configure(result["flow_id"], address)
+
+
+async def test_configure_changes_the_connection_and_reading(hass: HomeAssistant) -> None:
+    entry = existing(hass)
+
+    result = await configure(
+        hass,
+        entry,
+        fake_unit("t010"),
+        {CONF_HOST: "192.168.1.60", CONF_PORT: 5020, CONF_UNIT_ID: 7},
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.data == {**DATA, CONF_HOST: "192.168.1.60", CONF_PORT: 5020, CONF_UNIT_ID: 7}
+    assert entry.options == {k: v for k, v in SETTINGS.items() if k != CONF_TRANSPORT}
+    # The entry keeps its unique ID, so its entities keep their IDs.
+    assert entry.unique_id == "t010_tcp_192.168.1.50:502_2"
+
+
+async def test_configure_shows_the_current_address(hass: HomeAssistant) -> None:
+    entry = existing(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], SETTINGS)
+
+    defaults = {
+        str(key): key.default() for key in result["data_schema"].schema if callable(key.default)
+    }
+    assert defaults[CONF_HOST] == "192.168.1.50"
+    assert defaults[CONF_UNIT_ID] == 2
+
+
+async def test_configure_checks_the_device_answers(hass: HomeAssistant) -> None:
+    entry = existing(hass)
+    unit = fake_unit("t010")
+    unit.fail = TimeoutError("no answer")
+
+    result = await configure(
+        hass, entry, unit, {CONF_HOST: "192.168.1.60", CONF_PORT: 502, CONF_UNIT_ID: 2}
+    )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data == DATA
+
+
+async def test_configure_refuses_a_device_another_entry_reaches(hass: HomeAssistant) -> None:
+    entry = existing(hass)
+    MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="t010_tcp_192.168.1.60:502_2",
+        data={**DATA, CONF_HOST: "192.168.1.60"},
+    ).add_to_hass(hass)
+
+    result = await configure(
+        hass, entry, fake_unit("t010"), {CONF_HOST: "192.168.1.60", CONF_PORT: 502, CONF_UNIT_ID: 2}
+    )
+
+    assert result["errors"] == {"base": "already_configured"}
+    assert entry.data == DATA
