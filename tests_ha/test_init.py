@@ -72,8 +72,8 @@ async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.pool_thermostat_pool_thermostat") == "off"
     assert state(hass, "binary_sensor.pool_thermostat_thermometer_alarm") == "off"
 
-    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.unique_id)})
-    assert device is not None
+    [device] = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+    assert device.identifiers == {(DOMAIN, entry.unique_id)}
     assert (device.manufacturer, device.model, device.sw_version) == (
         "Optika ir technologija",
         "T010",

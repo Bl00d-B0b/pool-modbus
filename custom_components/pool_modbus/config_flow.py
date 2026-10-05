@@ -54,11 +54,11 @@ def _number(minimum: int, maximum: int) -> vol.All:
 
 
 def _select(options: list[str], translation_key: str | None = None) -> SelectSelector:
-    return SelectSelector(
-        SelectSelectorConfig(
-            options=options, mode=SelectSelectorMode.DROPDOWN, translation_key=translation_key
-        )
-    )
+    config = SelectSelectorConfig(options=options, mode=SelectSelectorMode.DROPDOWN)
+    if translation_key is not None:
+        # The selector schema rejects a translation_key of None.
+        config["translation_key"] = translation_key
+    return SelectSelector(config)
 
 
 USER_SCHEMA = vol.Schema(
