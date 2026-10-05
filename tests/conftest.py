@@ -38,14 +38,20 @@ class FakeUnit:
     """Answer like a device with standard addressing: N registers from a are a ... a+N-1.
 
     ``fail`` makes every read raise that exception, like a device that does not answer.
+    ``stale_reads`` makes the next that many reads after a write still return the old
+    value, like a gateway that answers reads from a cache.
     """
 
-    def __init__(self, registers: dict[int, int], fail: Exception | None = None) -> None:
+    def __init__(
+        self, registers: dict[int, int], fail: Exception | None = None, stale_reads: int = 0
+    ) -> None:
         self.registers = registers
         self.fail = fail
+        self.stale_reads = stale_reads
         self.requests: list[tuple[str, int, int]] = []
         self.message_spacing = 0.0
         self.connected = True
+        self._stale: dict[int, list[int]] = {}  # address -> [old value, reads left]
 
     def set_message_spacing(self, seconds: float) -> None:
         self.message_spacing = seconds
@@ -54,13 +60,22 @@ class FakeUnit:
         self.requests.append(("holding", address, count))
         if self.fail is not None:
             raise self.fail
-        return [self.registers.get(address + i, 0) for i in range(count)]
+        words = [self.registers.get(address + i, 0) for i in range(count)]
+        for stale_address, entry in list(self._stale.items()):
+            if address <= stale_address < address + count:
+                words[stale_address - address] = entry[0]
+                entry[1] -= 1
+                if entry[1] == 0:
+                    del self._stale[stale_address]
+        return words
 
     async def write_register(self, address: int, value: int) -> None:
         """Function 06; the register then reads back the written value."""
         self.requests.append(("write", address, value))
         if self.fail is not None:
             raise self.fail
+        if self.stale_reads:
+            self._stale[address] = [self.registers.get(address, 0), self.stale_reads]
         self.registers[address] = value
 
     @property

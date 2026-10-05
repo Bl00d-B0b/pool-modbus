@@ -187,3 +187,24 @@ async def test_read_only_devices_get_no_controls(hass: HomeAssistant) -> None:
     assert hass.states.async_entity_ids(SWITCH_DOMAIN) == []
     assert hass.states.async_entity_ids(NUMBER_DOMAIN) == []
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
+
+
+async def test_entity_shows_the_new_value_behind_a_caching_gateway(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    from custom_components.pool_modbus.library.devices import writing
+
+    monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0.0)
+    unit = fake_unit("t010")
+    await add(hass, "t010", unit)
+    unit.stale_reads = 3  # reads lag the write, as on the test installation
+
+    await hass.services.async_call(
+        NUMBER_DOMAIN,
+        SERVICE_SET_VALUE,
+        {ATTR_ENTITY_ID: DELAY, ATTR_VALUE: 4},
+        blocking=True,
+    )
+
+    assert unit.writes == [(7, 4)]
+    assert state(hass, DELAY) == "4"

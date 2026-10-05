@@ -74,7 +74,10 @@ changed under the integration's options (default 15 s).
 Before a write, the integration checks the value against the range the device
 accepts and reads the device again; a value the device already holds is not
 written. The T010 stores every write in its EEPROM, so this keeps automations
-that repeat a setting from wearing it out.
+that repeat a setting from wearing it out. After a write, the integration reads
+the device until it shows the new value, for up to 5 s, and reports an error if
+it does not. Some Modbus TCP gateways answer reads from a cache: on the test
+installation a written value showed in reads about 1 s later.
 
 If you already read the same devices through Home Assistant's YAML `modbus:`
 configuration, that hub keeps its own connection to the gateway. Both work,

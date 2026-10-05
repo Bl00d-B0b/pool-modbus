@@ -238,3 +238,47 @@ async def test_thermostat_refuses_other_modes(make_unit, t010_snapshot) -> None:
         await THERMOSTAT.set_mode(device, "cool")
 
     assert unit.writes == []
+
+
+# -- confirming writes -----------------------------------------------------------
+
+
+@pytest.fixture
+def quick_confirm(monkeypatch):
+    from pool_modbus.devices import writing
+
+    monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0.0)
+    monkeypatch.setattr(writing, "CONFIRM_TIMEOUT", 0.2)
+
+
+async def test_write_waits_until_the_device_shows_it(
+    make_unit, t010_snapshot, quick_confirm
+) -> None:
+    unit = make_unit(dict(t010_snapshot), stale_reads=3)  # a gateway answering from its cache
+    device = await read(unit)
+
+    await VALUES["setpoint"].write(device, 21.5)
+
+    assert unit.writes == [(5, 215)]
+    assert device.setpoint == pytest.approx(21.5)
+
+
+async def test_write_the_device_never_shows_raises(make_unit, t010_snapshot, quick_confirm) -> None:
+    unit = make_unit(dict(t010_snapshot), stale_reads=10**6)
+    device = await read(unit)
+
+    with pytest.raises(TimeoutError, match="setpoint still reads 20.0"):
+        await VALUES["setpoint"].write(device, 21.5)
+
+
+async def test_two_flag_writes_in_a_row_keep_each_other(
+    make_unit, t010_snapshot, quick_confirm
+) -> None:
+    unit = make_unit(dict(t010_snapshot), stale_reads=3)  # register 8 = 0x0100, heating blocked
+    device = await read(unit)
+
+    await THERMOSTAT.set_mode(device, "heat")  # clears bit 8
+    await VALUES["delaying"].write(device, True)  # sets bit 9, must not bring bit 8 back
+
+    assert unit.writes == [(8, 0x0000), (8, 0x0200)]
+    assert unit.registers[8] == 0x0200

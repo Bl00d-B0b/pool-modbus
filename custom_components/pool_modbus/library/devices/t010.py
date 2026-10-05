@@ -5,9 +5,9 @@ docs/devices/t010.md. The firmware answers function 03 for addresses 0-9, at
 most 10 registers per read, and function 06 for addresses 5-9.
 
 Writes: the setpoint, offset, delay setting, and the heating-blocked and
-delaying flags. Each is checked against the firmware's range first and skipped
-when the device already holds the value, because the firmware stores every
-write in EEPROM.
+delaying flags. Each is checked against the firmware's range first, skipped
+when the device already holds the value because the firmware stores every
+write in EEPROM, and confirmed by reading it back (see ``write_if_changed``).
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, gauge, integer
 
 from .base import DeviceType, Thermostat, Value
+from .writing import write_if_changed
 
 INSTRUMENT_TYPE = 0x15
 """What register 0's high byte holds on a T010."""
@@ -113,22 +114,6 @@ class T010(Component):
         if not self.heating_enabled:
             return "off"
         return "heating" if self.heating else "idle"
-
-
-async def write_if_changed(device: T010, field: str, value: Any) -> None:
-    """Write ``field`` unless the device already holds ``value``.
-
-    The firmware stores every write in EEPROM, so writing a value it already
-    holds only wears the memory. The device is read first rather than trusting
-    the last poll. Raises ``ValueError`` for a value the firmware does not accept.
-    """
-    writable = getattr(T010, field).writable
-    if callable(writable):
-        value = writable(value)  # check the value before talking to the device
-    await device.async_update()
-    if getattr(device, field) == value:
-        return
-    await device.write(field, value)
 
 
 async def _set_mode(device: T010, mode: str) -> None:

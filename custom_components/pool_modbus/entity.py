@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 
 from homeassistant.const import (
-    CONCENTRATION_PARTS_PER_MILLION,
     PERCENTAGE,
     EntityCategory,
     UnitOfElectricPotential,
+    UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
 )
@@ -24,7 +24,7 @@ UNITS: dict[str, str] = {
     "%": PERCENTAGE,
     "mV": UnitOfElectricPotential.MILLIVOLT,
     "min": UnitOfTime.MINUTES,
-    "ppm": CONCENTRATION_PARTS_PER_MILLION,
+    "ppm": UnitOfRatio.PARTS_PER_MILLION,
 }
 
 

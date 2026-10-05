@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pool-modbus"
-version = "0.4.0"
+version = "0.4.1"
 description = "Modbus device models for pool equipment, for Home Assistant and standalone use"
 readme = "README.md"
 license = "Apache-2.0"
