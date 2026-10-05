@@ -123,10 +123,9 @@ async def test_entity_ids_leave_out_the_area(hass: HomeAssistant) -> None:
     garden = ar.async_get(hass).async_create("Garden")
     for device_type in ("t010", "emec_ld"):
         entry = make_entry(hass, device_type)
-        dr.async_get(hass).async_get_or_create(
+        device = dr.async_get(hass).async_get_or_create(
             config_entry_id=entry.entry_id, identifiers={(DOMAIN, entry.unique_id)}
         )
-        device = dr.async_get(hass).async_get_device({(DOMAIN, entry.unique_id)})
         dr.async_get(hass).async_update_device(device.id, area_id=garden.id)
         await setup(hass, entry, fake_unit(device_type))
 
