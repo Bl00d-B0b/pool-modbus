@@ -69,7 +69,9 @@ async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
     entry = await add(hass, "t010", fake_unit("t010"))
 
     assert state(hass, "sensor.pool_thermostat_pool_temperature") == "19.0"
-    assert state(hass, "sensor.pool_thermostat_pool_thermostat") == "off"
+    assert state(hass, "climate.pool_thermostat_pool_thermostat") == "off"
+    assert state(hass, "switch.pool_thermostat_pool_heating") == "off"
+    assert state(hass, "number.pool_thermostat_set_temperature") == "20.0"
     assert state(hass, "binary_sensor.pool_thermostat_thermometer_alarm") == "off"
 
     [device] = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)

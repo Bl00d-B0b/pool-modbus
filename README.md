@@ -8,16 +8,16 @@ typed Python (registers, scaling, byte layout) and tests it against data
 recorded from real hardware, so the decoding is right once and stays right.
 
 > **Status: early development.** The Python library and the Home Assistant
-> integration read all three device types below; writing comes next. See the
-> [roadmap](#roadmap).
+> integration read all three device types below and change the T010's
+> settings; writing to the other two comes next. See the [roadmap](#roadmap).
 
 ## Supported devices
 
 | Device type | Key | Status | Tested with |
 |---|---|---|---|
-| Pool controller (filtration, cover, light, water level) | `pool_controller` | Library, read-only | [register map](docs/devices/pool_controller.md) |
-| T010 pool thermostat (Optika ir technologija) | `t010` | Library, read-only | Firmware 1.7, [register map](docs/devices/t010.md) |
-| EMEC LD series pH/Cl controller | `emec_ld` | Library, read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
+| Pool controller (filtration, cover, light, water level) | `pool_controller` | Read-only | [register map](docs/devices/pool_controller.md) |
+| T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
+| EMEC LD series pH/Cl controller | `emec_ld` | Read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
 Each device type also defines the values a user sees, named like the matching
 Home Assistant entities, and the rules that go with them (for example, which
@@ -31,6 +31,8 @@ Want your device here? See [CONTRIBUTING.md](CONTRIBUTING.md).
   Modbus ID. Devices can share one gateway or use separate ones.
 - Supported transports: **Modbus TCP**, **RTU over TCP**, **UDP** and
   **serial** (RS-485/RS-232, RTU or ASCII).
+- Each device is read in as few requests as it allows: its own per-request
+  limit is part of its device type and documented with its register map.
 - Devices with identical connection settings share one connection. In Home
   Assistant this uses the shared Modbus connections introduced in 2026, so
   several integrations can use the same gateway without clashing.
@@ -62,11 +64,17 @@ between integrations. Tested with Home Assistant 2026.9.4.
 4. Repeat for each device. Devices behind the same gateway share one
    connection.
 
-The integration is **read-only** for now: every value becomes a sensor or
-binary sensor, named as in the table of values above. Settings show up as
-diagnostic entities. Writing (switches, cover, thermostat, dosing settings)
-comes later; see the [roadmap](#roadmap). Each device's read interval can be
+Every value becomes an entity named as in the device's register map. Values
+a device lets you change become switches and numbers, and the T010 also gets a
+thermostat (climate) entity. Settings you can change are configuration
+entities; read-only settings are diagnostic. For now only the T010 is
+writable; see the [roadmap](#roadmap). Each device's read interval can be
 changed under the integration's options (default 15 s).
+
+Before a write, the integration checks the value against the range the device
+accepts and reads the device again; a value the device already holds is not
+written. The T010 stores every write in its EEPROM, so this keeps automations
+that repeat a setting from wearing it out.
 
 If you already read the same devices through Home Assistant's YAML `modbus:`
 configuration, that hub keeps its own connection to the gateway. Both work,
@@ -119,7 +127,6 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
   Pool Thermostat         off
-  Thermostat Action       off
   Pool Temperature        19.0 °C
   Pool Heating            off
   Heating Mode            Off
@@ -173,11 +180,10 @@ await connection.close()
 
 1. Read-only models and tests for the pool controller, T010 and EMEC LD (done).
 2. Home Assistant custom integration, installable through HACS: one entry per
-   device, each with its own connection settings; read-only entities first
-   (started).
-3. Writes, one setting at a time, each with tests: switches and pulses on the
-   pool controller, thermostat settings on the T010, dosing settings on the
-   EMEC LD.
+   device, each with its own connection settings (done).
+3. Writes, one device at a time, each with tests: thermostat settings on the
+   T010 (done), then switches and pulses on the pool controller, then dosing
+   settings on the EMEC LD.
 4. EMEC LD alarm coils.
 
 ## Development
@@ -205,8 +211,8 @@ pytest tests_ha
 ## Safety
 
 This software talks to equipment that doses chemicals, heats water and moves a
-pool cover. It is read-only for now. When write support arrives, test changes
-carefully and keep each device's own safety settings in place. You are
+pool cover. It writes only the T010's thermostat settings for now. Test
+changes carefully and keep each device's own safety settings in place. You are
 responsible for your installation.
 
 This is an independent project, not affiliated with or endorsed by EMEC or

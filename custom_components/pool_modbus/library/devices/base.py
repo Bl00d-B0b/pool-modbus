@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -34,6 +34,41 @@ class Value:
     device_class: str | None = None
     """Home Assistant device class, e.g. "temperature", "ph", "problem", "running"."""
 
+    write: Callable[[Any, Any], Awaitable[None]] | None = None
+    """Write a new value to the device; None for a read-only value. Raises
+    ``ValueError`` for a value the device does not accept."""
+
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float | None = None
+    """The range and resolution a writable number accepts."""
+
+    @property
+    def writable(self) -> bool:
+        return self.write is not None
+
+
+@dataclass(frozen=True)
+class Thermostat:
+    """A device that works as a thermostat; Home Assistant shows it as a climate entity."""
+
+    key: str
+    name: str
+    current_temperature: Callable[[Any], float | None]
+    target_temperature: Callable[[Any], float | None]
+    mode: Callable[[Any], str | None]
+    """One of ``modes``."""
+
+    action: Callable[[Any], str | None]
+    """What it is doing: "heating", "idle" or "off"."""
+
+    set_target_temperature: Callable[[Any, float], Awaitable[None]]
+    set_mode: Callable[[Any, str], Awaitable[None]]
+    minimum: float
+    maximum: float
+    step: float
+    modes: tuple[str, ...] = ("heat", "off")
+
 
 @dataclass(frozen=True)
 class Variant:
@@ -58,6 +93,8 @@ class DeviceType:
 
     values: tuple[Value, ...] = ()
     """User-facing values, in display order."""
+
+    thermostat: Thermostat | None = None
 
     identify: Callable[[Any], bool] | None = None
     """Whether an updated model looks like this device type; None accepts any."""

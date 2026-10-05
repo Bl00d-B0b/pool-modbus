@@ -46,6 +46,16 @@ class FakeUnit:
             raise self.fail
         return [self.registers.get(address + self.step * i, 0) for i in range(count)]
 
+    async def write_register(self, address: int, value: int) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.writes.append((address, value))
+        self.registers[address] = value
+
+    @property
+    def writes(self) -> list[tuple[int, int]]:
+        return self.__dict__.setdefault("_writes", [])
+
 
 def fake_unit(device_type: str) -> FakeUnit:
     if device_type == "emec_ld":

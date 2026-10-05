@@ -101,6 +101,7 @@ async def test_output_uses_home_assistant_names(bus) -> None:
         "Pool controller (unit 1, tcp 192.168.1.50:502)",
         "Filtration Mode Filtering",
         "Saved Backwash Schedule Friday 06:00",
+        "Pool Thermostat off",
         "Pool Temperature 19.0 °C",
         "Thermostat Firmware 1.7",
         "Pool pH Level 7.51 pH",

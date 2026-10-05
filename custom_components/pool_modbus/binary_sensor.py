@@ -1,4 +1,4 @@
-"""Binary sensors: every on/off value of a device."""
+"""Binary sensors: every read-only on/off value of a device."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ async def async_setup_entry(
     async_add_entities(
         PoolModbusBinarySensor(coordinator, value)
         for value in coordinator.device_type.values
-        if value.binary
+        if value.binary and not value.writable
     )
 
 
@@ -34,5 +34,5 @@ class PoolModbusBinarySensor(PoolModbusEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        raw = self.value.get(self.coordinator.device)
+        raw = self.device_value.get(self.coordinator.device)
         return None if raw is None else bool(raw)

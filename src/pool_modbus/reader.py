@@ -13,7 +13,7 @@ from modbus_connection.model import Component
 
 from .config import DeviceEntry
 from .connection import ConnectionConfig, Transport
-from .devices import Value, get_device_type
+from .devices import DeviceType, Thermostat, Value, get_device_type
 
 
 class Connection(Protocol):
@@ -100,9 +100,7 @@ def render(results: list[DeviceResult], *, raw: bool = False) -> str:
         if result.device is None:
             lines.append(f"  unavailable: {result.error}")
         else:
-            rows = (
-                _raw_rows(result.device) if raw else _value_rows(device_type.values, result.device)
-            )
+            rows = _raw_rows(result.device) if raw else _value_rows(device_type, result.device)
             width = max(len(name) for name, _ in rows)
             lines += [f"  {name:<{width}}  {text}" for name, text in rows]
         lines.append("")
@@ -116,8 +114,21 @@ def value_text(value: Value, device: Component) -> str:
     return format_value(value, value.get(device))
 
 
-def _value_rows(values: tuple[Value, ...], device: Component) -> list[tuple[str, str]]:
-    return [(value.name, value_text(value, device)) for value in values]
+def thermostat_text(thermostat: Thermostat, device: Component) -> str:
+    """The thermostat's mode, and what it is doing while not off: e.g. "heat, idle"."""
+    mode = thermostat.mode(device)
+    if mode is None:
+        return "unknown"
+    action = thermostat.action(device)
+    return mode if mode == "off" or action is None else f"{mode}, {action}"
+
+
+def _value_rows(device_type: DeviceType, device: Component) -> list[tuple[str, str]]:
+    rows = [(value.name, value_text(value, device)) for value in device_type.values]
+    thermostat = device_type.thermostat
+    if thermostat is not None:
+        rows.insert(0, (thermostat.name, thermostat_text(thermostat, device)))
+    return rows
 
 
 def _raw_rows(device: Component) -> list[tuple[str, str]]:
