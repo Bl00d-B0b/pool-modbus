@@ -5,6 +5,8 @@ from .connection import ConnectionConfig, Transport
 from .devices import (
     DEVICE_TYPES,
     SCAN_GROUPS,
+    Action,
+    Cover,
     DeviceType,
     Feature,
     ScanGroup,
@@ -21,7 +23,9 @@ __version__ = "2026.10.0"
 __all__ = [
     "DEVICE_TYPES",
     "SCAN_GROUPS",
+    "Action",
     "ConnectionConfig",
+    "Cover",
     "DeviceEntry",
     "DeviceResult",
     "DeviceType",

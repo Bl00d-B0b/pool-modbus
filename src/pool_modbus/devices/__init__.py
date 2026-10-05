@@ -7,7 +7,17 @@ To add a device type, write a module in this package that defines a
 from __future__ import annotations
 
 from . import emec_ld, pool_controller, t010
-from .base import SCAN_GROUPS, DeviceType, Feature, ScanGroup, Thermostat, Value, Variant
+from .base import (
+    SCAN_GROUPS,
+    Action,
+    Cover,
+    DeviceType,
+    Feature,
+    ScanGroup,
+    Thermostat,
+    Value,
+    Variant,
+)
 
 _TYPES: tuple[DeviceType, ...] = (
     pool_controller.DEVICE_TYPE,
@@ -33,6 +43,8 @@ def get_device_type(key: str) -> DeviceType:
 __all__ = [
     "DEVICE_TYPES",
     "SCAN_GROUPS",
+    "Action",
+    "Cover",
     "DeviceType",
     "Feature",
     "ScanGroup",
