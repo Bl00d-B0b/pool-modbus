@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pool-modbus"
+version = "0.1.0"
+description = "Modbus device models for pool equipment, for Home Assistant and standalone use"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Edvard Filistovič" }]
+keywords = ["modbus", "home-assistant", "pool", "emec", "dosing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+]
+dependencies = ["modbus-connection>=4.12,<5"]
+
+[project.optional-dependencies]
+# The command-line tool needs a Modbus backend; Home Assistant brings its own.
+cli = ["modbus-connection[pymodbus]>=4.12,<5"]
+test = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[project.urls]
+Homepage = "https://github.com/Bl00d-B0b/pool-modbus"
+Issues = "https://github.com/Bl00d-B0b/pool-modbus/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pool_modbus"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
