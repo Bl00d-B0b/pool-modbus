@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .coordinator import PoolModbusConfigEntry
+from .coordinator import PoolModbusConfigEntry, PoolModbusData
 from .entity import PoolModbusEntity
+from .library import Value
 
 
 async def async_setup_entry(
@@ -25,6 +26,11 @@ async def async_setup_entry(
 
 class PoolModbusSwitch(PoolModbusEntity, SwitchEntity):
     """An on/off setting, written to the device."""
+
+    def __init__(self, data: PoolModbusData, value: Value) -> None:
+        super().__init__(data, value)
+        if value.device_class:
+            self._attr_device_class = SwitchDeviceClass(value.device_class)
 
     @property
     def is_on(self) -> bool | None:

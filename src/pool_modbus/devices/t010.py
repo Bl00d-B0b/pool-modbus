@@ -95,11 +95,11 @@ class T010(Component):
         return None if self.heating_power is None else self.heating_power > 0
 
     @property
-    def delay_remaining(self) -> str | None:
-        """Heating delay still to run, as mm:ss."""
+    def delay_remaining(self) -> int | None:
+        """Heating delay still to run, in seconds."""
         if self.delay_minutes is None or self.delay_seconds is None:
             return None
-        return f"{self.delay_minutes:02d}:{self.delay_seconds:02d}"
+        return self.delay_minutes * 60 + self.delay_seconds
 
     @property
     def hvac_mode(self) -> str | None:
@@ -137,6 +137,8 @@ THERMOSTAT = Thermostat(
     step=0.5,
     # Heating whenever the power is above 0 %: relay mode 0 or 100, PWM mode in 20 % steps.
     attributes=lambda d: {"heating_power": d.heating_power},
+    icon="mdi:pool-thermometer",
+    icon_off="mdi:thermometer-off",
 )
 
 # The water temperature, heating on/off, the setpoint, whether it is heating and the
@@ -148,20 +150,32 @@ VALUES = (
         "Pool Delaying",
         lambda d: d.delaying,
         binary=True,
+        device_class="switch",
         write=lambda d, on: write_if_changed(d, "delaying", bool(on)),
+        icon="mdi:timer-sand",
+        icon_off="mdi:timer-off-outline",
     ),
-    Value("delay_remaining", "Delay Time", lambda d: d.delay_remaining),
+    Value(
+        "delay_remaining",
+        "Delay Time",
+        lambda d: d.delay_remaining,
+        "s",
+        device_class="duration",
+        icon="mdi:timer-sand",
+    ),
     Value(
         "offset",
         "Offset Temperature",
         lambda d: d.offset,
         "°C",
         category="setting",
+        device_class="temperature_delta",
         write=lambda d, t: write_if_changed(d, "offset", t),
         minimum=OFFSET_RANGE[0],
         maximum=OFFSET_RANGE[1],
         step=0.1,
         number_mode="box",
+        icon="mdi:thermometer-plus",
     ),
     Value(
         "set_delay",
@@ -175,14 +189,25 @@ VALUES = (
         maximum=DELAY_RANGE[1],
         step=1,
         number_mode="box",
+        icon="mdi:timer-cog-outline",
     ),
-    Value("menu_mode", "Menu Mode", lambda d: d.menu_mode, binary=True, category="diagnostic"),
+    Value(
+        "menu_mode",
+        "Menu Mode",
+        lambda d: d.menu_mode,
+        binary=True,
+        category="diagnostic",
+        icon="mdi:menu-open",
+        icon_off="mdi:menu",
+    ),
     Value(
         "sensor_disconnected",
         "Thermometer Alarm",
         lambda d: d.sensor_disconnected,
         binary=True,
         device_class="problem",
+        icon="mdi:thermometer-alert",
+        icon_off="mdi:thermometer-check",
     ),
     Value(
         "sensor_supply_fault",
@@ -190,6 +215,8 @@ VALUES = (
         lambda d: d.sensor_supply_fault,
         binary=True,
         device_class="problem",
+        icon="mdi:flash-alert",
+        icon_off="mdi:flash-outline",
     ),
     Value(
         "eeprom_fault",
@@ -197,12 +224,14 @@ VALUES = (
         lambda d: d.eeprom_fault,
         binary=True,
         device_class="problem",
+        icon="mdi:memory",
     ),
     Value(
         "software_version",
         "Thermostat Firmware",
         lambda d: d.software_version,
         category="diagnostic",
+        icon="mdi:chip",
     ),
 )
 

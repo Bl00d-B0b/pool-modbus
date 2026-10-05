@@ -210,3 +210,18 @@ async def test_entity_shows_the_new_value_behind_a_caching_gateway(
 
     assert unit.writes == [(7, 4)]
     assert state(hass, DELAY) == "4"
+
+
+async def test_icons_follow_the_state(hass: HomeAssistant) -> None:
+    unit = fake_unit("t010")
+    await add(hass, "t010", unit)
+    assert hass.states.get(DELAYING).attributes["icon"] == "mdi:timer-off-outline"
+    assert hass.states.get(CLIMATE).attributes["icon"] == "mdi:thermometer-off"
+    assert hass.states.get(OFFSET).attributes["device_class"] == "temperature_delta"
+
+    await hass.services.async_call(
+        SWITCH_DOMAIN, SERVICE_TURN_ON, {ATTR_ENTITY_ID: DELAYING}, blocking=True
+    )
+
+    assert hass.states.get(DELAYING).attributes["icon"] == "mdi:timer-sand"
+    assert hass.states.get(DELAYING).attributes["device_class"] == "switch"

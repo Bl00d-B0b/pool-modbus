@@ -70,6 +70,12 @@ class Value:
     """Model fields to read for this value beyond those ``get`` and ``available``
     use, e.g. a field only written."""
 
+    icon: str | None = None
+    """Material Design icon, e.g. "mdi:timer-sand"; for an on/off value, the one while on."""
+
+    icon_off: str | None = None
+    """The icon of an on/off value while off; None keeps ``icon``."""
+
     @property
     def writable(self) -> bool:
         return self.write is not None
@@ -102,6 +108,10 @@ class Thermostat:
     scan_group: ScanGroup = "fast"
     attributes: Callable[[Any], dict[str, Any]] | None = None
     """More of the thermostat's state, shown as attributes of the climate entity."""
+
+    icon: str | None = None
+    icon_off: str | None = None
+    """Icons while the thermostat is on (any mode but off) and while it is off."""
 
 
 @dataclass(frozen=True)

@@ -76,6 +76,12 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
         return None if action is None else HVACAction(action)
 
     @property
+    def icon(self) -> str | None:
+        if self.thermostat.icon_off is not None and self.hvac_mode is HVACMode.OFF:
+            return self.thermostat.icon_off
+        return self.thermostat.icon
+
+    @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         attributes = self.thermostat.attributes
         return None if attributes is None else attributes(self.coordinator.device)

@@ -24,6 +24,7 @@ UNITS: dict[str, str] = {
     "%": PERCENTAGE,
     "mV": UnitOfElectricPotential.MILLIVOLT,
     "min": UnitOfTime.MINUTES,
+    "s": UnitOfTime.SECONDS,
     "ppm": UnitOfRatio.PARTS_PER_MILLION,
 }
 
@@ -66,6 +67,14 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
             )
         elif value.category == "diagnostic":
             self._attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    @property
+    def icon(self) -> str | None:
+        """The value's icon; an on/off value can have its own icon while off."""
+        value = self.device_value
+        if value.icon_off is not None and not value.get(self.coordinator.device):
+            return value.icon_off
+        return value.icon
 
     @property
     def available(self) -> bool:
