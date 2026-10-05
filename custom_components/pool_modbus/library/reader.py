@@ -115,12 +115,20 @@ def value_text(value: Value, device: Component) -> str:
 
 
 def thermostat_text(thermostat: Thermostat, device: Component) -> str:
-    """Mode, what it is doing while not off, and the target: e.g. "heat, idle, target 20.0 °C"."""
+    """The thermostat as one line, e.g. "heat, heating at 100 %, 19.0 °C, target 32.5 °C"."""
     mode = thermostat.mode(device)
     if mode is None:
         return "unknown"
+    parts = [mode]
     action = thermostat.action(device)
-    parts = [mode] if mode == "off" or action is None else [mode, action]
+    if mode != "off" and action is not None:
+        power = (thermostat.attributes(device) if thermostat.attributes else {}).get(
+            "heating_power"
+        )
+        parts.append(f"{action} at {power} %" if action == "heating" and power else action)
+    current = thermostat.current_temperature(device)
+    if current is not None:
+        parts.append(f"{current} °C")
     target = thermostat.target_temperature(device)
     if target is not None:
         parts.append(f"target {target} °C")

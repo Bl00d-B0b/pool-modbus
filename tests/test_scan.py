@@ -25,9 +25,9 @@ def test_every_value_reads_known_fields(key: str) -> None:
 
 def test_t010_groups() -> None:
     plan = read_plan(get_device_type("t010"), T010, set())
-    # The thermostat is fast: its mode, action, target and current temperature.
+    # The thermostat is fast: its mode, action, heating power, target and current temperature.
     assert {"heating_blocked", "heating_power", "setpoint", "temperature"} <= plan["fast"]
-    assert plan["medium"] == {"temperature"}
+    assert "medium" not in plan  # the water temperature is the thermostat's
     assert plan["slow"] == {"offset", "set_delay", "menu_mode", "software_version_raw"}
 
 

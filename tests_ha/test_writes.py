@@ -62,10 +62,10 @@ async def test_the_thermostat_is_not_repeated_by_other_entities(hass: HomeAssist
         "switch.pool_thermostat_pool_heating",
         "number.pool_thermostat_set_temperature",
         "sensor.pool_thermostat_heating_mode",
+        "sensor.pool_thermostat_pool_temperature",
+        POWER,
     ):
         assert registry.async_get(entity_id) is None, entity_id
-    # Heating power adds to the thermostat in PWM mode only: an optional part, off by default.
-    assert registry.async_get(POWER) is None
 
 
 async def test_delaying_switch_keeps_the_heating_bit(hass: HomeAssistant) -> None:
@@ -138,6 +138,7 @@ async def test_thermostat(hass: HomeAssistant) -> None:
     assert current.state == HVACMode.HEAT
     assert current.attributes[ATTR_TEMPERATURE] == 32.5
     assert current.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
+    assert current.attributes["heating_power"] == 0
 
 
 async def test_thermostat_turn_off(hass: HomeAssistant) -> None:

@@ -39,7 +39,6 @@
           "scan_interval_fast": "Fast polling interval (s)",
           "scan_interval_medium": "Medium polling interval (s)",
           "scan_interval": "Slow polling interval (s)",
-          "read_heating_power": "Read heating power (PWM output)",
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
           "read_clock": "Read the clock",
@@ -48,8 +47,7 @@
         "data_description": {
           "scan_interval_fast": "States and alarms.",
           "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
-          "scan_interval": "Settings, clocks and firmware.",
-          "read_heating_power": "Only adds to the thermostat when the T010 runs in PWM mode."
+          "scan_interval": "Settings, clocks and firmware."
         }
       }
     },
@@ -72,7 +70,6 @@
           "scan_interval_fast": "Fast polling interval (s)",
           "scan_interval_medium": "Medium polling interval (s)",
           "scan_interval": "Slow polling interval (s)",
-          "read_heating_power": "Read heating power (PWM output)",
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
           "read_clock": "Read the clock",
@@ -81,8 +78,7 @@
         "data_description": {
           "scan_interval_fast": "States and alarms.",
           "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
-          "scan_interval": "Settings, clocks and firmware.",
-          "read_heating_power": "Only adds to the thermostat when the T010 runs in PWM mode."
+          "scan_interval": "Settings, clocks and firmware."
         }
       },
       "network": {

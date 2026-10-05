@@ -76,8 +76,10 @@ async def test_pool_controller_entities(hass: HomeAssistant) -> None:
 async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
     entry = await add(hass, "t010", fake_unit("t010"))
 
-    assert state(hass, "sensor.pool_thermostat_pool_temperature") == "19.0"
-    assert state(hass, "climate.pool_thermostat_pool_thermostat") == "off"
+    thermostat = hass.states.get("climate.pool_thermostat_pool_thermostat")
+    assert thermostat.state == "off"
+    assert thermostat.attributes["current_temperature"] == 19.0
+    assert thermostat.attributes["heating_power"] == 0
     assert state(hass, "switch.pool_thermostat_pool_delaying") == "off"
     assert state(hass, "number.pool_thermostat_set_delay_time") == "3"
     assert state(hass, "binary_sensor.pool_thermostat_thermometer_alarm") == "off"
@@ -107,13 +109,14 @@ async def test_entities_go_unavailable_when_the_device_stops_answering(
 ) -> None:
     unit = fake_unit("t010")
     entry = await add(hass, "t010", unit)
-    assert state(hass, "sensor.pool_thermostat_pool_temperature") == "19.0"
+    assert state(hass, "climate.pool_thermostat_pool_thermostat") == "off"
 
     unit.fail = TimeoutError("no answer")
     await entry.runtime_data.async_refresh_all()
     await hass.async_block_till_done()
 
-    assert state(hass, "sensor.pool_thermostat_pool_temperature") == STATE_UNAVAILABLE
+    assert state(hass, "climate.pool_thermostat_pool_thermostat") == STATE_UNAVAILABLE
+    assert state(hass, "number.pool_thermostat_offset_temperature") == STATE_UNAVAILABLE
 
 
 async def test_unload(hass: HomeAssistant) -> None:
@@ -126,7 +129,7 @@ async def test_unload(hass: HomeAssistant) -> None:
 
 
 async def test_each_scan_group_has_its_interval(hass: HomeAssistant) -> None:
-    entry = await add(hass, "t010", fake_unit("t010"))
+    entry = await add(hass, "emec_ld", fake_unit("emec_ld"))
     intervals = {g: c.update_interval for g, c in entry.runtime_data.coordinators.items()}
     assert intervals == {
         "fast": timedelta(seconds=5),
@@ -150,9 +153,10 @@ async def test_an_older_entry_keeps_its_interval_as_the_slow_one(hass: HomeAssis
     assert coordinators["fast"].update_interval == timedelta(seconds=5)
 
 
-async def test_optional_parts(hass: HomeAssistant) -> None:
-    await add(hass, "t010", fake_unit("t010"), {"read_heating_power": True})
-    assert state(hass, "sensor.pool_thermostat_heating_power") == "0"
+async def test_optional_parts_are_on_by_default(hass: HomeAssistant) -> None:
+    await add(hass, "emec_ld", fake_unit("emec_ld"))
+    assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
+    assert state(hass, "sensor.dosing_pump_ch1_ph_pulse1_mode") == "Proportional"
 
 
 async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:

@@ -100,6 +100,8 @@ class Thermostat:
     step: float
     modes: tuple[str, ...] = ("heat", "off")
     scan_group: ScanGroup = "fast"
+    attributes: Callable[[Any], dict[str, Any]] | None = None
+    """More of the thermostat's state, shown as attributes of the climate entity."""
 
 
 @dataclass(frozen=True)

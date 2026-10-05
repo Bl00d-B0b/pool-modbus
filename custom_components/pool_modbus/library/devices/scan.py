@@ -67,6 +67,8 @@ def thermostat_fields(model: type[Component], thermostat: Thermostat) -> frozens
         thermostat.mode,
         thermostat.action,
     ]
+    if thermostat.attributes is not None:
+        getters.append(thermostat.attributes)
     return frozenset(_fields_read(model, getters))
 
 

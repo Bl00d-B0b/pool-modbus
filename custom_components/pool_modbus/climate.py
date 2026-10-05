@@ -75,6 +75,11 @@ class PoolModbusClimate(CoordinatorEntity[PoolModbusCoordinator], ClimateEntity)
         action = self.thermostat.action(self.coordinator.device)
         return None if action is None else HVACAction(action)
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attributes = self.thermostat.attributes
+        return None if attributes is None else attributes(self.coordinator.device)
+
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (mode := kwargs.get(ATTR_HVAC_MODE)) is not None:
             await self.async_set_hvac_mode(mode)

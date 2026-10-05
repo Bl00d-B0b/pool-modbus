@@ -227,7 +227,8 @@ async def test_thermostat_target_and_state(make_unit, t010_snapshot) -> None:
         pytest.approx(19.0),
         pytest.approx(20.0),
     )
-    assert thermostat_text(THERMOSTAT, device) == "off, target 20.0 °C"
+    assert thermostat_text(THERMOSTAT, device) == "off, 19.0 °C, target 20.0 °C"
+    assert THERMOSTAT.attributes(device) == {"heating_power": 0}
 
     await THERMOSTAT.set_target_temperature(device, 32.5)
     await THERMOSTAT.set_mode(device, "heat")
@@ -235,7 +236,10 @@ async def test_thermostat_target_and_state(make_unit, t010_snapshot) -> None:
 
     assert unit.writes == [(5, 325), (8, 0x0000)]
     assert device.setpoint == pytest.approx(32.5)
-    assert thermostat_text(THERMOSTAT, device) == "heat, idle, target 32.5 °C"
+    assert thermostat_text(THERMOSTAT, device) == "heat, idle, 19.0 °C, target 32.5 °C"
+    unit.registers[2] = 100  # the relay switched on
+    await device.async_update()
+    assert thermostat_text(THERMOSTAT, device) == "heat, heating at 100 %, 19.0 °C, target 32.5 °C"
 
 
 async def test_thermostat_refuses_other_modes(make_unit, t010_snapshot) -> None:
@@ -293,7 +297,7 @@ async def test_two_flag_writes_in_a_row_keep_each_other(
 
 
 def test_values_the_thermostat_covers_are_not_repeated() -> None:
-    assert not {"setpoint", "heating_enabled", "heating"} & set(VALUES)
-    # Heating power adds to the thermostat in PWM mode only: an optional part, off by default.
-    assert VALUES["heating_power"].feature == "heating_power"
-    assert "heating_power" not in get_device_type("t010").default_features()
+    # Temperature, heating on/off, setpoint, heating or not, and heating power.
+    repeated = {"temperature", "setpoint", "heating_enabled", "heating", "heating_power"}
+    assert not repeated & set(VALUES)
+    assert get_device_type("t010").features == ()

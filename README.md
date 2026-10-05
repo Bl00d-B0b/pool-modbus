@@ -83,7 +83,6 @@ Optional parts, each a checkbox:
 | Device | Optional part | Default |
 |---|---|---|
 | Pool controller | Backwash schedule, clock | On |
-| T010 | Heating power (PWM output) | Off |
 | EMEC LD | Dosing settings (pH channel), probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
@@ -150,9 +149,7 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
   Controller Last Update   2026-10-05 12:42:52
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
-  Pool Thermostat         off, target 20.0 °C
-  Pool Temperature        19.0 °C
-  Heating Power           0 %
+  Pool Thermostat         off, 19.0 °C, target 20.0 °C
   Pool Delaying           off
   Delay Time              00:00
   Offset Temperature      0.0 °C

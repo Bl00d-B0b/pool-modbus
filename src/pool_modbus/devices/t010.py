@@ -19,7 +19,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, gauge, integer
 
-from .base import DeviceType, Feature, Thermostat, Value
+from .base import DeviceType, Thermostat, Value
 from .writing import write_if_changed
 
 INSTRUMENT_TYPE = 0x15
@@ -135,28 +135,14 @@ THERMOSTAT = Thermostat(
     minimum=SETPOINT_RANGE[0],
     maximum=SETPOINT_RANGE[1],
     step=0.5,
+    # Heating whenever the power is above 0 %: relay mode 0 or 100, PWM mode in 20 % steps.
+    attributes=lambda d: {"heating_power": d.heating_power},
 )
 
+# The water temperature, heating on/off, the setpoint, whether it is heating and the
+# heating power are all the thermostat's: its current temperature, mode, target,
+# action and the heating_power attribute.
 VALUES = (
-    Value(
-        "temperature",
-        "Pool Temperature",
-        lambda d: d.temperature,
-        "°C",
-        category="measurement",
-        device_class="temperature",
-    ),
-    # Heating on/off, the setpoint and whether it is heating are the thermostat's mode,
-    # target and action. The power adds to that only in PWM mode (20-80 % steps).
-    Value(
-        "heating_power",
-        "Heating Power",
-        lambda d: d.heating_power,
-        "%",
-        category="measurement",
-        scan_group="fast",
-        feature="heating_power",
-    ),
     Value(
         "delaying",
         "Pool Delaying",
@@ -233,7 +219,6 @@ DEVICE_TYPE = DeviceType(
     create=_create,
     values=VALUES,
     thermostat=THERMOSTAT,
-    features=(Feature("heating_power", "Heating power (PWM output)", default=False),),
     identify=lambda d: d.is_t010,
     software_version=lambda d: d.software_version,
     default_unit_id=1,  # factory default in the firmware

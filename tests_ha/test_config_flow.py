@@ -60,12 +60,7 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         hass,
         result["flow_id"],
         fake_unit("t010"),
-        {
-            "scan_interval_fast": 5,
-            "scan_interval_medium": 10,
-            "scan_interval": 15,
-            "read_heating_power": False,
-        },
+        {"scan_interval_fast": 5, "scan_interval_medium": 10, "scan_interval": 15},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -82,7 +77,6 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         "scan_interval_fast": 5,
         "scan_interval_medium": 10,
         "scan_interval": 15,
-        "read_heating_power": False,
     }
 
 
@@ -157,7 +151,6 @@ SETTINGS = {
     "scan_interval_fast": 3,
     "scan_interval_medium": 10,
     "scan_interval": 30,
-    "read_heating_power": True,
 }
 
 
