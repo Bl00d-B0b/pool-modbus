@@ -70,7 +70,9 @@ address and Modbus ID, the intervals and the optional parts. A new address is
 read before it is saved, and the device keeps its entities.
 
 Values are read in three groups, each on its own interval, as in
-solax-modbus. Each group reads only the registers of its own values.
+solax-modbus. Each group reads only the registers of its own values, and a
+device's Configure only shows the intervals of the groups it uses (the T010 and
+the pool controller have no medium group).
 
 | Group | Default | Values |
 |---|---|---|

@@ -52,7 +52,6 @@ from .const import (
 from .coordinator import connection_config, enabled_features, scan_interval
 from .library import (
     DEVICE_TYPES,
-    SCAN_GROUPS,
     ConnectionConfig,
     DeviceType,
     Transport,
@@ -152,12 +151,12 @@ def connection_schema(
 
 
 def settings_schema(device_type: DeviceType, options: Mapping[str, Any]) -> vol.Schema:
-    """The scan intervals and the device type's optional parts."""
+    """The intervals of the scan groups the device type uses, and its optional parts."""
     fields: dict[Any, Any] = {
         vol.Required(SCAN_INTERVAL_KEYS[group], default=scan_interval(options, group)): _number(
             1, 3600
         )
-        for group in SCAN_GROUPS
+        for group in device_type.scan_groups()
     }
     on = enabled_features(device_type, options)
     for feature in device_type.features:

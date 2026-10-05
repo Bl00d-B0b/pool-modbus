@@ -72,3 +72,9 @@ def test_controller_optional_parts() -> None:
     bare = read_plan(device_type, PoolController, set())
     assert "slow" not in bare
     assert {"pump_running", "pool_open"} <= bare["fast"]
+
+
+def test_each_type_lists_the_scan_groups_it_uses() -> None:
+    assert get_device_type("t010").scan_groups() == ("fast", "slow")
+    assert get_device_type("pool_controller").scan_groups() == ("fast", "slow")
+    assert get_device_type("emec_ld").scan_groups() == ("fast", "medium", "slow")

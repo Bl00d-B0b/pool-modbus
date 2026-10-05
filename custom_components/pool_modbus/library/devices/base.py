@@ -178,3 +178,10 @@ class DeviceType:
         """The values that exist with ``features`` switched on."""
         on = set(features)
         return tuple(v for v in self.values if v.feature is None or v.feature in on)
+
+    def scan_groups(self) -> tuple[ScanGroup, ...]:
+        """The scan groups this type's values use, with every optional part on."""
+        used = {value.group for value in self.values}
+        if self.thermostat is not None:
+            used.add(self.thermostat.scan_group)
+        return tuple(group for group in SCAN_GROUPS if group in used)

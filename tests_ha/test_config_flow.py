@@ -60,7 +60,7 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         hass,
         result["flow_id"],
         fake_unit("t010"),
-        {"scan_interval_fast": 5, "scan_interval_medium": 10, "scan_interval": 15},
+        {"scan_interval_fast": 5, "scan_interval": 15},
     )
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -73,11 +73,7 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         CONF_UNIT_ID: 2,
     }
     assert result["result"].unique_id == "t010_tcp_192.168.1.50:502_2"
-    assert result["options"] == {
-        "scan_interval_fast": 5,
-        "scan_interval_medium": 10,
-        "scan_interval": 15,
-    }
+    assert result["options"] == {"scan_interval_fast": 5, "scan_interval": 15}
 
 
 async def test_serial_asks_for_line_settings(hass: HomeAssistant) -> None:
@@ -149,7 +145,6 @@ DATA = {
 SETTINGS = {
     CONF_TRANSPORT: "tcp",
     "scan_interval_fast": 3,
-    "scan_interval_medium": 10,
     "scan_interval": 30,
 }
 
@@ -233,3 +228,24 @@ async def test_configure_refuses_a_device_another_entry_reaches(hass: HomeAssist
 
     assert result["errors"] == {"base": "already_configured"}
     assert entry.data == DATA
+
+
+async def test_settings_show_only_the_intervals_a_device_uses(hass: HomeAssistant) -> None:
+    for device_type, expected in (
+        ("t010", ["scan_interval_fast", "scan_interval"]),
+        ("emec_ld", ["scan_interval_fast", "scan_interval_medium", "scan_interval"]),
+    ):
+        result = await start(hass, device_type)
+        result = await finish(
+            hass,
+            result["flow_id"],
+            fake_unit(device_type),
+            {
+                CONF_NAME: device_type,
+                CONF_HOST: "192.168.1.70",
+                CONF_PORT: 502,
+                CONF_UNIT_ID: {"t010": 2, "emec_ld": 3}[device_type],
+            },
+        )
+        fields = [str(key) for key in result["data_schema"].schema]
+        assert [f for f in fields if f.startswith("scan_interval")] == expected
