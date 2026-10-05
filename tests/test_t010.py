@@ -11,6 +11,14 @@ from pool_modbus.reader import thermostat_text
 VALUES = {value.key: value for value in get_device_type("t010").values}
 
 
+async def write(device: T010, key: str, value) -> None:
+    """Write a setting the way Home Assistant does: the setpoint through the thermostat."""
+    if key == "setpoint":
+        await THERMOSTAT.set_target_temperature(device, value)
+    else:
+        await VALUES[key].write(device, value)
+
+
 async def read(unit) -> T010:
     device = get_device_type("t010").model(unit)
     await device.async_update()
@@ -129,7 +137,7 @@ async def test_write_setting(
     unit = make_unit(dict(t010_snapshot))
     device = await read(unit)
 
-    await VALUES[key].write(device, value)
+    await write(device, key, value)
 
     assert unit.writes == [(register, word)]
 
@@ -154,7 +162,7 @@ async def test_value_out_of_range_is_refused_before_any_request(
     unit.requests.clear()
 
     with pytest.raises(ValueError):
-        await VALUES[key].write(device, value)
+        await write(device, key, value)
 
     assert unit.requests == []
 
@@ -163,9 +171,9 @@ async def test_writing_the_value_the_device_holds_is_skipped(make_unit, t010_sna
     unit = make_unit(dict(t010_snapshot))
     device = await read(unit)
 
-    await VALUES["setpoint"].write(device, 20.0)
-    await VALUES["set_delay"].write(device, 3.0)
-    await VALUES["heating_enabled"].write(device, False)  # already blocked
+    await write(device, "setpoint", 20.0)
+    await write(device, "set_delay", 3.0)
+    await THERMOSTAT.set_mode(device, "off")  # already blocked
 
     assert unit.writes == []  # every write would go to the firmware's EEPROM
 
@@ -175,7 +183,7 @@ async def test_the_device_is_read_before_comparing(make_unit, t010_snapshot) -> 
     device = await read(unit)
     unit.registers[5] = 215  # changed on the device since the last poll
 
-    await VALUES["setpoint"].write(device, 20.0)
+    await write(device, "setpoint", 20.0)
 
     assert unit.writes == [(5, 200)]
 
@@ -186,7 +194,7 @@ async def test_heating_switch_changes_only_its_bit(make_unit, t010_snapshot) -> 
     unit = make_unit(registers)
     device = await read(unit)
 
-    await VALUES["heating_enabled"].write(device, True)
+    await THERMOSTAT.set_mode(device, "heat")
 
     assert unit.writes == [(8, 0x0200 | 0x0001)]
 
@@ -219,7 +227,7 @@ async def test_thermostat_target_and_state(make_unit, t010_snapshot) -> None:
         pytest.approx(19.0),
         pytest.approx(20.0),
     )
-    assert thermostat_text(THERMOSTAT, device) == "off"
+    assert thermostat_text(THERMOSTAT, device) == "off, target 20.0 °C"
 
     await THERMOSTAT.set_target_temperature(device, 32.5)
     await THERMOSTAT.set_mode(device, "heat")
@@ -227,7 +235,7 @@ async def test_thermostat_target_and_state(make_unit, t010_snapshot) -> None:
 
     assert unit.writes == [(5, 325), (8, 0x0000)]
     assert device.setpoint == pytest.approx(32.5)
-    assert thermostat_text(THERMOSTAT, device) == "heat, idle"
+    assert thermostat_text(THERMOSTAT, device) == "heat, idle, target 32.5 °C"
 
 
 async def test_thermostat_refuses_other_modes(make_unit, t010_snapshot) -> None:
@@ -257,7 +265,7 @@ async def test_write_waits_until_the_device_shows_it(
     unit = make_unit(dict(t010_snapshot), stale_reads=3)  # a gateway answering from its cache
     device = await read(unit)
 
-    await VALUES["setpoint"].write(device, 21.5)
+    await write(device, "setpoint", 21.5)
 
     assert unit.writes == [(5, 215)]
     assert device.setpoint == pytest.approx(21.5)
@@ -268,7 +276,7 @@ async def test_write_the_device_never_shows_raises(make_unit, t010_snapshot, qui
     device = await read(unit)
 
     with pytest.raises(TimeoutError, match="setpoint still reads 20.0"):
-        await VALUES["setpoint"].write(device, 21.5)
+        await write(device, "setpoint", 21.5)
 
 
 async def test_two_flag_writes_in_a_row_keep_each_other(
@@ -282,3 +290,10 @@ async def test_two_flag_writes_in_a_row_keep_each_other(
 
     assert unit.writes == [(8, 0x0000), (8, 0x0200)]
     assert unit.registers[8] == 0x0200
+
+
+def test_values_the_thermostat_covers_are_not_repeated() -> None:
+    assert not {"setpoint", "heating_enabled", "heating"} & set(VALUES)
+    assert (
+        VALUES["heating_power"].enabled_default is False
+    )  # adds to the thermostat in PWM mode only

@@ -37,11 +37,10 @@ from .conftest import fake_unit
 from .test_init import add, state
 
 CLIMATE = "climate.pool_thermostat_pool_thermostat"
-HEATING = "switch.pool_thermostat_pool_heating"
 DELAYING = "switch.pool_thermostat_pool_delaying"
-SETPOINT = "number.pool_thermostat_set_temperature"
 OFFSET = "number.pool_thermostat_offset_temperature"
 DELAY = "number.pool_thermostat_set_delay_time"
+POWER = "sensor.pool_thermostat_heating_power"
 
 # The snapshot: setpoint 20.0 °C (register 5 = 200), heating blocked (register 8 = 0x0100).
 
@@ -49,27 +48,25 @@ DELAY = "number.pool_thermostat_set_delay_time"
 async def test_settings_are_config_entities(hass: HomeAssistant) -> None:
     await add(hass, "t010", fake_unit("t010"))
     registry = er.async_get(hass)
-    assert registry.async_get(SETPOINT).entity_category == "config"
-    assert registry.async_get(HEATING).entity_category is None
-    assert hass.states.get(SETPOINT).attributes["min"] == 5.0
-    assert hass.states.get(SETPOINT).attributes["max"] == 40.0
+    assert registry.async_get(OFFSET).entity_category == "config"
+    assert registry.async_get(DELAYING).entity_category is None
     assert hass.states.get(OFFSET).attributes["min"] == -3.1
     assert hass.states.get(OFFSET).attributes["mode"] == "box"
     assert hass.states.get(DELAY).attributes["mode"] == "box"
-    assert hass.states.get(SETPOINT).attributes["mode"] == "auto"
 
 
-async def test_heating_switch(hass: HomeAssistant) -> None:
-    unit = fake_unit("t010")
-    await add(hass, "t010", unit)
-
-    await hass.services.async_call(
-        SWITCH_DOMAIN, SERVICE_TURN_ON, {ATTR_ENTITY_ID: HEATING}, blocking=True
-    )
-
-    assert unit.writes == [(8, 0x0000)]
-    assert state(hass, HEATING) == "on"
-    assert state(hass, CLIMATE) == HVACMode.HEAT
+async def test_the_thermostat_is_not_repeated_by_other_entities(hass: HomeAssistant) -> None:
+    await add(hass, "t010", fake_unit("t010"))
+    registry = er.async_get(hass)
+    for entity_id in (
+        "switch.pool_thermostat_pool_heating",
+        "number.pool_thermostat_set_temperature",
+        "sensor.pool_thermostat_heating_mode",
+    ):
+        assert registry.async_get(entity_id) is None, entity_id
+    # Heating power adds to the thermostat in PWM mode only, so it starts disabled.
+    assert registry.async_get(POWER).disabled_by == er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(POWER) is None
 
 
 async def test_delaying_switch_keeps_the_heating_bit(hass: HomeAssistant) -> None:
@@ -85,7 +82,7 @@ async def test_delaying_switch_keeps_the_heating_bit(hass: HomeAssistant) -> Non
 
 @pytest.mark.parametrize(
     ("entity_id", "value", "write"),
-    [(SETPOINT, 21.5, (5, 215)), (OFFSET, -0.5, (6, 0xFFFB)), (DELAY, 10, (7, 10))],
+    [(OFFSET, -0.5, (6, 0xFFFB)), (DELAY, 10, (7, 10))],
 )
 async def test_number(hass: HomeAssistant, entity_id: str, value: float, write) -> None:
     unit = fake_unit("t010")
@@ -107,9 +104,9 @@ async def test_setting_the_held_value_does_not_write(hass: HomeAssistant) -> Non
     await add(hass, "t010", unit)
 
     await hass.services.async_call(
-        NUMBER_DOMAIN,
-        SERVICE_SET_VALUE,
-        {ATTR_ENTITY_ID: SETPOINT, ATTR_VALUE: 20.0},
+        CLIMATE_DOMAIN,
+        SERVICE_SET_TEMPERATURE,
+        {ATTR_ENTITY_ID: CLIMATE, ATTR_TEMPERATURE: 20.0},
         blocking=True,
     )
 
@@ -142,7 +139,6 @@ async def test_thermostat(hass: HomeAssistant) -> None:
     assert current.state == HVACMode.HEAT
     assert current.attributes[ATTR_TEMPERATURE] == 32.5
     assert current.attributes[ATTR_HVAC_ACTION] == HVACAction.IDLE
-    assert state(hass, SETPOINT) == "32.5"
 
 
 async def test_thermostat_turn_off(hass: HomeAssistant) -> None:
@@ -166,7 +162,10 @@ async def test_device_failure_is_reported(hass: HomeAssistant) -> None:
 
     with pytest.raises(HomeAssistantError, match="did not accept"):
         await hass.services.async_call(
-            SWITCH_DOMAIN, SERVICE_TURN_ON, {ATTR_ENTITY_ID: HEATING}, blocking=True
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            {ATTR_ENTITY_ID: CLIMATE, ATTR_HVAC_MODE: HVACMode.HEAT},
+            blocking=True,
         )
 
 

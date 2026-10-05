@@ -46,6 +46,9 @@ class Value:
     number_mode: Literal["box", "slider"] | None = None
     """How Home Assistant shows a writable number: an input box or a slider; None lets it pick."""
 
+    enabled_default: bool = True
+    """False for a value most installations do not need: Home Assistant adds it disabled."""
+
     @property
     def writable(self) -> bool:
         return self.write is not None

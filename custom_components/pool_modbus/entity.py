@@ -54,6 +54,7 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{value.key}"
         self._attr_name = value.name
         self._attr_device_info = coordinator.device_info
+        self._attr_entity_registry_enabled_default = value.enabled_default
         if value.category == "setting":
             self._attr_entity_category = (
                 EntityCategory.CONFIG if value.writable else EntityCategory.DIAGNOSTIC

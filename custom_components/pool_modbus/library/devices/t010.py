@@ -123,10 +123,6 @@ async def _set_mode(device: T010, mode: str) -> None:
     await write_if_changed(device, "heating_blocked", mode == "off")
 
 
-def _on_off(flag: bool | None) -> str | None:
-    return None if flag is None else ("On" if flag else "Off")
-
-
 THERMOSTAT = Thermostat(
     key="thermostat",
     name="Pool Thermostat",
@@ -150,20 +146,15 @@ VALUES = (
         category="measurement",
         device_class="temperature",
     ),
-    Value(
-        "heating_enabled",
-        "Pool Heating",
-        lambda d: d.heating_enabled,
-        binary=True,
-        write=lambda d, on: write_if_changed(d, "heating_blocked", not on),
-    ),
-    Value("heating", "Heating Mode", lambda d: _on_off(d.heating)),
+    # Heating on/off, the setpoint and whether it is heating are the thermostat's mode,
+    # target and action. The power adds to that only in PWM mode (20-80 % steps).
     Value(
         "heating_power",
         "Heating Power",
         lambda d: d.heating_power,
         "%",
         category="measurement",
+        enabled_default=False,
     ),
     Value(
         "delaying",
@@ -173,18 +164,6 @@ VALUES = (
         write=lambda d, on: write_if_changed(d, "delaying", bool(on)),
     ),
     Value("delay_remaining", "Delay Time", lambda d: d.delay_remaining),
-    Value(
-        "setpoint",
-        "Set Temperature",
-        lambda d: d.setpoint,
-        "°C",
-        category="setting",
-        device_class="temperature",
-        write=lambda d, t: write_if_changed(d, "setpoint", t),
-        minimum=SETPOINT_RANGE[0],
-        maximum=SETPOINT_RANGE[1],
-        step=0.1,
-    ),
     Value(
         "offset",
         "Offset Temperature",

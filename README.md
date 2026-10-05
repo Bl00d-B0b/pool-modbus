@@ -129,14 +129,11 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
   Controller Last Update   2026-10-05 12:42:52
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
-  Pool Thermostat         off
+  Pool Thermostat         off, target 20.0 °C
   Pool Temperature        19.0 °C
-  Pool Heating            off
-  Heating Mode            Off
   Heating Power           0 %
   Pool Delaying           off
   Delay Time              00:00
-  Set Temperature         20.0 °C
   Offset Temperature      0.0 °C
   Set Delay Time          3 min
   Menu Mode               off

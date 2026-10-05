@@ -115,12 +115,16 @@ def value_text(value: Value, device: Component) -> str:
 
 
 def thermostat_text(thermostat: Thermostat, device: Component) -> str:
-    """The thermostat's mode, and what it is doing while not off: e.g. "heat, idle"."""
+    """Mode, what it is doing while not off, and the target: e.g. "heat, idle, target 20.0 °C"."""
     mode = thermostat.mode(device)
     if mode is None:
         return "unknown"
     action = thermostat.action(device)
-    return mode if mode == "off" or action is None else f"{mode}, {action}"
+    parts = [mode] if mode == "off" or action is None else [mode, action]
+    target = thermostat.target_temperature(device)
+    if target is not None:
+        parts.append(f"target {target} °C")
+    return ", ".join(parts)
 
 
 def _value_rows(device_type: DeviceType, device: Component) -> list[tuple[str, str]]:
