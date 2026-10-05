@@ -36,10 +36,10 @@ from homeassistant.helpers import entity_registry as er
 from .conftest import fake_unit
 from .test_init import add, state
 
-CLIMATE = "climate.pool_thermostat_pool_thermostat"
-DELAYING = "switch.pool_thermostat_pool_delaying"
-OFFSET = "number.pool_thermostat_offset_temperature"
-DELAY = "number.pool_thermostat_set_delay_time"
+CLIMATE = "climate.pool_thermostat_thermostat"
+DELAYING = "switch.pool_thermostat_heating_delay"
+OFFSET = "number.pool_thermostat_temperature_offset"
+DELAY = "number.pool_thermostat_delay_setting"
 POWER = "sensor.pool_thermostat_heating_power"
 
 # The snapshot: setpoint 20.0 °C (register 5 = 200), heating blocked (register 8 = 0x0100).

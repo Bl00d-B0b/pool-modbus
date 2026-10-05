@@ -71,12 +71,12 @@ Register 40025 (address 24):
 - **Backwash Day / Time:** the schedule as written (40018–40020).
 - **Saved Backwash Schedule:** what the controller keeps (40028–40030), e.g.
   "Friday 06:00", or "Off".
-- **Controller Last Update:** the clock from 40037–40040.
+- **Clock:** the clock from 40037–40040.
 
 Read groups in Home Assistant: the switches and status bits fast (40017 and
 40025, one request); the backwash schedule and the clock slow. Optional parts,
 both on by default: **backwash schedule** (Backwash Day, Backwash Time, Saved
-Backwash Schedule) and **clock** (Controller Last Update, Controller Sync RTC).
+Backwash Schedule) and **clock** (Clock, Set Clock).
 
 ## Writing
 
@@ -105,17 +105,17 @@ read-modify-writes of 40017.
 
 | Entity | Type | Device class | Icon | Registers | Read |
 |---|---|---|---|---|---|
-| Pool Filtration | Switch | `switch` | `air-filter` / `water-pump-off` | 40017 bit 0 | Fast |
-| Block Filling Up | Switch | `switch` | `water-off` / `water-plus-outline` | 40017 bit 5 | Fast |
-| Pool Cover | Cover: open/close | `gate` | `pool` / `gate` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
-| Pool Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
+| Filtration | Switch | `switch` | `air-filter` / `water-pump-off` | 40017 bit 0 | Fast |
+| Block Filling | Switch | `switch` | `water-off` / `water-plus-outline` | 40017 bit 5 | Fast |
+| Cover | Cover: open/close | `gate` | `pool` / `gate` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
+| Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
 | Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `air-filter`, `water-pump-off` | 40025 bits 1–2 | Fast |
 | Water Level | Sensor: Off, Minimum, Low, Normal, Maximum, Unknown | `enum` | `water-off`, `water-alert`, `water-minus`, `water-check`, `water-plus` | 40025 bits 6–10 | Fast |
-| Filter Pump Running, Pool Filling Up | Binary sensors | `running` | `water-pump`, `water-plus` | 40025 bits 0, 4 | Fast |
-| Room Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
+| Filter Pump, Filling | Binary sensors | `running` | `water-pump`, `water-plus` | 40025 bits 0, 4 | Fast |
+| Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
 | Water Level Monitoring | Binary sensor | | `water` / `water-off` | 40025 bit 10 | Fast |
-| Manual Filter Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
+| Start Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
 | Backwash Day, Backwash Time | Selects (time in 5 minute steps) | | `calendar-clock`, `clock-edit` | 40018–40020, 40017 bit 15 | Slow |
 | Saved Backwash Schedule | Sensor | | `calendar-check` | 40028–40030 | Slow |
-| Controller Last Update | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
-| Controller Sync RTC | Diagnostic button | | `home-clock` | 40033–40036 | Slow |
+| Clock | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
+| Set Clock | Diagnostic button | | `home-clock` | 40033–40036 | Slow |

@@ -19,8 +19,9 @@ recorded from real hardware, so the decoding is right once and stays right.
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
 | EMEC LD series pH/Cl controller | `emec_ld` | Read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
-Each device type also defines the values a user sees, named like the matching
-Home Assistant entities, and the rules that go with them (for example, which
+Each device type also defines the values a user sees, with generic names (in
+Home Assistant they follow the device's name, e.g. "Pool thermostat Heating
+Delay", and can be renamed), and the rules that go with them (for example, which
 dosing settings apply in which working mode).
 
 Want your device here? See [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -137,50 +138,50 @@ Output from a test installation, three devices behind one gateway:
 
 ```text
 Pool controller (unit 1, tcp 192.168.1.50:502)
-  Pool Filtration          on
-  Block Filling Up         off
+  Filtration               on
+  Block Filling            off
   Filtration Mode          Filtering
-  Filter Pump Running      on
+  Filter Pump              on
   Water Level              Normal
   Water Level Monitoring   on
-  Pool Filling Up          off
-  Pool Cover               closed
-  Pool Light               off
-  Room Flooding Alarm      off
+  Filling                  off
+  Light                    off
+  Flooding Alarm           off
   Backwash Day             Friday
   Backwash Time            06:00
   Saved Backwash Schedule  Friday 06:00
-  Controller Last Update   2026-10-05 12:42:52
+  Clock                    2026-10-05 12:16:03
+  Cover                    closed
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
-  Pool Thermostat         off, 19.0 °C, target 20.0 °C
-  Pool Delaying           off
-  Delay Time              0 s
-  Offset Temperature      0.0 °C
-  Set Delay Time          3 min
-  Menu Mode               off
-  Thermometer Alarm       off
-  Short Connection Alarm  off
-  EEPROM Alarm            off
-  Thermostat Firmware     1.7
+  Thermostat           off, 19.0 °C, target 20.0 °C
+  Heating Delay        off
+  Delay Remaining      0 s
+  Temperature Offset   0.0 °C
+  Delay Setting        3 min
+  Menu Mode            off
+  Sensor Alarm         off
+  Sensor Supply Alarm  off
+  EEPROM Alarm         off
+  Firmware             1.7
 
 EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
-  Pool pH Level          7.52 pH
-  Pool Cl Level          0.46 ppm
-  Dispenser Temperature  19.2 °C
-  Out Relay pH           On
-  Out Relay Cl           On
-  pH Pump Pulse Rate     0 p/min
-  Cl Pump Pulse Rate     0 p/min
-  pH Probe Voltage       -29 mV
-  Cl Probe Voltage       34 mV
-  Dispenser Last Update  2026-10-05 12:44:00
-  Ch1 pH pulse1 Mode     Proportional
-  pH Max Value           10.0 pH
-  pH Min Value           7.5 pH
-  Max Pulse Rate         30 p/min
-  Min Pulse Rate         0 p/min
-  Pulse Speed            unavailable
+  pH Level           7.51 pH
+  Cl Level           0.46 ppm
+  Temperature        17.6 °C
+  pH Relay           On
+  Cl Relay           On
+  pH Pulse Rate      0 p/min
+  Cl Pulse Rate      0 p/min
+  pH Probe Voltage   -27 mV
+  Cl Probe Voltage   34 mV
+  Clock              2026-10-01 20:32:00
+  pH Dosing Mode     Proportional
+  pH Max Value       10.0 pH
+  pH Min Value       7.5 pH
+  pH Max Pulse Rate  30 p/min
+  pH Min Pulse Rate  0 p/min
+  pH Pulse Speed     unavailable
 ```
 
 ## Python

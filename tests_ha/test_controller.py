@@ -34,14 +34,14 @@ from custom_components.pool_modbus.library.devices import pool_controller, writi
 from .conftest import fake_unit
 from .test_init import add, state
 
-FILTRATION = "switch.pool_controller_pool_filtration"
-COVER = "cover.pool_controller_pool_cover"
-LIGHT = "light.pool_controller_pool_light"
+FILTRATION = "switch.pool_controller_filtration"
+COVER = "cover.pool_controller_cover"
+LIGHT = "light.pool_controller_light"
 DAY = "select.pool_controller_backwash_day"
 TIME = "select.pool_controller_backwash_time"
-BACKWASH = "button.pool_controller_manual_filter_backwash"
+BACKWASH = "button.pool_controller_start_backwash"
 RESET = "button.pool_controller_reset_alarms"
-SYNC = "button.pool_controller_controller_sync_rtc"
+SYNC = "button.pool_controller_set_clock"
 MODE = "sensor.pool_controller_filtration_mode"
 
 # The snapshot: register 16 = 1 (filtration on), backwash Friday 06:00 written and
@@ -162,6 +162,6 @@ async def test_buttons(hass: HomeAssistant, freezer) -> None:
 async def test_optional_parts_take_their_entities(hass: HomeAssistant) -> None:
     options = {"read_backwash_schedule": False, "read_clock": False}
     await add(hass, "pool_controller", fake_unit("pool_controller"), options)
-    for gone in (DAY, TIME, SYNC, "sensor.pool_controller_controller_last_update"):
+    for gone in (DAY, TIME, SYNC, "sensor.pool_controller_clock"):
         assert hass.states.get(gone) is None, gone
     assert state(hass, FILTRATION) == "on"

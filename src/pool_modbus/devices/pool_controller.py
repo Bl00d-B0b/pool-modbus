@@ -278,7 +278,7 @@ async def sync_clock(device: PoolController, now: datetime) -> None:
 VALUES = (
     Value(
         "filtration_enabled",
-        "Pool Filtration",
+        "Filtration",
         lambda d: d.filtration_enabled,
         binary=True,
         device_class="switch",
@@ -288,7 +288,7 @@ VALUES = (
     ),
     Value(
         "filling_blocked",
-        "Block Filling Up",
+        "Block Filling",
         lambda d: d.filling_blocked,
         binary=True,
         device_class="switch",
@@ -310,7 +310,7 @@ VALUES = (
     ),
     Value(
         "pump_running",
-        "Filter Pump Running",
+        "Filter Pump",
         lambda d: d.pump_running,
         binary=True,
         device_class="running",
@@ -342,7 +342,7 @@ VALUES = (
     ),
     Value(
         "filling_up",
-        "Pool Filling Up",
+        "Filling",
         lambda d: d.filling_up,
         binary=True,
         device_class="running",
@@ -351,7 +351,7 @@ VALUES = (
     ),
     Value(
         "light_on",
-        "Pool Light",
+        "Light",
         lambda d: d.light_on,
         binary=True,
         write=set_light,
@@ -362,7 +362,7 @@ VALUES = (
     ),
     Value(
         "room_flooding_alarm",
-        "Room Flooding Alarm",
+        "Flooding Alarm",
         lambda d: d.room_flooding_alarm,
         binary=True,
         device_class="moisture",
@@ -401,7 +401,7 @@ VALUES = (
     ),
     Value(
         "clock",
-        "Controller Last Update",
+        "Clock",
         lambda d: d.clock,
         category="diagnostic",
         device_class="timestamp",
@@ -413,7 +413,7 @@ VALUES = (
 ACTIONS = (
     Action(
         "backwash",
-        "Manual Filter Backwash",
+        "Start Backwash",
         backwash,
         fields=("backwash_command",),
         icon="mdi:rotate-left",
@@ -427,7 +427,7 @@ ACTIONS = (
     ),
     Action(
         "sync_clock",
-        "Controller Sync RTC",
+        "Set Clock",
         sync_clock,
         category="diagnostic",
         scan_group="slow",
@@ -447,7 +447,7 @@ ACTIONS = (
 
 COVER = Cover(
     "cover",
-    "Pool Cover",
+    "Cover",
     lambda d: d.cover_closed,
     open_cover,
     close_cover,

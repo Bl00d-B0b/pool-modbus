@@ -66,23 +66,23 @@ async def test_pool_controller_entities(hass: HomeAssistant) -> None:
     await add(hass, "pool_controller", fake_unit("pool_controller"))
 
     assert state(hass, "sensor.pool_controller_filtration_mode") == "Filtering"
-    assert state(hass, "binary_sensor.pool_controller_filter_pump_running") == "on"
-    assert state(hass, "switch.pool_controller_pool_filtration") == "on"
+    assert state(hass, "binary_sensor.pool_controller_filter_pump") == "on"
+    assert state(hass, "switch.pool_controller_filtration") == "on"
     assert state(hass, "sensor.pool_controller_water_level") == "Normal"
     assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Friday 06:00"
-    assert state(hass, "sensor.pool_controller_controller_last_update").startswith("2026-10-05T")
+    assert state(hass, "sensor.pool_controller_clock").startswith("2026-10-05T")
 
 
 async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
     entry = await add(hass, "t010", fake_unit("t010"))
 
-    thermostat = hass.states.get("climate.pool_thermostat_pool_thermostat")
+    thermostat = hass.states.get("climate.pool_thermostat_thermostat")
     assert thermostat.state == "off"
     assert thermostat.attributes["current_temperature"] == 19.0
     assert thermostat.attributes["heating_power"] == 0
-    assert state(hass, "switch.pool_thermostat_pool_delaying") == "off"
-    assert state(hass, "number.pool_thermostat_set_delay_time") == "3"
-    assert state(hass, "binary_sensor.pool_thermostat_thermometer_alarm") == "off"
+    assert state(hass, "switch.pool_thermostat_heating_delay") == "off"
+    assert state(hass, "number.pool_thermostat_delay_setting") == "3"
+    assert state(hass, "binary_sensor.pool_thermostat_sensor_alarm") == "off"
 
     [device] = dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
     assert device.identifiers == {(DOMAIN, entry.unique_id)}
@@ -96,12 +96,12 @@ async def test_thermostat_entities_and_device(hass: HomeAssistant) -> None:
 async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
 
-    assert state(hass, "sensor.dosing_pump_pool_ph_level") == "7.51"
-    assert state(hass, "sensor.dosing_pump_pool_cl_level") == "0.46"
-    assert state(hass, "sensor.dosing_pump_out_relay_ph") == "On"
-    assert state(hass, "sensor.dosing_pump_ch1_ph_pulse1_mode") == "Proportional"
+    assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
+    assert state(hass, "sensor.dosing_pump_cl_level") == "0.46"
+    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
+    assert state(hass, "sensor.dosing_pump_ph_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
-    assert state(hass, "sensor.dosing_pump_pulse_speed") == STATE_UNAVAILABLE
+    assert state(hass, "sensor.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
 
 
 async def test_entities_go_unavailable_when_the_device_stops_answering(
@@ -109,14 +109,14 @@ async def test_entities_go_unavailable_when_the_device_stops_answering(
 ) -> None:
     unit = fake_unit("t010")
     entry = await add(hass, "t010", unit)
-    assert state(hass, "climate.pool_thermostat_pool_thermostat") == "off"
+    assert state(hass, "climate.pool_thermostat_thermostat") == "off"
 
     unit.fail = TimeoutError("no answer")
     await entry.runtime_data.async_refresh_all()
     await hass.async_block_till_done()
 
-    assert state(hass, "climate.pool_thermostat_pool_thermostat") == STATE_UNAVAILABLE
-    assert state(hass, "number.pool_thermostat_offset_temperature") == STATE_UNAVAILABLE
+    assert state(hass, "climate.pool_thermostat_thermostat") == STATE_UNAVAILABLE
+    assert state(hass, "number.pool_thermostat_temperature_offset") == STATE_UNAVAILABLE
 
 
 async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
@@ -129,7 +129,7 @@ async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert entry.runtime_data.coordinators["fast"].last_update_success
-    assert state(hass, "sensor.dosing_pump_out_relay_ph") == "On"
+    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
 
 
 async def test_unload(hass: HomeAssistant) -> None:
@@ -169,7 +169,7 @@ async def test_an_older_entry_keeps_its_interval_as_the_slow_one(hass: HomeAssis
 async def test_optional_parts_are_on_by_default(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
-    assert state(hass, "sensor.dosing_pump_ch1_ph_pulse1_mode") == "Proportional"
+    assert state(hass, "sensor.dosing_pump_ph_dosing_mode") == "Proportional"
 
 
 async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:
@@ -177,6 +177,6 @@ async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:
         hass, "emec_ld", fake_unit("emec_ld"), {"read_probe_voltages": False, "read_clock": False}
     )
     assert hass.states.get("sensor.dosing_pump_ph_probe_voltage") is None
-    assert hass.states.get("sensor.dosing_pump_dispenser_last_update") is None
-    assert state(hass, "sensor.dosing_pump_pool_ph_level") == "7.51"
+    assert hass.states.get("sensor.dosing_pump_clock") is None
+    assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
     assert set(entry.runtime_data.coordinators) == {"fast", "medium", "slow"}  # dosing settings

@@ -125,7 +125,7 @@ async def _set_mode(device: T010, mode: str) -> None:
 
 THERMOSTAT = Thermostat(
     key="thermostat",
-    name="Pool Thermostat",
+    name="Thermostat",
     current_temperature=lambda d: d.temperature,
     target_temperature=lambda d: d.setpoint,
     mode=lambda d: d.hvac_mode,
@@ -147,7 +147,7 @@ THERMOSTAT = Thermostat(
 VALUES = (
     Value(
         "delaying",
-        "Pool Delaying",
+        "Heating Delay",
         lambda d: d.delaying,
         binary=True,
         device_class="switch",
@@ -157,7 +157,7 @@ VALUES = (
     ),
     Value(
         "delay_remaining",
-        "Delay Time",
+        "Delay Remaining",
         lambda d: d.delay_remaining,
         "s",
         device_class="duration",
@@ -165,7 +165,7 @@ VALUES = (
     ),
     Value(
         "offset",
-        "Offset Temperature",
+        "Temperature Offset",
         lambda d: d.offset,
         "°C",
         category="setting",
@@ -179,7 +179,7 @@ VALUES = (
     ),
     Value(
         "set_delay",
-        "Set Delay Time",
+        "Delay Setting",
         lambda d: d.set_delay,
         "min",
         category="setting",
@@ -202,7 +202,7 @@ VALUES = (
     ),
     Value(
         "sensor_disconnected",
-        "Thermometer Alarm",
+        "Sensor Alarm",
         lambda d: d.sensor_disconnected,
         binary=True,
         device_class="problem",
@@ -211,7 +211,7 @@ VALUES = (
     ),
     Value(
         "sensor_supply_fault",
-        "Short Connection Alarm",
+        "Sensor Supply Alarm",
         lambda d: d.sensor_supply_fault,
         binary=True,
         device_class="problem",
@@ -228,7 +228,7 @@ VALUES = (
     ),
     Value(
         "software_version",
-        "Thermostat Firmware",
+        "Firmware",
         lambda d: d.software_version,
         category="diagnostic",
         icon="mdi:chip",
