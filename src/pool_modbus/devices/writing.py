@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from modbus_connection import GatewayTargetError, ModbusError, ModbusTimeoutError
 from modbus_connection.model import Component
 
 CONFIRM_TIMEOUT = 5.0
@@ -12,6 +13,9 @@ CONFIRM_TIMEOUT = 5.0
 
 CONFIRM_INTERVAL = 0.25
 """Seconds between reads while waiting."""
+
+NO_REPLY = (GatewayTargetError, ModbusTimeoutError)
+"""Errors meaning a request got no reply, so the device may still have carried it out."""
 
 
 async def pulse(device: Component, field: str, seconds: float) -> None:
@@ -52,6 +56,11 @@ async def write_if_changed(device: Component, field: str, value: Any) -> None:
     also means the next read-modify-write of a shared register starts from the
     current word.
 
+    A write that gets no reply is not an error by itself: the EMEC LD stores a
+    value but answers too late for its gateway, which then reports exception
+    0x0B. The reads that follow decide, and a read that fails meanwhile is
+    tried again until the timeout.
+
     Raises ``ValueError`` for a value the field does not accept, and
     ``TimeoutError`` if the device does not show the value within
     ``CONFIRM_TIMEOUT`` seconds.
@@ -60,19 +69,32 @@ async def write_if_changed(device: Component, field: str, value: Any) -> None:
     if callable(writable):
         value = writable(value)
     await device.async_update()
-    if getattr(device, field) == value:
+    current = getattr(device, field)
+    if current == value:
         return
-    await device.write(field, value)
+    no_reply: Exception | None = None
+    try:
+        await device.write(field, value)
+    except NO_REPLY as err:
+        no_reply = err
 
     loop = asyncio.get_running_loop()
     deadline = loop.time() + CONFIRM_TIMEOUT
+    read_error: Exception | None = None
     while True:
-        await device.async_update()
-        current = getattr(device, field)
-        if current == value:
-            return
+        try:
+            await device.async_update()
+        except (ModbusError, OSError, TimeoutError) as err:
+            read_error = err
+        else:
+            read_error = None
+            current = getattr(device, field)
+            if current == value:
+                return
         if loop.time() >= deadline:
+            reads = f"cannot be read ({read_error})" if read_error else f"still reads {current}"
+            unanswered = ", which got no reply" if no_reply is not None else ""
             raise TimeoutError(
-                f"{field} still reads {current} {CONFIRM_TIMEOUT:g} s after writing {value}"
-            )
+                f"{field} {reads} {CONFIRM_TIMEOUT:g} s after writing {value}{unanswered}"
+            ) from no_reply or read_error
         await asyncio.sleep(CONFIRM_INTERVAL)

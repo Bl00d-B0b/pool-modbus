@@ -179,6 +179,27 @@ async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, wri
     assert pump.writes == writes
 
 
+async def test_a_write_answered_too_late_is_confirmed_by_reading(
+    make_pump, ldphcl_snapshot
+) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    pump.slow_write_reply = True  # stored, but the gateway reports exception 0x0B
+    pump.failed_reads = 2  # and the next reads collide
+    await WRITE_VALUES["ph_min"].write(device, 7.55)
+    assert pump.writes == [(69, 755)]
+    assert device.ch1_pulse_val2 == pytest.approx(7.55)
+
+
+async def test_a_write_the_pump_did_not_store_is_an_error(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    pump.lose_writes = True
+    with pytest.raises(TimeoutError, match="still reads 7.5 .* after writing 7.55, which got no"):
+        await WRITE_VALUES["ph_min"].write(device, 7.55)
+    assert pump.writes == [(69, 755)]
+
+
 async def test_a_setting_the_pump_holds_is_not_written(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)

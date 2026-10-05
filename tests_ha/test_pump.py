@@ -10,6 +10,7 @@ from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from modbus_connection import GatewayTargetError
 
 from custom_components.pool_modbus.library.devices import writing
 
@@ -66,6 +67,18 @@ async def test_ph_values_and_rates(hass: HomeAssistant) -> None:
     assert unit.writes == [(69, 755), (71, 29)]
     assert state(hass, PH_MIN) == "7.55"
     assert state(hass, MAX_RATE) == "29"
+
+
+async def test_a_write_answered_too_late_shows_at_once(hass: HomeAssistant) -> None:
+    unit = fake_unit("emec_ld")
+    await add(hass, "emec_ld", unit)
+    unit.write_reply = GatewayTargetError()  # stored, but the gateway reports 0x0B
+    unit.stale_reads = 2
+
+    await set_number(hass, PH_MIN, 7.55)
+
+    assert unit.writes == [(69, 755)]
+    assert state(hass, PH_MIN) == "7.55"
 
 
 async def test_a_min_rate_sets_the_max_rate_to_0(hass: HomeAssistant) -> None:

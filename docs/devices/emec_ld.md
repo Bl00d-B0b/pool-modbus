@@ -93,6 +93,12 @@ with function 06, at the value's odd wire address. Each value is checked
 against its range first, not written when the controller already holds it, and
 confirmed by reading it back.
 
+The tested LDPHCL stores a written value but answers function 06 later than its
+Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
+0x0B, "gateway target device failed to respond". The new value reads back
+within about 2 s, so the read-back, not the reply, decides whether a write
+worked.
+
 | Setting | Register | Range |
 |---|---|---|
 | pH Max Value, pH Min Value (val1, val2) | 40068, 40070 | 0.00–14.00 pH |

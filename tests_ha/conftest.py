@@ -42,7 +42,8 @@ class FakeUnit:
     ``stale_reads`` makes the next that many reads after a write still return the old
     value, like a gateway that answers reads from a cache. ``fail`` makes every request
     raise; ``fail_once`` only the next read, like a request that collided with another
-    client's.
+    client's. ``write_reply`` is raised by a write after storing the value, like the
+    EMEC LD's answer arriving too late for its gateway.
     """
 
     def __init__(self, registers: dict[int, int], *, odd_step: bool = False) -> None:
@@ -50,6 +51,7 @@ class FakeUnit:
         self.step = 2 if odd_step else 1
         self.fail: Exception | None = None
         self.fail_once: Exception | None = None
+        self.write_reply: Exception | None = None
         self.connected = True
         self.stale_reads = 0
         self.writes: list[tuple[int, int]] = []
@@ -81,6 +83,8 @@ class FakeUnit:
         if self.stale_reads:
             self._stale[address] = [self.registers.get(address, 0), self.stale_reads]
         self.registers[address] = value
+        if self.write_reply is not None:
+            raise self.write_reply
 
     async def write_registers(self, address: int, values: list[int]) -> None:
         if self.fail is not None:

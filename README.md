@@ -100,7 +100,10 @@ written. The T010 stores every write in its EEPROM, so this keeps automations
 that repeat a setting from wearing it out. After a write, the integration reads
 the device until it shows the new value, for up to 5 s, and reports an error if
 it does not. Some Modbus TCP gateways answer reads from a cache: on the test
-installation a written value showed in reads about 1 s later.
+installation a written value showed in reads about 1 s later. A write that gets
+no reply (exception 0x0B from a gateway, or a timeout) is not reported as an
+error if the device then reads back the new value; the EMEC LD answers writes
+too late for its gateway.
 
 If you already read the same devices through Home Assistant's YAML `modbus:`
 configuration, that hub keeps its own connection to the gateway. Both work,

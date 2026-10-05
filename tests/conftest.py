@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from modbus_connection import GatewayTargetError
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -18,6 +19,10 @@ class FakeEmecPump:
     A read of N registers from an odd address returns the N values two
     addresses apart. An even start address fails the test, because the real
     controller returns byte-shifted data for it.
+
+    ``slow_write_reply`` stores a written value but raises exception 0x0B, as
+    the real controller does behind its gateway; ``lose_writes`` also drops the
+    value. ``failed_reads`` makes that many reads after a write fail.
     """
 
     def __init__(self, registers: dict[int, int]) -> None:
@@ -25,6 +30,10 @@ class FakeEmecPump:
         self.requests: list[tuple[str, int, int]] = []
         self.message_spacing = 0.0
         self.connected = True
+        self.slow_write_reply = False
+        self.lose_writes = False
+        self.failed_reads = 0
+        self._failing_reads = 0
 
     def set_message_spacing(self, seconds: float) -> None:
         self.message_spacing = seconds
@@ -32,13 +41,20 @@ class FakeEmecPump:
     async def read_holding_registers(self, address: int, count: int) -> list[int]:
         self.requests.append(("holding", address, count))
         assert address % 2 == 1, f"a read from even address {address} returns byte-shifted data"
+        if self._failing_reads:
+            self._failing_reads -= 1
+            raise GatewayTargetError
         return [self.registers.get(address + 2 * i, 0) for i in range(count)]
 
     async def write_register(self, address: int, value: int) -> None:
         """Function 06 at a value's odd wire address."""
         self.requests.append(("write", address, value))
         assert address % 2 == 1, f"a write to even address {address} lands between two values"
-        self.registers[address] = value
+        if not self.lose_writes:
+            self.registers[address] = value
+        self._failing_reads = self.failed_reads
+        if self.slow_write_reply or self.lose_writes:
+            raise GatewayTargetError
 
     @property
     def writes(self) -> list[tuple[int, int]]:
