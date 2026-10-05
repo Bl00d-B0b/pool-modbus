@@ -124,7 +124,13 @@ async def test_writes_are_refused(make_pump, ldphcl_snapshot) -> None:
         (
             PulseMode.DISABLED,
             set(),
-            {"pH Max Value", "pH Min Value", "pH Max Pulse Rate", "pH Min Pulse Rate", "pH Pulse Speed"},
+            {
+                "pH Max Value",
+                "pH Min Value",
+                "pH Max Pulse Rate",
+                "pH Min Pulse Rate",
+                "pH Pulse Speed",
+            },
         ),
     ],
 )
