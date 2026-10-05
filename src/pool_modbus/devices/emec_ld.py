@@ -1,15 +1,14 @@
 """EMEC LD-series pH / chlorine controllers.
 
 Tested on an LDPHCL (firmware 5.1.4) behind a Modbus TCP-to-RS-485 gateway.
-Register map and known errors in the vendor PDF: docs/devices/emec_ld.md.
+Register map: docs/devices/emec_ld.md.
 
 Addressing. The controller is byte-addressed: every 16-bit value takes two
-Modbus addresses and sits at an odd wire address, ``PDF address - 40001``. A
-read of N registers from an odd address returns the N values at a, a+2, a+4,
-...; a read from an even address returns byte-shifted data. ``EmecUnit``
-numbers the values 0, 1, 2, ... (``index = (PDF address - 40002) / 2``) and
-sends each read to wire address ``2 * index + 1``, so the model's read planner
-works unchanged.
+Modbus addresses and sits at an odd wire address, ``register - 40001``. A read
+of N registers from an odd address returns the N values at a, a+2, a+4, ...;
+reads must start at an odd address. ``EmecUnit`` numbers the values 0, 1, 2,
+... (``index = (register - 40002) / 2``) and sends each read to wire address
+``2 * index + 1``, so the model's read planner works unchanged.
 
 Formats. Most values are plain 16-bit words. Output states and pulse rates are
 one byte in the high half of the word (low byte 0). The clock packs two bytes
@@ -32,7 +31,7 @@ _PULSE_RATE_TRANSIENT = 0xFF
 
 
 def wire_address(index: int) -> int:
-    """Wire address of value ``index``, where ``index = (PDF address - 40002) / 2``."""
+    """Wire address of value ``index``, where ``index = (register - 40002) / 2``."""
     return 2 * index + 1
 
 
@@ -119,11 +118,11 @@ class EmecLD(Component):
     ch2_divisor = integer(3, signed=False)
 
     # Outputs (40024-40032), one byte in the high half of the word.
-    relay_ch2_raw = high_byte(11)  # 40024 "out relay cl"
-    pulse_rate_ch1_raw = high_byte(12)  # 40026 "P/m for out IS pH", output IS1
-    pulse_rate_ch1_2_raw = high_byte(13)  # 40028, labelled the same in the PDF, output IS2
-    pulse_rate_ch2_raw = high_byte(14)  # 40030 "P/m for out IS Cl"
-    relay_ch1_raw = high_byte(15)  # 40032 "out relay pH"
+    relay_ch2_raw = high_byte(11)  # 40024 relay output, channel 2 (Cl)
+    pulse_rate_ch1_raw = high_byte(12)  # 40026 pulse rate, channel 1 output IS1
+    pulse_rate_ch1_2_raw = high_byte(13)  # 40028 pulse rate, channel 1 output IS2
+    pulse_rate_ch2_raw = high_byte(14)  # 40030 pulse rate, channel 2
+    relay_ch1_raw = high_byte(15)  # 40032 relay output, channel 1 (pH)
 
     # Clock (40044-40048), two bytes per word.
     clock_month = bits(21, 8, 8)

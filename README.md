@@ -43,14 +43,13 @@ Want your device here? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 These controllers are byte-addressed: each value takes two Modbus addresses and
 sits at an odd one, and some values are a single byte in the high half of a
-register. The vendor's register PDF gets several of these details wrong.
-[docs/devices/emec_ld.md](docs/devices/emec_ld.md) has the verified register
-map and the list of errors.
+register. [docs/devices/emec_ld.md](docs/devices/emec_ld.md) has the register
+map, tested on an LDPHCL with firmware 5.1.4.
 
 ## Home Assistant
 
 Requires Home Assistant **2026.9** or later, which shares Modbus connections
-between integrations.
+between integrations. Tested with Home Assistant 2026.9.4.
 
 1. In HACS, add `https://github.com/Bl00d-B0b/pool-modbus` as a custom
    repository of type *Integration*, install *Pool equipment (Modbus)* and

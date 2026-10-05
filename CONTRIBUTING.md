@@ -28,8 +28,9 @@ serial numbers or anything else private.
 3. Add tests in `tests/` with a fake unit that answers the way the real
    device does, and a snapshot recorded from real hardware (strip anything
    private).
-4. Document the register map in `docs/devices/<key>.md`, including what was
-   verified on hardware and any errors found in the vendor documentation.
+4. Document the register map in `docs/devices/<key>.md`: the model and
+   firmware version tested, and every register the device type uses, as
+   verified on hardware.
 
 Start read-only. Writes come later, one setting at a time, each with tests.
 
