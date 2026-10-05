@@ -40,7 +40,7 @@ class PoolModbusNumber(PoolModbusEntity, NumberEntity):
 
     @property
     def native_value(self) -> float | None:
-        return self.value.get(self.coordinator.device)
+        return self.device_value.get(self.coordinator.device)
 
     async def async_set_native_value(self, value: float) -> None:
         await self.async_write_value(value)

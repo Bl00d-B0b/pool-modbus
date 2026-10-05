@@ -48,7 +48,8 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
 
     def __init__(self, coordinator: PoolModbusCoordinator, value: Value) -> None:
         super().__init__(coordinator)
-        self.value = value
+        # Not ``self.value``: NumberEntity already has a ``value`` property.
+        self.device_value = value
         entry = coordinator.config_entry
         self._attr_unique_id = f"{entry.unique_id or entry.entry_id}_{value.key}"
         self._attr_name = value.name
@@ -65,11 +66,13 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
         """Unavailable when the device did not answer, or the value does not apply."""
         if not super().available:
             return False
-        return self.value.available is None or bool(self.value.available(self.coordinator.device))
+        return self.device_value.available is None or bool(
+            self.device_value.available(self.coordinator.device)
+        )
 
     async def async_write_value(self, new: object) -> None:
-        write = self.value.write
+        write = self.device_value.write
         assert write is not None
         await async_write(
-            self.coordinator, self.value.name, lambda: write(self.coordinator.device, new)
+            self.coordinator, self.device_value.name, lambda: write(self.coordinator.device, new)
         )

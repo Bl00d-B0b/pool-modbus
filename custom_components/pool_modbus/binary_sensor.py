@@ -34,5 +34,5 @@ class PoolModbusBinarySensor(PoolModbusEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        raw = self.value.get(self.coordinator.device)
+        raw = self.device_value.get(self.coordinator.device)
         return None if raw is None else bool(raw)

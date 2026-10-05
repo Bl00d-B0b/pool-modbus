@@ -44,7 +44,7 @@ class PoolModbusSensor(PoolModbusEntity, SensorEntity):
 
     @property
     def native_value(self) -> Any:
-        raw = self.value.get(self.coordinator.device)
+        raw = self.device_value.get(self.coordinator.device)
         if isinstance(raw, Enum):
             return getattr(raw, "label", raw.name)
         if isinstance(raw, datetime):
