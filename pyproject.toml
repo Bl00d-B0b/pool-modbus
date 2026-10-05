@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pool-modbus"
-version = "0.2.0"
+version = "0.3.0"
 description = "Modbus device models for pool equipment, for Home Assistant and standalone use"
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,11 +20,11 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Home Automation",
 ]
-dependencies = ["modbus-connection>=4.12,<5"]
+dependencies = ["modbus-connection>=4.10,<5"]
 
 [project.optional-dependencies]
 # The command-line tool needs a Modbus backend; Home Assistant brings its own.
-cli = ["modbus-connection[pymodbus]>=4.12,<5"]
+cli = ["modbus-connection[pymodbus]>=4.10,<5"]
 test = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
 
 [project.urls]

@@ -47,6 +47,34 @@ register. The vendor's register PDF gets several of these details wrong.
 [docs/devices/emec_ld.md](docs/devices/emec_ld.md) has the verified register
 map and the list of errors.
 
+## Home Assistant
+
+Requires Home Assistant **2026.9** or later, which shares Modbus connections
+between integrations.
+
+1. In HACS, add `https://github.com/Bl00d-B0b/pool-modbus` as a custom
+   repository of type *Integration*, install *Pool equipment (Modbus)* and
+   restart Home Assistant.
+2. Go to **Settings → Devices & services → Add integration** and pick *Pool
+   equipment (Modbus)*.
+3. Choose the device type and connection (Modbus TCP, RTU over TCP, UDP or
+   serial), then the address and Modbus ID. Before saving, the integration reads
+   the device and checks it is the chosen type.
+4. Repeat for each device. Devices behind the same gateway share one
+   connection.
+
+The integration is **read-only** for now: every value becomes a sensor or
+binary sensor, named as in the table of values above. Settings show up as
+diagnostic entities. Writing (switches, cover, thermostat, dosing settings)
+comes later; see the [roadmap](#roadmap). Each device's read interval can be
+changed under the integration's options (default 15 s).
+
+If you already read the same devices through Home Assistant's YAML `modbus:`
+configuration, that hub keeps its own connection to the gateway. Both work,
+but the gateway then has two clients, and some gateways answer the occasional
+request with a timeout. Move a device to this integration and out of the YAML
+at the same time.
+
 ## Command line
 
 Read a device and print its values (read-only):
@@ -146,7 +174,8 @@ await connection.close()
 
 1. Read-only models and tests for the pool controller, T010 and EMEC LD (done).
 2. Home Assistant custom integration, installable through HACS: one entry per
-   device, each with its own connection settings; read-only entities first.
+   device, each with its own connection settings; read-only entities first
+   (started).
 3. Writes, one setting at a time, each with tests: switches and pulses on the
    pool controller, thermostat settings on the T010, dosing settings on the
    EMEC LD.
@@ -160,6 +189,18 @@ python -m venv .venv
 pip install -e ".[test,cli]"
 pytest
 ruff check . && ruff format --check .
+```
+
+The integration under `custom_components/pool_modbus/` carries a copy of the
+library in `library/`. After changing `src/pool_modbus`, run
+`python script/vendor_library.py`; a test fails while the copy is out of date.
+
+The integration's own tests need Home Assistant, which runs on Linux and macOS
+but not Windows (CI runs them on every push):
+
+```bash
+pip install "pytest-homeassistant-custom-component==0.13.364" "modbus-connection[tmodbus]==4.10.0"
+pytest tests_ha
 ```
 
 ## Safety

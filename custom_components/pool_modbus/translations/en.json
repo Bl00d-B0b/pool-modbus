@@ -1,0 +1,72 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add pool equipment",
+        "description": "Choose the device and how Home Assistant reaches it. Each device is added on its own.",
+        "data": {
+          "device_type": "Device type",
+          "transport": "Connection"
+        }
+      },
+      "network": {
+        "title": "Network connection",
+        "description": "The address of the device, or of the Modbus gateway it is wired to.",
+        "data": {
+          "name": "Name",
+          "host": "Host",
+          "port": "Port",
+          "unit_id": "Modbus ID"
+        }
+      },
+      "serial": {
+        "title": "Serial connection",
+        "description": "The RS-485 or RS-232 adapter on this machine and the device's line settings.",
+        "data": {
+          "name": "Name",
+          "serial_port": "Serial port",
+          "baudrate": "Baud rate",
+          "bytesize": "Data bits",
+          "parity": "Parity",
+          "stopbits": "Stop bits",
+          "unit_id": "Modbus ID"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The device did not answer: {error}",
+      "wrong_device": "A device answered, but it does not look like the selected device type. Check the Modbus ID.",
+      "invalid_settings": "The connection settings are not valid: {error}"
+    },
+    "abort": {
+      "already_configured": "This device is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling",
+        "data": {
+          "scan_interval": "Seconds between reads"
+        }
+      }
+    }
+  },
+  "selector": {
+    "transport": {
+      "options": {
+        "tcp": "Modbus TCP",
+        "rtu_over_tcp": "RTU over TCP",
+        "udp": "Modbus UDP",
+        "serial": "Serial (RS-485 / RS-232)"
+      }
+    },
+    "parity": {
+      "options": {
+        "N": "None",
+        "E": "Even",
+        "O": "Odd"
+      }
+    }
+  }
+}
