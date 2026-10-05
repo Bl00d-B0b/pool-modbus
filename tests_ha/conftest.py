@@ -24,6 +24,13 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+@pytest.fixture(autouse=True)
+def no_retry_pause(monkeypatch):
+    from custom_components.pool_modbus import coordinator
+
+    monkeypatch.setattr(coordinator, "RETRY_DELAY", 0)
+
+
 def snapshot(name: str) -> dict[int, int]:
     data = json.loads((FIXTURES / f"{name}_snapshot.json").read_text(encoding="utf-8"))
     return {int(address): value for address, value in data["holding"].items()}
@@ -33,13 +40,16 @@ class FakeUnit:
     """A device with standard addressing; ``odd_step`` answers like an EMEC LD controller.
 
     ``stale_reads`` makes the next that many reads after a write still return the old
-    value, like a gateway that answers reads from a cache.
+    value, like a gateway that answers reads from a cache. ``fail`` makes every request
+    raise; ``fail_once`` only the next read, like a request that collided with another
+    client's.
     """
 
     def __init__(self, registers: dict[int, int], *, odd_step: bool = False) -> None:
         self.registers = registers
         self.step = 2 if odd_step else 1
         self.fail: Exception | None = None
+        self.fail_once: Exception | None = None
         self.connected = True
         self.stale_reads = 0
         self.writes: list[tuple[int, int]] = []
@@ -51,6 +61,9 @@ class FakeUnit:
     async def read_holding_registers(self, address: int, count: int) -> list[int]:
         if self.fail is not None:
             raise self.fail
+        if self.fail_once is not None:
+            err, self.fail_once = self.fail_once, None
+            raise err
         addresses = [address + self.step * i for i in range(count)]
         words = [self.registers.get(a, 0) for a in addresses]
         for stale_address, entry in list(self._stale.items()):

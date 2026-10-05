@@ -119,6 +119,19 @@ async def test_entities_go_unavailable_when_the_device_stops_answering(
     assert state(hass, "number.pool_thermostat_offset_temperature") == STATE_UNAVAILABLE
 
 
+async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
+    unit = fake_unit("emec_ld")
+    entry = await add(hass, "emec_ld", unit)
+
+    # Another Modbus client's request collided with this one.
+    unit.fail_once = TimeoutError("Modbus exception code 1")
+    await entry.runtime_data.coordinators["fast"].async_refresh()
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.coordinators["fast"].last_update_success
+    assert state(hass, "sensor.dosing_pump_out_relay_ph") == "On"
+
+
 async def test_unload(hass: HomeAssistant) -> None:
     entry = await add(hass, "pool_controller", fake_unit("pool_controller"))
 

@@ -104,9 +104,10 @@ installation a written value showed in reads about 1 s later.
 
 If you already read the same devices through Home Assistant's YAML `modbus:`
 configuration, that hub keeps its own connection to the gateway. Both work,
-but the gateway then has two clients, and some gateways answer the occasional
-request with a timeout. Move a device to this integration and out of the YAML
-at the same time.
+but the gateway then has two clients, and their requests can collide: a device
+may answer one of them with an error or a timeout. The integration tries a
+failed read once more before it marks entities unavailable. Move a device to
+this integration and out of the YAML at the same time.
 
 ## Command line
 
