@@ -7,8 +7,8 @@ have no Home Assistant integration. This project models each device type as
 typed Python (registers, scaling, byte layout) and tests it against data
 recorded from real hardware, so the decoding is right once and stays right.
 
-> **Status: early development.** The Python library reads all three device
-> types below. The Home Assistant integration is the next step; see the
+> **Status: early development.** The Python library and the Home Assistant
+> integration read all three device types below; writing comes next. See the
 > [roadmap](#roadmap).
 
 ## Supported devices
@@ -199,7 +199,7 @@ The integration's own tests need Home Assistant, which runs on Linux and macOS
 but not Windows (CI runs them on every push):
 
 ```bash
-pip install "pytest-homeassistant-custom-component==0.13.364" "modbus-connection[tmodbus]==4.10.0"
+pip install "pytest-homeassistant-custom-component==0.13.367" "modbus-connection[tmodbus]==4.10.0"
 pytest tests_ha
 ```
 
