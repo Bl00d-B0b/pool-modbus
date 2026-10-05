@@ -16,7 +16,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 | Device type | Key | Status | Tested with |
 |---|---|---|---|
 | Pool controller (filtration, cover, light, water level) | `pool_controller` | Library, read-only | [register map](docs/devices/pool_controller.md) |
-| T010 pool thermostat | `t010` | Library, read-only | Firmware 1.7, [register map](docs/devices/t010.md) |
+| T010 pool thermostat (Optika ir technologija) | `t010` | Library, read-only | Firmware 1.7, [register map](docs/devices/t010.md) |
 | EMEC LD series pH/Cl controller | `emec_ld` | Library, read-only | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
 Each device type also defines the values a user sees, named like the matching

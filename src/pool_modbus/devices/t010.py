@@ -1,4 +1,4 @@
-"""T010 pool thermostat, standard Modbus addressing.
+"""T010 pool thermostat by Optika ir technologija (baseinai.lt), standard Modbus addressing.
 
 Register map from the device firmware (software version 1.7); see
 docs/devices/t010.md. The firmware answers function 03 for addresses 0-9, at
@@ -118,7 +118,7 @@ def _create(unit: ModbusUnit, variant: str | None) -> T010:
 DEVICE_TYPE = DeviceType(
     key="t010",
     name="T010 pool thermostat",
-    manufacturer="Unknown",
+    manufacturer="Optika ir technologija",  # start-up screen: "THERMOSTAT T010", "O&Technologija"
     models=("T010",),
     create=_create,
     values=VALUES,

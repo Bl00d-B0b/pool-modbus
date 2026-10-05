@@ -11,6 +11,11 @@ def test_all_device_types_are_registered() -> None:
     assert list(DEVICE_TYPES) == ["pool_controller", "t010", "emec_ld"]
 
 
+def test_manufacturers() -> None:
+    assert DEVICE_TYPES["t010"].manufacturer == "Optika ir technologija"
+    assert DEVICE_TYPES["emec_ld"].manufacturer == "EMEC"
+
+
 def test_emec_ld_is_registered() -> None:
     device_type = DEVICE_TYPES["emec_ld"]
     assert device_type.manufacturer == "EMEC"
