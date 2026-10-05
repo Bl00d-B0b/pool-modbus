@@ -56,6 +56,17 @@ class FakeUnit:
             raise self.fail
         return [self.registers.get(address + i, 0) for i in range(count)]
 
+    async def write_register(self, address: int, value: int) -> None:
+        """Function 06; the register then reads back the written value."""
+        self.requests.append(("write", address, value))
+        if self.fail is not None:
+            raise self.fail
+        self.registers[address] = value
+
+    @property
+    def writes(self) -> list[tuple[int, int]]:
+        return [(address, value) for kind, address, value in self.requests if kind == "write"]
+
 
 def load_snapshot(name: str) -> dict[int, int]:
     data = json.loads((FIXTURES / f"{name}_snapshot.json").read_text(encoding="utf-8"))

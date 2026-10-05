@@ -2,10 +2,10 @@
 
 from .config import DeviceEntry, load_devices
 from .connection import ConnectionConfig, Transport
-from .devices import DEVICE_TYPES, DeviceType, Value, Variant, get_device_type
+from .devices import DEVICE_TYPES, DeviceType, Thermostat, Value, Variant, get_device_type
 from .reader import DeviceResult, read_devices
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "DEVICE_TYPES",
@@ -13,6 +13,7 @@ __all__ = [
     "DeviceEntry",
     "DeviceResult",
     "DeviceType",
+    "Thermostat",
     "Transport",
     "Value",
     "Variant",

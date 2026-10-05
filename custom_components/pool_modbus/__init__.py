@@ -13,7 +13,13 @@ from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID, DEFAULT_SCAN_INTERVAL
 from .coordinator import PoolModbusConfigEntry, PoolModbusCoordinator, connection_config
 from .library import get_device_type
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.CLIMATE,
+    Platform.NUMBER,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> bool:

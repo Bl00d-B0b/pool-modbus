@@ -3,17 +3,49 @@
 Register map from the device firmware (software version 1.7); see
 docs/devices/t010.md. The firmware answers function 03 for addresses 0-9, at
 most 10 registers per read, and function 06 for addresses 5-9.
+
+Writes: the setpoint, offset, delay setting, and the heating-blocked and
+delaying flags. Each is checked against the firmware's range first and skipped
+when the device already holds the value, because the firmware stores every
+write in EEPROM.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, gauge, integer
 
-from .base import DeviceType, Value
+from .base import DeviceType, Thermostat, Value
 
 INSTRUMENT_TYPE = 0x15
 """What register 0's high byte holds on a T010."""
+
+SETPOINT_RANGE = (5.0, 40.0)
+OFFSET_RANGE = (-3.1, 3.1)
+DELAY_RANGE = (0, 59)
+
+
+def _tenths(low: float, high: float) -> Callable[[Any], float]:
+    """Accept a temperature in the firmware's range, in its 0.1 °C resolution."""
+
+    def check(value: Any) -> float:
+        tenths = round(float(value), 1)
+        if not low <= tenths <= high:
+            raise ValueError(f"{value} is outside {low} to {high}")
+        return tenths
+
+    return check
+
+
+def _minutes(value: Any) -> int:
+    """Accept a whole number of minutes in the firmware's range."""
+    low, high = DELAY_RANGE
+    if value != int(value) or not low <= value <= high:
+        raise ValueError(f"{value} is not a whole number from {low} to {high}")
+    return int(value)
 
 
 class T010(Component):
@@ -28,11 +60,12 @@ class T010(Component):
     heating_power = integer(2, signed=False, unit="%")  # relay: 0 or 100; PWM: steps of 20
     delay_minutes = bits(3, 8, 8)  # heating delay still to run
     delay_seconds = bits(3, 0, 8)
-    setpoint = gauge(5, 0.1, unit="°C")  # 5.0-40.0
-    offset = gauge(6, 0.1, unit="°C")  # -3.1 to +3.1
-    set_delay = integer(7, signed=False, unit="min")  # 0-59
-    heating_blocked = bit(8, 8)
-    delaying = bit(8, 9)
+    # Writes use function 06, one register each; register 8 is read back and merged.
+    setpoint = gauge(5, 0.1, unit="°C", writable=_tenths(*SETPOINT_RANGE))
+    offset = gauge(6, 0.1, unit="°C", writable=_tenths(*OFFSET_RANGE))
+    set_delay = integer(7, signed=False, unit="min", writable=_minutes)
+    heating_blocked = bit(8, 8, writable=True)
+    delaying = bit(8, 9, writable=True)
     menu_mode = bit(8, 0)
     sensor_disconnected = bit(8, 1)  # raw temperature below 3.1 °C
     sensor_supply_fault = bit(8, 2)  # sensor supply below 6.0 V for about 2 s
@@ -82,13 +115,47 @@ class T010(Component):
         return "heating" if self.heating else "idle"
 
 
+async def write_if_changed(device: T010, field: str, value: Any) -> None:
+    """Write ``field`` unless the device already holds ``value``.
+
+    The firmware stores every write in EEPROM, so writing a value it already
+    holds only wears the memory. The device is read first rather than trusting
+    the last poll. Raises ``ValueError`` for a value the firmware does not accept.
+    """
+    writable = getattr(T010, field).writable
+    if callable(writable):
+        value = writable(value)  # check the value before talking to the device
+    await device.async_update()
+    if getattr(device, field) == value:
+        return
+    await device.write(field, value)
+
+
+async def _set_mode(device: T010, mode: str) -> None:
+    if mode not in ("heat", "off"):
+        raise ValueError(f"{mode!r} is not a T010 mode; use heat or off")
+    await write_if_changed(device, "heating_blocked", mode == "off")
+
+
 def _on_off(flag: bool | None) -> str | None:
     return None if flag is None else ("On" if flag else "Off")
 
 
+THERMOSTAT = Thermostat(
+    key="thermostat",
+    name="Pool Thermostat",
+    current_temperature=lambda d: d.temperature,
+    target_temperature=lambda d: d.setpoint,
+    mode=lambda d: d.hvac_mode,
+    action=lambda d: d.hvac_action,
+    set_target_temperature=lambda d, t: write_if_changed(d, "setpoint", t),
+    set_mode=_set_mode,
+    minimum=SETPOINT_RANGE[0],
+    maximum=SETPOINT_RANGE[1],
+    step=0.5,
+)
+
 VALUES = (
-    Value("hvac_mode", "Pool Thermostat", lambda d: d.hvac_mode),
-    Value("hvac_action", "Thermostat Action", lambda d: d.hvac_action),
     Value(
         "temperature",
         "Pool Temperature",
@@ -97,7 +164,13 @@ VALUES = (
         category="measurement",
         device_class="temperature",
     ),
-    Value("heating_enabled", "Pool Heating", lambda d: d.heating_enabled, binary=True),
+    Value(
+        "heating_enabled",
+        "Pool Heating",
+        lambda d: d.heating_enabled,
+        binary=True,
+        write=lambda d, on: write_if_changed(d, "heating_blocked", not on),
+    ),
     Value("heating", "Heating Mode", lambda d: _on_off(d.heating)),
     Value(
         "heating_power",
@@ -106,7 +179,13 @@ VALUES = (
         "%",
         category="measurement",
     ),
-    Value("delaying", "Pool Delaying", lambda d: d.delaying, binary=True),
+    Value(
+        "delaying",
+        "Pool Delaying",
+        lambda d: d.delaying,
+        binary=True,
+        write=lambda d, on: write_if_changed(d, "delaying", bool(on)),
+    ),
     Value("delay_remaining", "Delay Time", lambda d: d.delay_remaining),
     Value(
         "setpoint",
@@ -115,8 +194,22 @@ VALUES = (
         "°C",
         category="setting",
         device_class="temperature",
+        write=lambda d, t: write_if_changed(d, "setpoint", t),
+        minimum=SETPOINT_RANGE[0],
+        maximum=SETPOINT_RANGE[1],
+        step=0.1,
     ),
-    Value("offset", "Offset Temperature", lambda d: d.offset, "°C", category="setting"),
+    Value(
+        "offset",
+        "Offset Temperature",
+        lambda d: d.offset,
+        "°C",
+        category="setting",
+        write=lambda d, t: write_if_changed(d, "offset", t),
+        minimum=OFFSET_RANGE[0],
+        maximum=OFFSET_RANGE[1],
+        step=0.1,
+    ),
     Value(
         "set_delay",
         "Set Delay Time",
@@ -124,6 +217,10 @@ VALUES = (
         "min",
         category="setting",
         device_class="duration",
+        write=lambda d, m: write_if_changed(d, "set_delay", m),
+        minimum=DELAY_RANGE[0],
+        maximum=DELAY_RANGE[1],
+        step=1,
     ),
     Value("menu_mode", "Menu Mode", lambda d: d.menu_mode, binary=True, category="diagnostic"),
     Value(
@@ -167,6 +264,7 @@ DEVICE_TYPE = DeviceType(
     models=("T010",),
     create=_create,
     values=VALUES,
+    thermostat=THERMOSTAT,
     identify=lambda d: d.is_t010,
     software_version=lambda d: d.software_version,
     default_unit_id=1,  # factory default in the firmware

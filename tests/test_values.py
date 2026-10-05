@@ -32,6 +32,16 @@ async def test_every_value_is_known(snapshot_units, key: str) -> None:
 
 @pytest.mark.parametrize("key", sorted(DEVICE_TYPES))
 def test_value_keys_and_names_are_unique(key: str) -> None:
-    values = DEVICE_TYPES[key].values
-    assert len({v.key for v in values}) == len(values)
-    assert len({v.name for v in values}) == len(values)
+    device_type = DEVICE_TYPES[key]
+    values = device_type.values
+    thermostat = [device_type.thermostat] if device_type.thermostat else []
+    assert len({v.key for v in [*values, *thermostat]}) == len(values) + len(thermostat)
+    assert len({v.name for v in [*values, *thermostat]}) == len(values) + len(thermostat)
+
+
+@pytest.mark.parametrize("key", sorted(DEVICE_TYPES))
+def test_writable_numbers_declare_their_range(key: str) -> None:
+    for value in DEVICE_TYPES[key].values:
+        if value.writable and not value.binary:
+            assert None not in (value.minimum, value.maximum, value.step), value.name
+            assert value.minimum < value.maximum, value.name
