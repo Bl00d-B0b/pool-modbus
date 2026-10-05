@@ -109,7 +109,8 @@ class EmecLD(Component):
     On an LDPHCL, channel 1 is pH and channel 2 is free chlorine in ppm.
     """
 
-    max_span = 32  # proven against real hardware; the protocol allows more
+    max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
+    register_ranges = ((0, 919),)  # every value up to 41840 answers a read
 
     # Measurements (40002-40008); the value is reading / divisor.
     ch1_reading = integer(0)

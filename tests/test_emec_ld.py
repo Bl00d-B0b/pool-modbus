@@ -22,10 +22,10 @@ def test_wire_address(index: int, wire: int) -> None:
     assert wire_address(index) == wire
 
 
-async def test_reads_use_odd_addresses_and_few_requests(make_pump, ldphcl_snapshot) -> None:
+async def test_one_read_from_an_odd_address(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    assert pump.requests == [("holding", 1, 29), ("holding", 67, 6), ("holding", 153, 6)]
+    assert pump.requests == [("holding", 1, 82)]  # values 0-81; the controller allows 125
     assert pump.message_spacing == pytest.approx(0.1)
 
 
