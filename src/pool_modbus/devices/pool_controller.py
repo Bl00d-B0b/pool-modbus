@@ -465,6 +465,7 @@ def _create(unit: ModbusUnit, variant: str | None) -> PoolController:
 
 DEVICE_TYPE = DeviceType(
     key="pool_controller",
+    default_name="Controller",
     entity_id_base="pool_controller",
     name="Pool controller",
     manufacturer="Unknown",

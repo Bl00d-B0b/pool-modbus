@@ -19,10 +19,11 @@ recorded from real hardware, so the decoding is right once and stays right.
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
 | EMEC LD series pH/Cl controller | `emec_ld` | Read and write (channel 1 dosing settings) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
-Each device type also defines the values a user sees, with generic names (in
-Home Assistant they follow the device's name, e.g. "Pool thermostat Heating
-Delay", and can be renamed), and the rules that go with them (for example, which
-dosing settings apply in which working mode).
+Each device type also defines the values a user sees, with generic names, and
+the rules that go with them (for example, which dosing settings apply in which
+working mode). In Home Assistant the names follow the device's name, e.g.
+"Thermostat Heating Delay"; a new device is offered "Controller", "Thermostat"
+or "Dosing pump" as its name, and both can be renamed.
 
 Want your device here? See [CONTRIBUTING.md](CONTRIBUTING.md).
 

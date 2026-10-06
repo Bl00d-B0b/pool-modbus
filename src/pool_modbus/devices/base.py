@@ -224,6 +224,10 @@ class DeviceType:
     message_spacing: float = 0.0
     """Seconds to keep the bus quiet around this device's requests."""
 
+    default_name: str = ""
+    """The name offered for a device of this type when it is added (the type's
+    ``name`` if empty), e.g. "Thermostat"."""
+
     entity_id_base: str = ""
     """The start of every entity id of this type, before a device's prefix
     (``pool_thermostat`` gives ``number.pool_thermostat_temperature_offset``);

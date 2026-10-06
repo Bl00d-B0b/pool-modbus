@@ -174,6 +174,13 @@ async def test_same_device_twice(hass: HomeAssistant) -> None:
     assert result["reason"] == "already_configured"
 
 
+async def test_a_first_device_is_offered_the_type_s_default_name(hass: HomeAssistant) -> None:
+    result = await start(hass)
+
+    [name] = [key for key in result["data_schema"].schema if key == CONF_NAME]
+    assert name.default() == "Thermostat"
+
+
 async def test_another_device_of_a_type_is_offered_a_numbered_name(hass: HomeAssistant) -> None:
     MockConfigEntry(
         domain=DOMAIN, title="Pool thermostat", data={CONF_DEVICE_TYPE: "t010"}

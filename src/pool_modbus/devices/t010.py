@@ -240,6 +240,7 @@ def _create(unit: ModbusUnit, variant: str | None) -> T010:
 
 DEVICE_TYPE = DeviceType(
     key="t010",
+    default_name="Thermostat",
     entity_id_base="pool_thermostat",
     name="T010 pool thermostat",
     manufacturer="Optika ir technologija",  # start-up screen: "THERMOSTAT T010", "O&Technologija"

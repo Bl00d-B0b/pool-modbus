@@ -158,15 +158,15 @@ def _prefix_taken(hass: HomeAssistant, device_type: DeviceType, prefix: str) -> 
 
 
 def suggested_title(hass: HomeAssistant, device_type: DeviceType) -> str:
-    """The name offered for a new device. For a type already added it is the first
-    device's name numbered from 2 ("Pool thermostat 2"), so the devices are told
-    apart in lists; otherwise the type's name."""
+    """The name offered for a new device: the type's default name ("Thermostat"), or
+    for a type already added the first device's name numbered from 2
+    ("Thermostat 2"), so the devices are told apart in lists."""
     entries = hass.config_entries.async_entries(DOMAIN)
     taken = {entry.title for entry in entries}
     same_type = [
         entry.title for entry in entries if entry.data.get(CONF_DEVICE_TYPE) == device_type.key
     ]
-    base = same_type[0] if same_type else device_type.name
+    base = same_type[0] if same_type else device_type.default_name or device_type.name
     if base not in taken:
         return base
     number = 2
@@ -186,7 +186,7 @@ def connection_schema(
 
     fields: dict[Any, Any] = {}
     if with_name:
-        fields[required(CONF_NAME, device_type.name)] = TextSelector()
+        fields[required(CONF_NAME, device_type.default_name or device_type.name)] = TextSelector()
         fields[vol.Optional(CONF_PREFIX, default=current.get(CONF_PREFIX, ""))] = TextSelector()
     if transport == Transport.SERIAL:
         fields[required(CONF_SERIAL_PORT)] = TextSelector()

@@ -536,6 +536,7 @@ def _identify(device: EmecLD) -> bool:
 
 DEVICE_TYPE = DeviceType(
     key="emec_ld",
+    default_name="Dosing pump",
     entity_id_base="dosing_pump",
     name="EMEC LD series pH/Cl controller",
     manufacturer="EMEC",
