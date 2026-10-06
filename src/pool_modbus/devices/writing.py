@@ -8,6 +8,8 @@ from typing import Any
 from modbus_connection import GatewayTargetError, ModbusError, ModbusTimeoutError
 from modbus_connection.model import Component
 
+from .reading import update_or_keep
+
 CONFIRM_TIMEOUT = 5.0
 """Seconds to wait for the device to read back a written value."""
 
@@ -38,7 +40,7 @@ async def wait_until(device: Component, done: Any, what: str, timeout: float | N
     limit = CONFIRM_TIMEOUT if timeout is None else timeout
     deadline = loop.time() + limit
     while True:
-        await device.async_update()
+        await update_or_keep(device)
         if done(device):
             return
         if loop.time() >= deadline:
@@ -68,7 +70,7 @@ async def write_if_changed(device: Component, field: str, value: Any) -> None:
     writable = getattr(type(device), field).writable
     if callable(writable):
         value = writable(value)
-    await device.async_update()
+    await update_or_keep(device)
     current = getattr(device, field)
     if current == value:
         return
@@ -83,7 +85,7 @@ async def write_if_changed(device: Component, field: str, value: Any) -> None:
     read_error: Exception | None = None
     while True:
         try:
-            await device.async_update()
+            await update_or_keep(device)
         except (ModbusError, OSError, TimeoutError) as err:
             read_error = err
         else:

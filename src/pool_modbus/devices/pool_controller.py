@@ -20,6 +20,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, integer
 
 from .base import Action, Cover, DeviceType, Feature, Value
+from .reading import update_or_keep
 from .writing import pulse, wait_until, write_if_changed
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -184,7 +185,7 @@ def _time(hour: int | None, minute: int | None) -> str | None:
 
 async def set_light(device: PoolController, on: bool) -> None:
     """Toggle the light if it is not already as asked; confirmed in the status."""
-    await device.async_update()
+    await update_or_keep(device)
     if device.light_on == bool(on):
         return
     if not device.pool_open:
@@ -198,7 +199,7 @@ async def set_light(device: PoolController, on: bool) -> None:
 async def _move_cover(device: PoolController, command: str, want_open: bool) -> None:
     """Pulse the open or close command unless the cover already is there. The cover
     takes a while to move, so the status is not waited for."""
-    await device.async_update()
+    await update_or_keep(device)
     if device.pool_open == want_open:
         return
     await pulse(device, command, LONG_PULSE)
@@ -222,7 +223,7 @@ async def set_backwash_day(device: PoolController, day: str) -> None:
     if day not in DAY_OPTIONS:
         raise ValueError(f"{day!r} is not one of {', '.join(DAY_OPTIONS)}")
     bitmap = 0 if day == "Off" else 1 << DAYS.index(day)
-    await device.async_update()
+    await update_or_keep(device)
     if device.backwash_days_written == bitmap and device.backwash_days == bitmap:
         return
     await device.write("backwash_days_written", bitmap)
@@ -233,7 +234,7 @@ async def set_backwash_time(device: PoolController, time: str) -> None:
     if time not in TIME_OPTIONS:
         raise ValueError(f"{time!r} is not a time of day in 5 minute steps, like 06:00")
     hour, minute = (int(part) for part in time.split(":"))
-    await device.async_update()
+    await update_or_keep(device)
     written = (device.backwash_hour_written, device.backwash_minute_written)
     saved = (device.backwash_hour, device.backwash_minute)
     if written == saved == (hour, minute):

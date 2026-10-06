@@ -154,9 +154,42 @@ async def test_renamed_keys_keep_their_entities(hass: HomeAssistant) -> None:
     assert registry.async_get("button.pool_controller_sync_rtc") is None  # no duplicate
 
 
+async def test_a_missed_poll_keeps_the_last_values(hass: HomeAssistant) -> None:
+    unit = fake_unit("t010")
+    entry = await add(hass, "t010", unit)
+
+    unit.fail = TimeoutError("no answer")  # the poll and its retry both fail
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+
+    assert state(hass, "climate.pool_thermostat") == "off"
+    assert state(hass, "number.pool_thermostat_delay_setting") == "3"
+
+
+async def test_a_block_of_zeros_never_shows(hass: HomeAssistant) -> None:
+    unit = fake_unit("emec_ld")
+    entry = await add(hass, "emec_ld", unit)
+    registers, unit.registers = unit.registers, {}  # the pump answers with zeros
+
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+
+    assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
+    assert state(hass, "sensor.dosing_pump_temperature") == "17.6"
+    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
+
+    unit.registers = registers
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+    assert all(c.last_update_success for c in entry.runtime_data.coordinators.values())
+
+
 async def test_entities_go_unavailable_when_the_device_stops_answering(
-    hass: HomeAssistant,
+    hass: HomeAssistant, monkeypatch
 ) -> None:
+    from custom_components.pool_modbus import coordinator
+
+    monkeypatch.setattr(coordinator, "STALE_AFTER", 0)  # the device has been silent too long
     unit = fake_unit("t010")
     entry = await add(hass, "t010", unit)
     assert state(hass, "climate.pool_thermostat") == "off"

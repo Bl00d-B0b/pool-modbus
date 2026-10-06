@@ -30,7 +30,11 @@ serial numbers or anything else private.
      `device_class` where one fits;
    - for a thermostat, cover or commands: `thermostat`, `cover` and `actions`;
    - an adapter like `EmecUnit` only if the device addresses registers in a
-     non-standard way.
+     non-standard way;
+   - if the device can answer with values it cannot hold (the EMEC LD sends
+     blocks of zeros), a `_verify_read` on the model that raises
+     `ImplausibleReadError`, and the fields it checks in `check_fields`, which
+     every scan group then reads.
 2. List it in `_TYPES` in `src/pool_modbus/devices/__init__.py`.
 3. Add tests in `tests/` with a fake unit that answers the way the real
    device does, and a snapshot recorded from real hardware (strip anything

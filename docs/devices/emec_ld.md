@@ -82,6 +82,15 @@ controller:
 Read groups in Home Assistant: the relay states fast (40024, 40032); readings,
 temperature, pulse rates and probe voltages medium (40002–40058, one request);
 the clock and the channel 1 dosing settings slow (40044–40078, one request).
+Every group also reads channel 1's divisor (40004), so the fast group reads
+40004–40032 and the slow group 40004–40078, each in one request.
+
+The tested LDPHCL now and then answers a read with zeros for a few seconds:
+divisors 0 (so no pH or Cl value), temperature 0.0 °C, probe voltages 0 mV and
+both relays "Disabled", while the next poll reads normally again. Seen four
+times in 12 hours on 2026-10-06, and under the YAML setup before. A
+measurement's divisor is never 0, so a read with channel 1's divisor at 0 is
+refused and the values from the last good read stay.
 Optional parts, all on by default: **dosing settings** (pH Dosing Mode
 and the five settings above), **probe voltages** and **clock**. A part that is
 off is not read.

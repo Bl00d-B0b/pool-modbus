@@ -4,7 +4,8 @@ A device is read in up to three groups (fast, medium, slow), each on its own
 interval. Each group gets its own model instance, narrowed with
 ``Component.restrict_fields`` to the fields its values use, so it only reads
 those registers. The fields a value uses are found by running its getters on
-stand-ins for the model, and can be extended with ``Value.fields``.
+stand-ins for the model, and can be extended with ``Value.fields``. A device
+type's ``check_fields`` are added to every group, so each read can be checked.
 """
 
 from __future__ import annotations
@@ -96,7 +97,11 @@ def read_plan(
         plan[thermostat.scan_group] |= thermostat_fields(model, thermostat)
     if device_type.cover is not None:
         plan[device_type.cover.scan_group] |= cover_fields(model, device_type.cover)
-    return {group: frozenset(fields) for group, fields in plan.items() if fields}
+    return {
+        group: frozenset(fields | set(device_type.check_fields))
+        for group, fields in plan.items()
+        if fields
+    }
 
 
 def group_model(device_type: DeviceType, unit: Any, fields: Iterable[str]) -> Component:

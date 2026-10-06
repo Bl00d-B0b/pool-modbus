@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -29,12 +30,24 @@ from .const import (
     FEATURE_PREFIX,
     SCAN_INTERVAL_KEYS,
 )
-from .library import Action, ConnectionConfig, DeviceType, ScanGroup, Transport, Value
+from .library import (
+    Action,
+    ConnectionConfig,
+    DeviceType,
+    ScanGroup,
+    Transport,
+    Value,
+    update_or_keep,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 RETRY_DELAY = 0.5
 """Seconds before a failed read is tried once more."""
+
+STALE_AFTER = 60.0
+"""Seconds a scan group keeps showing its last values while its reads fail; after
+that its entities are unavailable."""
 
 
 def connection_config(data: Mapping[str, Any]) -> ConnectionConfig:
@@ -87,20 +100,33 @@ class PoolModbusCoordinator(DataUpdateCoordinator[None]):
         )
         self.device = device
         self.group = group
+        self._last_read: float | None = None
 
     async def _async_update_data(self) -> None:
-        """Read the group. A failed read is tried once more after a short pause:
-        with a second Modbus client on the bus (another integration, a YAML hub)
-        requests can collide, and the device answers one of them with an error."""
+        """Read the group, keeping the last values through a short failure.
+
+        A failed read is tried once more after a short pause: requests can collide
+        with another Modbus client's, and a device can miss one. If that fails too,
+        the entities keep their last values, for up to ``STALE_AFTER`` seconds since
+        the last good read, so a missed poll does not cut their history; after that
+        they are unavailable. A failed or refused read never changes the values.
+        """
         try:
-            await self.device.async_update()
+            await self._read()
+        except (ModbusError, OSError, TimeoutError) as err:
+            if self._last_read is not None and time.monotonic() - self._last_read < STALE_AFTER:
+                _LOGGER.debug("%s: read failed (%s), showing the last values", self.name, err)
+                return
+            raise UpdateFailed(f"{self.name} did not answer: {err}") from err
+        self._last_read = time.monotonic()
+
+    async def _read(self) -> None:
+        try:
+            await update_or_keep(self.device)
         except (ModbusError, OSError, TimeoutError) as first:
             _LOGGER.debug("%s: read failed (%s), trying once more", self.name, first)
             await asyncio.sleep(RETRY_DELAY)
-            try:
-                await self.device.async_update()
-            except (ModbusError, OSError, TimeoutError) as err:
-                raise UpdateFailed(f"{self.name} did not answer: {err}") from err
+            await update_or_keep(self.device)
 
 
 @dataclass

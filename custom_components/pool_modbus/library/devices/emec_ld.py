@@ -24,7 +24,8 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, enum, gauge, integer
 
-from .base import DeviceType, Feature, Value
+from .base import DeviceType, Feature, ImplausibleReadError, Value
+from .reading import update_or_keep
 from .writing import write_if_changed
 
 # A pulse rate reads 0xFF for a single poll while it sits at zero.
@@ -143,7 +144,7 @@ class EmecLD(Component):
 
     # Measurements (40002-40008); the value is reading / divisor.
     ch1_reading = integer(0)
-    ch1_divisor = integer(1, signed=False)  # 1, 10, 100 or 1000
+    ch1_divisor = integer(1, signed=False)  # 1, 10, 100 or 1000, never 0
     ch2_reading = integer(2)
     ch2_divisor = integer(3, signed=False)
 
@@ -180,6 +181,14 @@ class EmecLD(Component):
     ch2_pulse_perc2 = integer(79, unit="p/min")
     ch2_pulse_wait = integer(80, unit="min")
     ch2_pulse_mode = enum(81, PulseMode)
+
+    def _verify_read(self) -> None:
+        """Refuse a block of zeros. The tested LDPHCL now and then answers a read
+        with zeros for a few seconds (divisors 0, temperature 0.0 °C, probe
+        voltages 0 mV, relays disabled); a measurement's divisor is never 0, and
+        every scan group reads channel 1's (``check_fields``)."""
+        if "ch1_divisor" in self.resolved_fields and not self.ch1_divisor:
+            raise ImplausibleReadError("the controller answered with zeros (channel 1 divisor 0)")
 
     @property
     def ch1_value(self) -> float | None:
@@ -279,7 +288,7 @@ async def set_ph_mode(device: EmecLD, label: str) -> None:
     mode = next((m for m in PulseMode if m.label == label), None)
     if mode is None:
         raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in PulseMode)}")
-    await device.async_update()
+    await update_or_keep(device)
     if device.ch1_pulse_mode is mode:
         return
     for field, value in _MODE_STEPS[mode]:
@@ -502,4 +511,5 @@ DEVICE_TYPE = DeviceType(
     identify=_identify,
     default_unit_id=1,
     message_spacing=0.1,  # the protocol notes ask for at least 100 ms between requests
+    check_fields=("ch1_divisor",),
 )

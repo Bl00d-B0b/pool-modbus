@@ -5,8 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 
 import pytest
+from modbus_connection import ModbusError
 
-from pool_modbus.devices import get_device_type
+from pool_modbus import update_or_keep
+from pool_modbus.devices import ImplausibleReadError, get_device_type
 from pool_modbus.devices.emec_ld import EmecLD, EmecUnit, OutputState, PulseMode, wire_address
 from pool_modbus.reader import value_text
 
@@ -92,6 +94,31 @@ async def test_relay_state_is_the_high_byte(make_pump, ldphcl_snapshot, word, st
     registers[wire_address(15)] = word  # 40032, channel 1 relay
     device = await read(make_pump(registers))
     assert device.relay_ch1 is state
+
+
+async def test_a_block_of_zeros_is_refused_and_the_values_stay(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+
+    # As seen on the LDPHCL now and then for a few seconds: every value reads 0.
+    pump.registers = {}
+    with pytest.raises(ImplausibleReadError):
+        await update_or_keep(device)
+
+    assert device.ch1_value == pytest.approx(7.51)
+    assert device.temperature == pytest.approx(17.6)
+    assert device.relay_ch1 is OutputState.ON
+
+
+async def test_a_failed_request_leaves_the_values(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    pump._failing_reads = 1  # the next read gets no answer
+
+    with pytest.raises(ModbusError):
+        await update_or_keep(device)
+
+    assert device.ch1_value == pytest.approx(7.51)
 
 
 async def test_invalid_clock_reads_as_none(make_pump, ldphcl_snapshot) -> None:

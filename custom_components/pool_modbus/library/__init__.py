@@ -9,12 +9,14 @@ from .devices import (
     Cover,
     DeviceType,
     Feature,
+    ImplausibleReadError,
     ScanGroup,
     Thermostat,
     Value,
     Variant,
     get_device_type,
 )
+from .devices.reading import update_or_keep
 from .devices.scan import group_model, read_plan
 from .reader import DeviceResult, read_devices
 
@@ -30,6 +32,7 @@ __all__ = [
     "DeviceResult",
     "DeviceType",
     "Feature",
+    "ImplausibleReadError",
     "ScanGroup",
     "Thermostat",
     "Transport",
@@ -41,4 +44,5 @@ __all__ = [
     "load_devices",
     "read_devices",
     "read_plan",
+    "update_or_keep",
 ]

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
-from modbus_connection import ModbusUnit
+from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.model import Component
 
 type Category = Literal["measurement", "status", "setting", "diagnostic"]
@@ -186,6 +186,10 @@ class Variant:
     name: str
 
 
+class ImplausibleReadError(ModbusError):
+    """The device answered a read with values it cannot hold, such as a block of zeros."""
+
+
 @dataclass(frozen=True)
 class DeviceType:
     """One kind of device: its identity, defaults, and how to model it on a unit."""
@@ -219,6 +223,10 @@ class DeviceType:
     default_unit_id: int = 1
     message_spacing: float = 0.0
     """Seconds to keep the bus quiet around this device's requests."""
+
+    check_fields: tuple[str, ...] = ()
+    """Fields every scan group reads, for the model's check of each read
+    (``_verify_read``, which raises ``ImplausibleReadError``)."""
 
     def model(self, unit: ModbusUnit, variant: str | None = None) -> Component:
         """Apply this type's bus requirements to ``unit`` and return its model.
