@@ -85,8 +85,9 @@ A read that fails is tried once more after 0.5 s. If that fails too, the
 group's entities keep their last values instead of turning unavailable, so a
 missed poll does not cut their history and statistics; only when a group has
 had no good read for 60 s do its entities show unavailable. A device type can
-also refuse a read it knows to be wrong (the EMEC LD sometimes answers with a
-block of zeros); a refused or failed read never changes the values shown.
+also refuse a read it knows to be wrong (the EMEC LD sometimes answers with
+zeros); a refused read is not retried at once but at the next poll, and a
+refused or failed read never changes the values shown.
 
 Optional parts, each a checkbox:
 

@@ -184,6 +184,22 @@ async def test_a_block_of_zeros_never_shows(hass: HomeAssistant) -> None:
     assert all(c.last_update_success for c in entry.runtime_data.coordinators.values())
 
 
+async def test_a_value_dropping_to_zero_shows_from_the_second_read(hass: HomeAssistant) -> None:
+    unit = fake_unit("emec_ld")
+    entry = await add(hass, "emec_ld", unit)
+    medium = entry.runtime_data.coordinators["medium"]
+    unit.registers[55] = unit.registers[57] = 0  # both probe voltages, 40056 and 40058
+
+    await medium.async_refresh()  # refused, not retried at once: the last values stay
+    await hass.async_block_till_done()
+    assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
+    assert medium.last_update_success
+
+    await medium.async_refresh()
+    await hass.async_block_till_done()
+    assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "0"
+
+
 async def test_entities_go_unavailable_when_the_device_stops_answering(
     hass: HomeAssistant, monkeypatch
 ) -> None:

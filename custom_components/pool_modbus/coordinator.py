@@ -34,6 +34,7 @@ from .library import (
     Action,
     ConnectionConfig,
     DeviceType,
+    ImplausibleReadError,
     ScanGroup,
     Transport,
     Value,
@@ -123,6 +124,10 @@ class PoolModbusCoordinator(DataUpdateCoordinator[None]):
     async def _read(self) -> None:
         try:
             await update_or_keep(self.device)
+        except ImplausibleReadError:
+            # The device answered, with values it cannot hold; reading again at
+            # once would see the same, so the next poll reads again.
+            raise
         except (ModbusError, OSError, TimeoutError) as first:
             _LOGGER.debug("%s: read failed (%s), trying once more", self.name, first)
             await asyncio.sleep(RETRY_DELAY)

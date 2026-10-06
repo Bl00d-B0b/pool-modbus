@@ -28,6 +28,19 @@ from .base import DeviceType, Feature, ImplausibleReadError, Value
 from .reading import update_or_keep
 from .writing import write_if_changed
 
+# Values the controller sometimes reads as 0 for a single poll although they are
+# not (see EmecLD._verify_read). Pulse rates are left out: they drop to 0 whenever
+# dosing stops.
+_GLITCH_FIELDS = (
+    "ch1_reading",
+    "ch2_reading",
+    "temperature",
+    "probe_mv_ch1",
+    "probe_mv_ch2",
+    "relay_ch1_raw",
+    "relay_ch2_raw",
+)
+
 # A pulse rate reads 0xFF for a single poll while it sits at zero.
 _PULSE_RATE_TRANSIENT = 0xFF
 
@@ -182,13 +195,38 @@ class EmecLD(Component):
     ch2_pulse_wait = integer(80, unit="min")
     ch2_pulse_mode = enum(81, PulseMode)
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._last_accepted: dict[str, Any] = {}
+        self._dropped: frozenset[str] = frozenset()
+
     def _verify_read(self) -> None:
-        """Refuse a block of zeros. The tested LDPHCL now and then answers a read
-        with zeros for a few seconds (divisors 0, temperature 0.0 °C, probe
-        voltages 0 mV, relays disabled); a measurement's divisor is never 0, and
-        every scan group reads channel 1's (``check_fields``)."""
+        """Refuse a read with values the controller cannot hold.
+
+        The tested LDPHCL now and then answers with zeros for a few seconds: all
+        of a read (divisors 0, temperature 0.0 °C, probe voltages 0 mV, relays
+        disabled), or only some values (both probe voltages, or both relays),
+        while the next poll reads normally again. A measurement's divisor is never
+        0, and every scan group reads channel 1's (``check_fields``), so a read
+        with it at 0 is refused. A value that was not 0 and now reads 0 is refused
+        once: a real 0 (pH 7.00 gives a probe voltage of about 0 mV) is accepted
+        when the next read shows it too, a glitch is gone by then.
+        """
         if "ch1_divisor" in self.resolved_fields and not self.ch1_divisor:
             raise ImplausibleReadError("the controller answered with zeros (channel 1 divisor 0)")
+        read = {
+            name: getattr(self, name) for name in _GLITCH_FIELDS if name in self.resolved_fields
+        }
+        dropped = frozenset(
+            name for name, value in read.items() if value == 0 and self._last_accepted.get(name)
+        )
+        if dropped and dropped != self._dropped:
+            self._dropped = dropped
+            raise ImplausibleReadError(
+                f"{', '.join(sorted(dropped))} dropped to 0; shown if the next read agrees"
+            )
+        self._dropped = frozenset()
+        self._last_accepted.update(read)
 
     @property
     def ch1_value(self) -> float | None:

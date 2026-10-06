@@ -110,6 +110,47 @@ async def test_a_block_of_zeros_is_refused_and_the_values_stay(make_pump, ldphcl
     assert device.relay_ch1 is OutputState.ON
 
 
+@pytest.mark.parametrize(
+    ("indices", "field", "kept", "zero"),
+    [
+        ((27, 28), "probe_mv_ch1", -27, 0),  # both probe voltages, seen 2026-10-06 10:25
+        ((11, 15), "relay_ch1", OutputState.ON, OutputState.DISABLED),  # both relays
+        ((25,), "temperature", 17.6, 0.0),
+    ],
+)
+async def test_a_value_dropping_to_zero_needs_a_second_read(
+    make_pump, ldphcl_snapshot, indices, field, kept, zero
+) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    for index in indices:
+        pump.registers[wire_address(index)] = 0
+
+    with pytest.raises(ImplausibleReadError, match="dropped to 0"):
+        await update_or_keep(device)
+    assert (
+        getattr(device, field) == pytest.approx(kept)
+        if isinstance(kept, float)
+        else getattr(device, field) == kept
+    )
+    assert device.ch1_value == pytest.approx(7.51)  # the rest of the read is kept too
+
+    await update_or_keep(device)  # the next read shows 0 again: it is real
+    assert getattr(device, field) == zero
+
+
+async def test_a_one_poll_zero_never_shows(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    good = dict(pump.registers)
+    pump.registers[wire_address(27)] = pump.registers[wire_address(28)] = 0
+    with pytest.raises(ImplausibleReadError):
+        await update_or_keep(device)
+    pump.registers = good  # the next poll reads normally again
+    await update_or_keep(device)
+    assert (device.probe_mv_ch1, device.probe_mv_ch2) == (-27, 34)
+
+
 async def test_a_failed_request_leaves_the_values(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)
