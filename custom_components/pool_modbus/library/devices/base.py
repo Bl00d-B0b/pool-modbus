@@ -224,6 +224,11 @@ class DeviceType:
     message_spacing: float = 0.0
     """Seconds to keep the bus quiet around this device's requests."""
 
+    entity_id_base: str = ""
+    """The start of every entity id of this type, before a device's prefix
+    (``pool_thermostat`` gives ``number.pool_thermostat_temperature_offset``);
+    the key if empty."""
+
     check_fields: tuple[str, ...] = ()
     """Fields every scan group reads, for the model's check of each read
     (``_verify_read``, which raises ``ImplausibleReadError``)."""

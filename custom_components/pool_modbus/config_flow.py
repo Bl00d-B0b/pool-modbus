@@ -3,11 +3,14 @@
 Adding a device asks for its type and connection, reads it to check it is that
 type, then asks for the scan intervals and optional parts. Configure changes
 all of that later, connection included; the entry keeps its unique ID, so its
-entities keep their IDs.
+entities keep their IDs. The entity id prefix is set when the device is added:
+it is part of the device's identity, so the same device can be added twice with
+different prefixes (to compare settings, say).
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -40,6 +43,7 @@ from .const import (
     CONF_BYTESIZE,
     CONF_DEVICE_TYPE,
     CONF_PARITY,
+    CONF_PREFIX,
     CONF_SERIAL_PORT,
     CONF_STOPBITS,
     CONF_TRANSPORT,
@@ -107,28 +111,56 @@ USER_SCHEMA = vol.Schema(
 )
 
 
-def unique_id(device_type: DeviceType, config: ConnectionConfig, unit_id: int) -> str:
-    """One entry per device: its type, where it is reached, and its Modbus ID."""
+def unique_id(
+    device_type: DeviceType, config: ConnectionConfig, unit_id: int, prefix: str = ""
+) -> str:
+    """One entry per device: its type, where it is reached, its Modbus ID, and its
+    entity id prefix if it has one."""
     if config.transport is Transport.SERIAL:
         where = config.serial_port
     else:
         where = f"{config.host}:{config.port}"
-    return f"{device_type.key}_{config.transport}_{where}_{unit_id}"
+    identity = f"{device_type.key}_{config.transport}_{where}_{unit_id}"
+    return f"{identity}_{prefix}" if prefix else identity
 
 
 def _identity(data: Mapping[str, Any]) -> str | None:
     """Which device an entry reaches; None for an entry without connection data."""
     try:
         device_type = get_device_type(data[CONF_DEVICE_TYPE])
-        return unique_id(device_type, connection_config(data), int(data[CONF_UNIT_ID]))
+        return unique_id(
+            device_type,
+            connection_config(data),
+            int(data[CONF_UNIT_ID]),
+            data.get(CONF_PREFIX, ""),
+        )
     except (KeyError, ValueError):
         return None
 
 
+def entity_id_prefix(text: str | None) -> str | None:
+    """The prefix as it goes into entity ids (lower case, words joined by ``_``),
+    "" for none, or None if it has other characters than letters, digits, spaces,
+    ``-`` and ``_``."""
+    text = (text or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9 _-]*", text):
+        return None
+    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+
+
+def _prefix_taken(hass: HomeAssistant, device_type: DeviceType, prefix: str) -> bool:
+    """Whether another device of this type has this prefix (or, for "", none)."""
+    return any(
+        entry.data.get(CONF_DEVICE_TYPE) == device_type.key
+        and entry.data.get(CONF_PREFIX, "") == prefix
+        for entry in hass.config_entries.async_entries(DOMAIN)
+    )
+
+
 def suggested_title(hass: HomeAssistant, device_type: DeviceType) -> str:
     """The name offered for a new device. For a type already added it is the first
-    device's name numbered from 2 ("Pool thermostat 2"), so the new device's entity
-    ids get a suffix of their own; otherwise the type's name."""
+    device's name numbered from 2 ("Pool thermostat 2"), so the devices are told
+    apart in lists; otherwise the type's name."""
     entries = hass.config_entries.async_entries(DOMAIN)
     taken = {entry.title for entry in entries}
     same_type = [
@@ -155,6 +187,7 @@ def connection_schema(
     fields: dict[Any, Any] = {}
     if with_name:
         fields[required(CONF_NAME, device_type.name)] = TextSelector()
+        fields[vol.Optional(CONF_PREFIX, default=current.get(CONF_PREFIX, ""))] = TextSelector()
     if transport == Transport.SERIAL:
         fields[required(CONF_SERIAL_PORT)] = TextSelector()
         fields[required(CONF_BAUDRATE, "9600")] = _select(BAUDRATES)
@@ -239,14 +272,22 @@ class PoolModbusConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             data = {**self._data, **user_input}
             title = data.pop(CONF_NAME)
-            config = connection_config(data)
-            identity = unique_id(device_type, config, int(data[CONF_UNIT_ID]))
-            await self.async_set_unique_id(identity)
-            self._abort_if_unique_id_configured()
-            if _other_entry_reaches(self.hass, identity, None):
-                return self.async_abort(reason="already_configured")
-            errors, found = await validate_connection(self.hass, device_type, data)
-            placeholders.update(found)
+            prefix = entity_id_prefix(data.get(CONF_PREFIX))
+            if prefix is None:
+                errors[CONF_PREFIX] = "invalid_prefix"
+            else:
+                data[CONF_PREFIX] = prefix
+                config = connection_config(data)
+                identity = unique_id(device_type, config, int(data[CONF_UNIT_ID]), prefix)
+                await self.async_set_unique_id(identity)
+                self._abort_if_unique_id_configured()
+                if _other_entry_reaches(self.hass, identity, None):
+                    return self.async_abort(reason="already_configured")
+                if _prefix_taken(self.hass, device_type, prefix):
+                    errors[CONF_PREFIX] = "prefix_taken"
+            if not errors:
+                errors, found = await validate_connection(self.hass, device_type, data)
+                placeholders.update(found)
             if not errors:
                 self._data, self._title = data, title
                 return await self.async_step_settings()
@@ -302,7 +343,12 @@ class PoolModbusOptionsFlow(OptionsFlow):
                 **settings_schema(self._device_type(), entry.options).schema,
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        prefix = entry.data.get(CONF_PREFIX, "")
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+            description_placeholders={"prefix": f"`{prefix}`" if prefix else "none"},
+        )
 
     async def async_step_connection(
         self, user_input: dict[str, Any] | None = None

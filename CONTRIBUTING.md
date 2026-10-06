@@ -21,7 +21,8 @@ serial numbers or anything else private.
    - a `modbus_connection.model.Component` with one field per register, using
      the right type (`integer`, `gauge`, `bits`, `enum`, `coil`, ...);
    - a `DEVICE_TYPE = DeviceType(...)` with the manufacturer, tested models,
-     default Modbus ID and any bus requirements such as `message_spacing`;
+     default Modbus ID, the start of its entity ids (`entity_id_base`, such as
+     `pool_thermostat`) and any bus requirements such as `message_spacing`;
    - its `values`: each is read fast, medium or slow by its category (status,
      measurement, setting or diagnostic) unless `scan_group` says otherwise,
      and may belong to an optional part (`feature`, listed in `features`) that

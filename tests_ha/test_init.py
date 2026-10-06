@@ -117,6 +117,29 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "number.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
 
 
+async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Spa thermostat",
+        unique_id="t010_tcp_192.168.1.50:502_2_spa",
+        data={
+            CONF_DEVICE_TYPE: "t010",
+            CONF_TRANSPORT: "tcp",
+            CONF_HOST: "192.168.1.50",
+            CONF_PORT: 502,
+            CONF_UNIT_ID: 2,
+            "prefix": "spa",
+        },
+    )
+    entry.add_to_hass(hass)
+    await setup(hass, entry, fake_unit("t010"))
+
+    assert state(hass, "climate.pool_thermostat_spa") == "off"
+    assert hass.states.get("climate.pool_thermostat_spa").name == "Spa thermostat"
+    assert state(hass, "number.pool_thermostat_spa_temperature_offset") == "0.0"
+    assert hass.states.get("climate.pool_thermostat") is None
+
+
 async def test_entity_ids_leave_out_the_area(hass: HomeAssistant) -> None:
     """Home Assistant puts a device's area in front of the ids it makes up; the
     integration's ids are the device's name and the entity's only."""

@@ -14,9 +14,13 @@
         "description": "The address of the device, or of the Modbus gateway it is wired to. The device is read before the settings are saved.",
         "data": {
           "name": "Name",
+          "prefix": "Entity id prefix (optional)",
           "host": "Host",
           "port": "Port",
           "unit_id": "Modbus ID"
+        },
+        "data_description": {
+          "prefix": "Goes into every entity id after the device type: 2 gives number.pool_thermostat_2_temperature_offset. Leave it empty for the first device of a type; each device of a type needs a different one. It cannot be changed later."
         }
       },
       "serial": {
@@ -24,12 +28,16 @@
         "description": "The RS-485 or RS-232 adapter on this machine and the device's line settings. The device is read before the settings are saved.",
         "data": {
           "name": "Name",
+          "prefix": "Entity id prefix (optional)",
           "serial_port": "Serial port",
           "baudrate": "Baud rate",
           "bytesize": "Data bits",
           "parity": "Parity",
           "stopbits": "Stop bits",
           "unit_id": "Modbus ID"
+        },
+        "data_description": {
+          "prefix": "Goes into every entity id after the device type: 2 gives number.pool_thermostat_2_temperature_offset. Leave it empty for the first device of a type; each device of a type needs a different one. It cannot be changed later."
         }
       },
       "settings": {
@@ -54,7 +62,9 @@
     "error": {
       "cannot_connect": "The device did not answer: {error}",
       "wrong_device": "A device answered, but it does not look like the selected device type. Check the Modbus ID.",
-      "invalid_settings": "The connection settings are not valid: {error}"
+      "invalid_settings": "The connection settings are not valid: {error}",
+      "invalid_prefix": "Use only letters, digits, spaces, - and _.",
+      "prefix_taken": "Another device of this type already has this prefix (or, if empty, no prefix). Choose a different one."
     },
     "abort": {
       "already_configured": "This device is already set up."
@@ -64,7 +74,7 @@
     "step": {
       "init": {
         "title": "Configure",
-        "description": "The connection, how often each group of values is read, and which optional parts to read. The next step asks for the address.",
+        "description": "The connection, how often each group of values is read, and which optional parts to read. The next step asks for the address. Entity id prefix: {prefix} (set when the device was added).",
         "data": {
           "transport": "Connection",
           "scan_interval_fast": "Fast polling interval (s)",

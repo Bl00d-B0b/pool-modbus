@@ -13,6 +13,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.pool_modbus.const import (
     CONF_DEVICE_TYPE,
+    CONF_PREFIX,
     CONF_TRANSPORT,
     CONF_UNIT_ID,
     DOMAIN,
@@ -71,9 +72,49 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         CONF_HOST: "192.168.1.50",
         CONF_PORT: 502,
         CONF_UNIT_ID: 2,
+        CONF_PREFIX: "",
     }
     assert result["result"].unique_id == "t010_tcp_192.168.1.50:502_2"
     assert result["options"] == {"scan_interval_fast": 5, "scan_interval": 15}
+
+
+async def add_with_prefix(hass: HomeAssistant, prefix: str):
+    result = await start(hass)
+    result = await finish(
+        hass, result["flow_id"], fake_unit("t010"), {**NETWORK, CONF_PREFIX: prefix}
+    )
+    if result["step_id"] != "settings":
+        return result
+    return await finish(hass, result["flow_id"], fake_unit("t010"), {"scan_interval_fast": 5})
+
+
+async def test_the_same_device_again_with_a_prefix(hass: HomeAssistant) -> None:
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="t010_tcp_192.168.1.50:502_2", data={CONF_DEVICE_TYPE: "t010"}
+    ).add_to_hass(hass)
+
+    result = await add_with_prefix(hass, "Spa 1")
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PREFIX] == "spa_1"
+    assert result["result"].unique_id == "t010_tcp_192.168.1.50:502_2_spa_1"
+
+
+async def test_a_prefix_another_device_of_the_type_has_is_refused(hass: HomeAssistant) -> None:
+    # another T010, elsewhere, already without a prefix
+    MockConfigEntry(
+        domain=DOMAIN, unique_id="t010_tcp_192.168.1.60:502_2", data={CONF_DEVICE_TYPE: "t010"}
+    ).add_to_hass(hass)
+
+    result = await add_with_prefix(hass, "")
+
+    assert result["errors"] == {CONF_PREFIX: "prefix_taken"}
+
+
+async def test_a_prefix_with_other_characters_is_refused(hass: HomeAssistant) -> None:
+    result = await add_with_prefix(hass, "spa!")
+
+    assert result["errors"] == {CONF_PREFIX: "invalid_prefix"}
 
 
 async def test_serial_asks_for_line_settings(hass: HomeAssistant) -> None:

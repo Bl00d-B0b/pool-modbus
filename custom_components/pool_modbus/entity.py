@@ -20,8 +20,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 from modbus_connection import ModbusError
 
+from .const import CONF_DEVICE_TYPE, CONF_PREFIX
 from .coordinator import PoolModbusCoordinator, PoolModbusData
-from .library import Value
+from .library import Value, get_device_type
 
 UNITS: dict[str, str] = {
     "°C": UnitOfTemperature.CELSIUS,
@@ -57,14 +58,19 @@ async def async_write(
 
 
 def entity_id(domain: str, entry: ConfigEntry, name: str | None) -> str:
-    """The entity id to register: the device's name, then the entity's (none for a
-    device's main entity), e.g. ``sensor.dosing_pump_ph_level``.
+    """The entity id to register: the device type's base, the device's prefix if it
+    has one, then the entity's name (none for a device's main entity), e.g.
+    ``number.pool_thermostat_temperature_offset`` or, with prefix ``spa``,
+    ``number.pool_thermostat_spa_temperature_offset``.
 
     Home Assistant puts the device's area in front of the entity ids it makes up;
     an id the integration suggests is taken as it is (with ``_2`` added if it is in
     use), so the area never becomes part of an id.
     """
-    return f"{domain}.{slugify(f'{entry.title} {name}' if name else entry.title)}"
+    device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
+    base = device_type.entity_id_base or device_type.key
+    parts = [base, entry.data.get(CONF_PREFIX, ""), name or ""]
+    return f"{domain}.{slugify(' '.join(part for part in parts if part))}"
 
 
 class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):

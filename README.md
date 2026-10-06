@@ -102,16 +102,20 @@ also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
 read-only settings are diagnostic.
 
-Entity ids are the device's name followed by the entity's, as in
-`sensor.dosing_pump_ph_level` or `switch.pool_controller_filtration`; the
-thermostat, the T010's main entity, is named after the device alone
-(`climate.pool_thermostat`). The device's area is never part of an id, although
-Home Assistant puts it in front of the ids it makes up by default, so moving a
-device to another area changes no id. A second device of a type you already
-added is offered the first one's name with a number, e.g. "Pool thermostat 2",
-which gives its ids their own suffix (`climate.pool_thermostat_2`,
-`number.pool_thermostat_2_temperature_offset`). The clocks are named as in
-other integrations: RTC, and Sync RTC on the pool controller to set it.
+Entity ids start with the device type (`pool_controller`, `pool_thermostat`,
+`dosing_pump`), then the device's entity id prefix if it has one, then the
+entity's name: `number.pool_thermostat_temperature_offset`, or with prefix `2`,
+`number.pool_thermostat_2_temperature_offset`. The thermostat, the T010's main
+entity, has no name of its own (`climate.pool_thermostat`,
+`climate.pool_thermostat_2`). The prefix is asked for when a device is added:
+optional, letters, digits and `_`, and different for each device of a type
+(only one of them can have none). It is part of the device's identity, so it
+cannot be changed later, and the same device can be added a second time with a
+prefix of its own. The device's name is only what is shown: entities are named
+"<device name> <entity name>". The device's area is never part of an id,
+although Home Assistant puts it in front of the ids it makes up by default, so
+moving a device to another area changes no id. The clocks are named as in other
+integrations: RTC, and Sync RTC on the pool controller to set it.
 
 Before a write, the integration checks the value against the range the device
 accepts and reads the device again; a value the device already holds is not
