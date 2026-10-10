@@ -25,6 +25,7 @@ OUT = (
 
 
 def rect(x: float, y: float, w: float, h: float) -> str:
+    x, y, w, h = (round(v, 2) for v in (x, y, w, h))
     return f"M{x} {y}h{w}v{h}h{-w}z"
 
 
@@ -68,7 +69,7 @@ const ICONS = {icons};
 window.customIcons = window.customIcons || {{}};
 window.customIcons.pool = {{
   getIcon: (name) =>
-    name in ICONS
+    Object.hasOwn(ICONS, name)
       ? Promise.resolve({{ path: ICONS[name] }})
       : Promise.reject(new Error(`no icon pool:${{name}}`)),
   getIconList: () => Promise.resolve(Object.keys(ICONS).map((name) => ({{ name }}))),

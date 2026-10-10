@@ -264,6 +264,31 @@ async def test_a_command_after_another_starts_from_the_current_word(
     assert unit.registers[COMMAND] == 0x0001
 
 
+async def test_a_pulse_clears_its_bit_even_if_the_set_is_not_confirmed(
+    controller_snapshot, monkeypatch
+) -> None:
+    from pool_modbus.devices import writing
+
+    monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0)
+    monkeypatch.setattr(writing, "CONFIRM_TIMEOUT", 0.02)
+    unit = FakeController(dict(controller_snapshot), stale_reads=10_000)  # reads never catch up
+    device = await read(unit)
+
+    with pytest.raises(TimeoutError):
+        await reset_alarms(device, datetime(2026, 10, 10, 12, 0))
+
+    assert unit.writes == [(COMMAND, 0x4001), (COMMAND, 0x0001)]  # set, then cleared anyway
+
+
+async def test_a_bit_found_set_is_cleared_by_the_pulse(controller_snapshot) -> None:
+    unit = FakeController({**controller_snapshot, COMMAND: 0x0011})  # the light bit stuck
+    device = await read(unit)
+
+    await set_light(device, True)  # cover closed: the toggle is ignored
+
+    assert unit.writes == [(COMMAND, 0x0001)]  # the set is skipped, the clearing write goes out
+
+
 async def test_backwash_time_takes_any_minute(controller_snapshot) -> None:
     unit, device = await controller(controller_snapshot)
     await set_backwash_time(device, time(7, 31))

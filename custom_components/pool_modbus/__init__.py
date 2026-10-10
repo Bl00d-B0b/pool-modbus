@@ -13,6 +13,7 @@ from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, Home
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 from modbus_connection import ModbusError
 
 from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID, DOMAIN
@@ -56,7 +57,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if http is None or DATA_EXTRA_MODULE_URL not in hass.data:
         return True
     await http.async_register_static_paths([StaticPathConfig(ICONS_URL, str(ICONS_MODULE), True)])
-    add_extra_js_url(hass, f"{ICONS_URL}?v={ICONS_MODULE.stat().st_mtime_ns}")
+    version = (await async_get_integration(hass, DOMAIN)).version
+    add_extra_js_url(hass, f"{ICONS_URL}?v={version}")
     return True
 
 
