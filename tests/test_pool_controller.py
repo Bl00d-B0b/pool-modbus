@@ -255,7 +255,7 @@ async def test_a_command_after_another_starts_from_the_current_word(
     monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0)
     monkeypatch.setattr(pool_controller, "LIGHT_WAIT", 0.05)
     # The gateway answers reads from a cache: reads lag a write by two polls.
-    unit = FakeUnit(dict(controller_snapshot), stale_reads=2)
+    unit = FakeController(dict(controller_snapshot), stale_reads=2)
     device = await read(unit)
 
     await set_backwash_time(device, "06:05")  # ends with the save pulse
