@@ -13,6 +13,7 @@ backwash timers" pulse; it is confirmed in 27-29, where the controller keeps it.
 
 from __future__ import annotations
 
+import contextlib
 from datetime import datetime
 from typing import Any
 
@@ -32,6 +33,9 @@ LONG_PULSE = 3.1
 
 SHORT_PULSE = 0.5
 """Seconds to hold the light, alarm reset and schedule save commands."""
+
+LIGHT_WAIT = 3.0
+"""Seconds to wait for the status to show the light switched after its toggle."""
 
 
 def _within(low: int, high: int):
@@ -184,16 +188,23 @@ def _time(hour: int | None, minute: int | None) -> str | None:
 
 
 async def set_light(device: PoolController, on: bool) -> None:
-    """Toggle the light if it is not already as asked; confirmed in the status."""
+    """Toggle the light if it is not already as asked, then wait for the status.
+
+    Whether the light switches is the controller's decision, so a toggle it does
+    not carry out is no error: the light keeps showing its real state (40025 bit
+    11), and a switch in Home Assistant goes back to it.
+    """
     await update_or_keep(device)
     if device.light_on == bool(on):
         return
-    if not device.pool_open:
-        raise ValueError("the controller only switches the light while the cover is open")
     await pulse(device, "light_command", SHORT_PULSE)
-    await wait_until(
-        device, lambda d: d.light_on == bool(on), f"the light is still {'off' if on else 'on'}"
-    )
+    with contextlib.suppress(TimeoutError):
+        await wait_until(
+            device,
+            lambda d: d.light_on == bool(on),
+            f"the light is still {'off' if on else 'on'}",
+            timeout=LIGHT_WAIT,
+        )
 
 
 async def _move_cover(device: PoolController, command: str, want_open: bool) -> None:
@@ -357,7 +368,7 @@ VALUES = (
         binary=True,
         write=set_light,
         light=True,
-        fields=("light_command", "pool_open"),
+        fields=("light_command",),
         icon="mdi:lightbulb-on",
         icon_off="mdi:lightbulb-off",
     ),

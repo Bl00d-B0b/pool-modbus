@@ -25,7 +25,6 @@ from homeassistant.components.select import (
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
@@ -107,13 +106,19 @@ async def test_cover_open_and_close(hass: HomeAssistant) -> None:
     assert unit.writes[2:] == [(16, 0x0009), (16, 0x0001)]
 
 
-async def test_light_needs_the_cover_open(hass: HomeAssistant) -> None:
-    unit = fake_unit("pool_controller")
+async def test_light_the_controller_does_not_switch_stays_off(
+    hass: HomeAssistant, monkeypatch
+) -> None:
+    from custom_components.pool_modbus.library.devices import pool_controller
+
+    monkeypatch.setattr(pool_controller, "LIGHT_WAIT", 0.05)
+    unit = fake_unit("pool_controller")  # cover closed: the controller ignores the toggle
     await add(hass, "pool_controller", unit)
 
-    with pytest.raises(ServiceValidationError, match="cover is open"):
-        await call(hass, LIGHT_DOMAIN, SERVICE_TURN_ON, LIGHT)
-    assert unit.writes == []
+    await call(hass, LIGHT_DOMAIN, SERVICE_TURN_ON, LIGHT)  # no error
+
+    assert unit.writes == [(16, 0x0011), (16, 0x0001)]
+    assert state(hass, LIGHT) == "off"
 
 
 async def test_light(hass: HomeAssistant) -> None:

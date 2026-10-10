@@ -101,7 +101,9 @@ Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches, numbers, selects or lights; the T010
 also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
-read-only settings are diagnostic.
+read-only settings are diagnostic. The pool light is switched as the controller
+allows: a toggle the controller does not carry out leaves the light as it is,
+without an error.
 
 Entity ids start with the device type (`pool_controller`, `pool_thermostat`,
 `dosing_pump`), then the device's entity id prefix if it has one, then the

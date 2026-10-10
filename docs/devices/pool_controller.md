@@ -88,9 +88,11 @@ Backwash Schedule) and **clock** (RTC, Sync RTC).
   light toggle (bit 4), alarm reset (bit 14) and schedule save (bit 15) 0.5 s.
 - **The cover** is only told to move when it is not already open or closed as
   asked; it takes a while to move, so the status is not waited for.
-- **The light** toggles, so it is only pulsed when it is not already as asked,
-  then confirmed in 40025 bit 11. The controller switches it only while the
-  cover is open, so the integration refuses it while the cover is closed.
+- **The light** toggles, so it is only pulsed when it is not already as asked;
+  the integration then waits up to 3 s for 40025 bit 11 to follow. Whether the
+  light switches is the controller's decision: if the status does not follow,
+  that is no error, the light keeps showing its real state, and a switch in
+  Home Assistant goes back to it.
 - **The backwash schedule**: the day is written to 40018 (one day bit, or 0 for
   off), the time to 40019–40020 in one request, then the save pulse; the write
   is confirmed when the controller shows it in 40028–40030.

@@ -181,11 +181,16 @@ async def test_switch_already_as_asked_is_not_written(controller_snapshot) -> No
     assert unit.writes == []
 
 
-async def test_light_is_refused_while_the_cover_is_closed(controller_snapshot) -> None:
-    unit, device = await controller(controller_snapshot)
-    with pytest.raises(ValueError, match="cover is open"):
-        await set_light(device, True)
-    assert unit.writes == []
+async def test_light_toggle_the_controller_ignores_is_no_error(
+    controller_snapshot, monkeypatch
+) -> None:
+    from pool_modbus.devices import pool_controller
+
+    monkeypatch.setattr(pool_controller, "LIGHT_WAIT", 0.05)
+    unit, device = await controller(controller_snapshot)  # cover closed: it ignores the toggle
+    await set_light(device, True)
+    assert unit.writes == [(COMMAND, 0x0011), (COMMAND, 0x0001)]  # the pulse went out
+    assert device.light_on is False  # and the light shows as it is
 
 
 async def test_light_toggles_once_and_is_confirmed(controller_snapshot) -> None:
@@ -198,11 +203,14 @@ async def test_light_toggles_once_and_is_confirmed(controller_snapshot) -> None:
     assert len(unit.writes) == 2
 
 
-async def test_light_that_does_not_change_is_reported(controller_snapshot) -> None:
+async def test_light_that_does_not_change_shows_as_it_is(controller_snapshot, monkeypatch) -> None:
+    from pool_modbus.devices import pool_controller
+
+    monkeypatch.setattr(pool_controller, "LIGHT_WAIT", 0.05)
     unit = FakeUnit({**controller_snapshot, STATUS: 0x0103 | OPEN})  # ignores the toggle
     device = await read(unit)
-    with pytest.raises(TimeoutError, match="still off"):
-        await set_light(device, True)
+    await set_light(device, True)
+    assert device.light_on is False
 
 
 @pytest.mark.parametrize(
