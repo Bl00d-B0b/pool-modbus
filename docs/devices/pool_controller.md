@@ -100,6 +100,11 @@ Backwash Schedule) and **clock** (RTC, Sync RTC).
 - **The backwash schedule**: the day is written to 40018 (one day bit, or 0 for
   off), the time to 40019–40020 in one request, then the save pulse; the write
   is confirmed when the controller shows it in 40028–40030.
+- **A manual backwash** on the tested installation: the valve was in the
+  backwash position for about 1.4 min, then the water level read low and the
+  controller refilled for about 8 min (Filling on), moving the valve to the
+  backwash position twice more for about a minute each during the refill, and
+  the level read normal again. Opening the cover took 149 s, closing 67 s.
 - **The clock** is set by writing the local time to 40033–40036 in one request
   (second/weekday with 1 = Monday, hour/minute, month/day, century/year) and
   confirmed in 40037–40040.
