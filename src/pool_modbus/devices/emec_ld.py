@@ -1,18 +1,9 @@
-"""EMEC LD-series pH / chlorine controllers.
+"""EMEC LD-series pH / chlorine controllers. Tested on an LDPHCL, firmware 5.1.4.
 
-Tested on an LDPHCL (firmware 5.1.4) behind a Modbus TCP-to-RS-485 gateway.
-Register map: docs/devices/emec_ld.md.
-
-Addressing. The controller is byte-addressed: every 16-bit value takes two
-Modbus addresses and sits at an odd wire address, ``register - 40001``. A read
-of N registers from an odd address returns the N values at a, a+2, a+4, ...;
-reads must start at an odd address. ``EmecUnit`` numbers the values 0, 1, 2,
-... (``index = (register - 40002) / 2``) and sends each read to wire address
-``2 * index + 1``, so the model's read planner works unchanged.
-
-Formats. Most values are plain 16-bit words. Output states and pulse rates are
-one byte in the high half of the word (low byte 0). The clock packs two bytes
-into each word.
+The controller is byte-addressed: a value sits at odd wire address
+``register - 40001``, and a read from an odd address returns every second
+register. ``EmecUnit`` numbers the values 0, 1, 2, ... (``(register - 40002) / 2``)
+and maps them to the wire. Register map and formats: docs/devices/emec_ld.md.
 """
 
 from __future__ import annotations
@@ -53,10 +44,8 @@ def wire_address(index: int) -> int:
 class EmecUnit:
     """A ``ModbusUnit`` view that maps EMEC value indices to odd wire addresses.
 
-    Coils use normal bit addressing and pass straight through. A value is
-    written with function 06 at its odd wire address, one value per request;
-    writing several values in one request and writing coils are refused, as
-    they are untested.
+    Coils pass straight through. Values are written one per request (function
+    06); multi-register and coil writes are refused as untested.
     """
 
     def __init__(self, unit: ModbusUnit) -> None:
@@ -201,16 +190,12 @@ class EmecLD(Component):
         self._dropped: frozenset[str] = frozenset()
 
     def _verify_read(self) -> None:
-        """Refuse a read with values the controller cannot hold.
+        """Refuse a read with zeros the controller cannot hold.
 
-        The tested LDPHCL now and then answers with zeros for a few seconds: all
-        of a read (divisors 0, temperature 0.0 °C, probe voltages 0 mV, relays
-        disabled), or only some values (both probe voltages, or both relays),
-        while the next poll reads normally again. A measurement's divisor is never
-        0, and every scan group reads channel 1's (``check_fields``), so a read
-        with it at 0 is refused. A value that was not 0 and now reads 0 is refused
-        once: a real 0 (pH 7.00 gives a probe voltage of about 0 mV) is accepted
-        when the next read shows it too, a glitch is gone by then.
+        The LDPHCL sometimes answers with zeros for one poll: all values, or some
+        (both probe voltages, both relays). A divisor is never 0, so a read with
+        channel 1's divisor at 0 is refused; a value that drops to 0 is refused
+        once and accepted when the next read agrees (a real 0 shows a poll later).
         """
         if "ch1_divisor" in self.resolved_fields and not self.ch1_divisor:
             raise ImplausibleReadError("the controller answered with zeros (channel 1 divisor 0)")
@@ -305,9 +290,8 @@ def _create(unit: ModbusUnit, variant: str | None) -> EmecLD:
 
 
 # -- writes -------------------------------------------------------------------
-# The controller's proportional mode runs from 0 pulses per minute at one pH value
-# to the set rate at the other, so setting one end's rate sets the other end's to
-# 0, and a working mode is entered by writing its settings in a fixed order.
+# Proportional mode runs from 0 p/min at one pH end to the set rate at the other,
+# so one end's rate zeroes the other's; a mode is entered in a fixed write order.
 
 _MODE_STEPS = {
     PulseMode.ON_OFF: (
@@ -334,11 +318,13 @@ async def set_ph_mode(device: EmecLD, label: str) -> None:
 
 
 async def set_max_rate(device: EmecLD, rate: float) -> None:
+    """The pH rate at pH Max Value; the rate at pH Min Value goes to 0."""
     await write_if_changed(device, "ch1_pulse_perc1", rate)
     await write_if_changed(device, "ch1_pulse_perc2", 0)
 
 
 async def set_min_rate(device: EmecLD, rate: float) -> None:
+    """The pH rate at pH Min Value; the rate at pH Max Value goes to 0."""
     await write_if_changed(device, "ch1_pulse_perc2", rate)
     await write_if_changed(device, "ch1_pulse_perc1", 0)
 

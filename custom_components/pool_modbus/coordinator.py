@@ -104,14 +104,8 @@ class PoolModbusCoordinator(DataUpdateCoordinator[None]):
         self._last_read: float | None = None
 
     async def _async_update_data(self) -> None:
-        """Read the group, keeping the last values through a short failure.
-
-        A failed read is tried once more after a short pause: requests can collide
-        with another Modbus client's, and a device can miss one. If that fails too,
-        the entities keep their last values, for up to ``STALE_AFTER`` seconds since
-        the last good read, so a missed poll does not cut their history; after that
-        they are unavailable. A failed or refused read never changes the values.
-        """
+        """Read the group; a failed read is retried once, then the last values are
+        kept for up to ``STALE_AFTER`` seconds before the entities go unavailable."""
         try:
             await self._read()
         except (ModbusError, OSError, TimeoutError) as err:

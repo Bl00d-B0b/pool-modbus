@@ -23,10 +23,9 @@ NO_REPLY = (GatewayTargetError, ModbusTimeoutError)
 async def write_bits(device: Component, word_field: str, mask: int, on: bool) -> None:
     """Set (``on``) or clear the bits of ``mask`` in the register behind ``word_field``.
 
-    The new word is computed from the device's own last read and written whole:
-    a read-modify-write that reads the register again inside the write can start
-    from a stale word behind a gateway that answers reads from a cache, and set
-    a just-cleared bit again. The write is confirmed by reading the device back.
+    The word is computed from the device's last read and written whole, then
+    confirmed by read-back; a read inside the write could be stale behind a
+    gateway that caches reads, and set a just-cleared bit again.
     """
     await update_or_keep(device)
     word = getattr(device, word_field)
@@ -72,21 +71,11 @@ async def wait_until(device: Component, done: Any, what: str, timeout: float | N
 async def write_if_changed(device: Component, field: str, value: Any) -> None:
     """Write ``field`` unless the device already holds ``value``, then confirm it.
 
-    The value is checked by the field's validator before anything is sent, and
-    the device is read first rather than trusting the last poll. After the
-    write the device is read until it shows the new value: some Modbus gateways
-    answer reads from a cache, so a write can take a moment to show. Confirming
-    also means the next read-modify-write of a shared register starts from the
-    current word.
-
-    A write that gets no reply is not an error by itself: the EMEC LD stores a
-    value but answers too late for its gateway, which then reports exception
-    0x0B. The reads that follow decide, and a read that fails meanwhile is
-    tried again until the timeout.
-
-    Raises ``ValueError`` for a value the field does not accept, and
-    ``TimeoutError`` if the device does not show the value within
-    ``CONFIRM_TIMEOUT`` seconds.
+    The value is checked by the field's validator, the device is read first, and
+    after the write it is read until it shows the value (gateways cache reads).
+    A write without a reply (the EMEC LD answers too late for its gateway) is
+    decided by that read-back. Raises ``ValueError`` for a value the field does
+    not accept, ``TimeoutError`` if the value does not show in ``CONFIRM_TIMEOUT``.
     """
     writable = getattr(type(device), field).writable
     if callable(writable):

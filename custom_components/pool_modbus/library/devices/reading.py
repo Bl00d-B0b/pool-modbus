@@ -6,13 +6,10 @@ from modbus_connection.model import Component
 
 
 async def update_or_keep(model: Component) -> None:
-    """Read ``model``; if the read fails, it keeps the values it had.
+    """Read ``model``; if the read fails or is refused, it keeps the values it had.
 
-    A failed request leaves the values as they were, but a read the model's
-    check refuses (``ImplausibleReadError``) has already stored them, and a read
-    of several blocks can fail after the first. Either way the values from before
-    the read are put back, so the model never shows part of a read or values its
-    check refused.
+    A refused read (``ImplausibleReadError``) or a failure after the first of
+    several blocks has already stored values; they are put back.
     """
     # The model keeps its values in these two dicts; its read plan holds them by
     # reference, so they are restored in place.

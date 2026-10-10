@@ -1,15 +1,9 @@
 """Pool controller: filtration, cover, light and water level. Standard addressing.
 
-Register map from the controller's register sheet, checked against live data;
-see docs/devices/pool_controller.md.
-
-Writes. Register 16 holds two switches (filtration, block filling up) and the
-command bits: a command is a pulse, the bit set, held, then cleared. The cover
-and the backwash need more than 3 s, the light, alarm reset and schedule save
-about 0.5 s. Register 16 is always written as a whole word computed from the
-last read of the block (``write_bits``), so the other bits stay, and confirmed
-by reading it back. A backwash schedule written to 17-19 only counts after the "save
-backwash timers" pulse; it is confirmed in 27-29, where the controller keeps it.
+Register 16 holds the switches and the command bits (pulses: cover and backwash
+over 3 s, the others 0.5 s), written as a whole word (``write_bits``). A
+backwash schedule written to 17-19 counts after the save pulse and shows in
+27-29. Register map and behaviour: docs/devices/pool_controller.md.
 """
 
 from __future__ import annotations
@@ -228,10 +222,12 @@ async def _move_cover(device: PoolController, command: int, want_open: bool) -> 
 
 
 async def open_cover(device: PoolController) -> None:
+    """Open the cover unless it is open; the status is not waited for."""
     await _move_cover(device, OPEN_BIT, True)
 
 
 async def close_cover(device: PoolController) -> None:
+    """Close the cover unless it is closed; the status is not waited for."""
     await _move_cover(device, CLOSE_BIT, False)
 
 
@@ -242,6 +238,7 @@ async def _save_schedule(device: PoolController, done: Any, what: str) -> None:
 
 
 async def set_backwash_day(device: PoolController, day: str) -> None:
+    """Write the backwash day ("Off" or a weekday), then save it."""
     if day not in DAY_OPTIONS:
         raise ValueError(f"{day!r} is not one of {', '.join(DAY_OPTIONS)}")
     bitmap = 0 if day == "Off" else 1 << DAYS.index(day)
@@ -276,10 +273,12 @@ async def set_backwash_time(device: PoolController, value: time | str) -> None:
 
 
 async def backwash(device: PoolController, now: datetime) -> None:
+    """Start a manual filter backwash."""
     await pulse_bits(device, "command_word", BACKWASH_BIT, LONG_PULSE)
 
 
 async def reset_alarms(device: PoolController, now: datetime) -> None:
+    """Reset the controller's alarms."""
     await pulse_bits(device, "command_word", RESET_ALARMS_BIT, SHORT_PULSE)
 
 

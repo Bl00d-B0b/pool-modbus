@@ -1,11 +1,8 @@
-"""Which model fields each scan group reads.
+"""Which model fields each scan group (fast, medium, slow) reads.
 
-A device is read in up to three groups (fast, medium, slow), each on its own
-interval. Each group gets its own model instance, narrowed with
-``Component.restrict_fields`` to the fields its values use, so it only reads
-those registers. The fields a value uses are found by running its getters on
-stand-ins for the model, and can be extended with ``Value.fields``. A device
-type's ``check_fields`` are added to every group, so each read can be checked.
+Each group gets a model narrowed with ``restrict_fields`` to the fields its
+values use, found by running the getters on stand-ins, plus ``Value.fields``
+and the device type's ``check_fields``.
 """
 
 from __future__ import annotations
@@ -107,10 +104,8 @@ def read_plan(
 def group_model(device_type: DeviceType, unit: Any, fields: Iterable[str]) -> Component:
     """A model of ``device_type`` on ``unit`` that reads only ``fields``.
 
-    ``restrict_fields`` also takes the other fields' addresses out of the readable
-    ranges, which would split a group's read around them. The device types here
-    declare ranges the device serves in full, so those stay, and a group still
-    reads its registers in as few requests as the device allows.
+    The declared ``register_ranges`` are kept, so a group's read is not split
+    around the fields it does not use.
     """
     model = device_type.model(unit)
     declared = type(model).register_ranges

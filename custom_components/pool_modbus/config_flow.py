@@ -1,11 +1,8 @@
 """Config flow: one entry per device, each with its own connection settings.
 
-Adding a device asks for its type and connection, reads it to check it is that
-type, then asks for the scan intervals and optional parts. Configure changes
-all of that later, connection included; the entry keeps its unique ID, so its
-entities keep their IDs. The entity id prefix is set when the device is added:
-it is part of the device's identity, so the same device can be added twice with
-different prefixes (to compare settings, say).
+Adding a device asks for its type, connection and entity id prefix, reads it
+to check the type, then asks for the scan intervals and optional parts.
+Configure changes all but the prefix later; the entry keeps its unique ID.
 """
 
 from __future__ import annotations

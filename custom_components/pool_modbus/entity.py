@@ -58,14 +58,10 @@ async def async_write(
 
 
 def entity_id(domain: str, entry: ConfigEntry, name: str | None) -> str:
-    """The entity id to register: the device type's base, the device's prefix if it
-    has one, then the entity's name (none for a device's main entity), e.g.
-    ``number.pool_thermostat_temperature_offset`` or, with prefix ``spa``,
-    ``number.pool_thermostat_spa_temperature_offset``.
+    """The entity id: the device type's base, the device's prefix, the entity's
+    name (none for the main entity), e.g. ``number.pool_thermostat_spa_temperature_offset``.
 
-    Home Assistant puts the device's area in front of the entity ids it makes up;
-    an id the integration suggests is taken as it is (with ``_2`` added if it is in
-    use), so the area never becomes part of an id.
+    Suggested here so that Home Assistant does not put the area in front of it.
     """
     device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
     base = device_type.entity_id_base or device_type.key

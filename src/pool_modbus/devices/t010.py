@@ -1,14 +1,8 @@
-"""T010 pool thermostat by Optika ir technologija (baseinai.lt), standard Modbus addressing.
+"""T010 pool thermostat by Optika ir technologija, firmware 1.7. Standard addressing.
 
-Register map from the device firmware (software version 1.7); see
-docs/devices/t010.md. The model reads addresses 0-8 (40001-40009) in one
-function-03 request; the firmware allows at most 10 registers per read. Settings
-are written with function 06.
-
-Writes: the setpoint, offset, delay setting, and the heating-blocked and
-delaying flags. Each is checked against the firmware's range first, skipped
-when the device already holds the value because the firmware stores every
-write in EEPROM, and confirmed by reading it back (see ``write_if_changed``).
+Addresses 0-8 (40001-40009) are read in one request (the firmware allows 10).
+Writes are skipped when the device holds the value, as every write goes to its
+EEPROM, and confirmed by read-back. Register map: docs/devices/t010.md.
 """
 
 from __future__ import annotations
