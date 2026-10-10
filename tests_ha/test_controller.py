@@ -73,7 +73,7 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert (mode.state, mode.attributes["icon"]) == ("Filtering", "mdi:filter")
     assert mode.attributes["device_class"] == "enum"
     assert hass.states.get(COVER).attributes["device_class"] == "shutter"
-    assert hass.states.get(COVER).attributes["icon"] == "mdi:window-shutter"
+    assert hass.states.get(COVER).attributes["icon"] == "pool:cover-closed"
     assert hass.states.get(LIGHT).attributes["icon"] == "mdi:lightbulb-off"
     assert len(hass.states.get(DAY).attributes["options"]) == 8  # Off and the weekdays
     # The cover and light replace the old open/close buttons and status sensors.

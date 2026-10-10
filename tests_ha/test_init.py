@@ -254,6 +254,15 @@ async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
 
 
+async def test_the_icon_set_is_served(hass: HomeAssistant) -> None:
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    await add(hass, "pool_controller", fake_unit("pool_controller"))
+
+    assert any("/pool_modbus/pool_icons.js" in url for url in hass.data[DATA_EXTRA_MODULE_URL].urls)
+    assert hass.states.get("cover.pool_controller_cover").attributes["icon"] == "pool:cover-closed"
+
+
 async def test_unload(hass: HomeAssistant) -> None:
     entry = await add(hass, "pool_controller", fake_unit("pool_controller"))
 

@@ -111,7 +111,7 @@ read-modify-writes of 40017.
 |---|---|---|---|---|---|
 | Filtration | Switch | `switch` | `filter` / `filter-off` | 40017 bit 0 | Fast |
 | Block Filling | Switch | `switch` | `water-off` / `water-plus-outline` | 40017 bit 5 | Fast |
-| Cover | Cover: open/close | `shutter` | `window-shutter-open` / `window-shutter` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
+| Cover | Cover: open/close | `shutter` | `pool:cover-open` / `pool:cover-closed`, the integration's own icons | 40017 bits 2–3, 40025 bit 3 | Fast |
 | Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
 | Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `filter`, `filter-off` | 40025 bits 1–2 | Fast |
 | Water Level | Sensor: Off, Minimum, Low, Normal, Maximum, Unknown | `enum` | `water-off`, `water-alert`, `water-minus`, `water-check`, `water-plus` | 40025 bits 6–10 | Fast |

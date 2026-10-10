@@ -470,8 +470,8 @@ COVER = Cover(
     close_cover,
     device_class="shutter",
     fields=("open_command", "close_command"),
-    icon="mdi:window-shutter-open",
-    icon_closed="mdi:window-shutter",
+    icon="pool:cover-open",  # the integration's own icons: the terrace over the pool
+    icon_closed="pool:cover-closed",
 )
 
 

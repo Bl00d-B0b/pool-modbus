@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.typing import ConfigType
 from modbus_connection import ModbusError
 
-from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID
+from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID, DOMAIN
 from .coordinator import (
     PoolModbusConfigEntry,
     PoolModbusCoordinator,
@@ -35,6 +41,23 @@ PLATFORMS: list[Platform] = [
 
 RENAMED_KEYS = {"clock": "rtc", "sync_clock": "sync_rtc"}
 """Value and action keys renamed to the names other integrations use (RTC, Sync RTC)."""
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+ICONS_MODULE = Path(__file__).parent / "frontend" / "pool_icons.js"
+ICONS_URL = f"/{DOMAIN}/pool_icons.js"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the integration's icon set (``pool:``, drawn by script/make_pool_icons.py)
+    to the frontend; entities use its icons like Material Design ones."""
+    http = getattr(hass, "http", None)
+    if http is not None:
+        await http.async_register_static_paths(
+            [StaticPathConfig(ICONS_URL, str(ICONS_MODULE), True)]
+        )
+    add_extra_js_url(hass, f"{ICONS_URL}?v={ICONS_MODULE.stat().st_mtime_ns}")
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> bool:

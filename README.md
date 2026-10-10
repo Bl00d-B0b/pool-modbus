@@ -102,7 +102,10 @@ a device lets you change become switches, numbers, selects, times or lights; the
 also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
 read-only settings, clocks, firmware versions, probe voltages and the buttons
-that set the clock or reset alarms are diagnostic. The pool light is switched as the controller
+that set the clock or reset alarms are diagnostic. The integration brings its own
+icon set, `pool:`, for what Material Design Icons lack: the pool cover, a terrace
+that slides over a pool sunk into the ground (`pool:cover-open`,
+`pool:cover-closed`, drawn by `script/make_pool_icons.py`). The pool light is switched as the controller
 allows: a toggle the controller does not carry out leaves the light as it is,
 without an error.
 

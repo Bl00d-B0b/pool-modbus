@@ -32,6 +32,8 @@ serial numbers or anything else private.
    - for a thermostat, cover or commands: `thermostat`, `cover` and `actions`;
    - an adapter like `EmecUnit` only if the device addresses registers in a
      non-standard way;
+   - an icon Material Design Icons lacks goes into the `pool:` icon set:
+     `script/make_pool_icons.py` draws it and writes the frontend module;
    - if the device can answer with values it cannot hold (the EMEC LD sends
      blocks of zeros), a `_verify_read` on the model that raises
      `ImplausibleReadError`, and the fields it checks in `check_fields`, which

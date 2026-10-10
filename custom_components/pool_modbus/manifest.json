@@ -3,7 +3,7 @@
   "name": "Pool equipment",
   "codeowners": ["@Bl00d-B0b"],
   "config_flow": true,
-  "dependencies": ["modbus"],
+  "dependencies": ["frontend", "http", "modbus"],
   "documentation": "https://github.com/Bl00d-B0b/pool-modbus",
   "integration_type": "device",
   "iot_class": "local_polling",
