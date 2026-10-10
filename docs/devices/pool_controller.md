@@ -83,7 +83,9 @@ Backwash Schedule) and **clock** (RTC, Sync RTC).
 - **Switches** (40017 bits 0 and 5) are written as a read-modify-write of 40017,
   so the other bits are kept, and confirmed by reading them back.
 - **Commands** are pulses: the bit is set, held, then cleared, each with a
-  read-modify-write. Open and close the cover (bits 2 and 3) and the manual
+  read-modify-write, and the clearing is confirmed by reading it back, so the
+  next command starts from the current word even behind a gateway that answers
+  reads from a cache. Open and close the cover (bits 2 and 3) and the manual
   backwash (bit 1) are held 3.1 s, as the controller needs more than 3 s; the
   light toggle (bit 4), alarm reset (bit 14) and schedule save (bit 15) 0.5 s.
 - **The cover** is only told to move when it is not already open or closed as

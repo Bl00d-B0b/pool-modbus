@@ -24,13 +24,17 @@ async def pulse(device: Component, field: str, seconds: float) -> None:
     """Set a command bit, hold it for ``seconds``, then clear it.
 
     Both writes read the register back and merge, so the register's other bits
-    stay as they are. The bit is cleared even if the wait is interrupted.
+    stay as they are. The bit is cleared even if the wait is interrupted, and the
+    clearing is confirmed by reading it back before returning: behind a gateway
+    that answers reads from a cache, the next command's read-merge-write would
+    otherwise start from the word with this bit still set, and set it again.
     """
     await device.write(field, True)
     try:
         await asyncio.sleep(seconds)
     finally:
         await device.write(field, False)
+    await wait_until(device, lambda d: not getattr(d, field), f"{field} is still set")
 
 
 async def wait_until(device: Component, done: Any, what: str, timeout: float | None = None) -> None:

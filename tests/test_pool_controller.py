@@ -247,6 +247,23 @@ async def test_backwash_day_is_written_then_saved(controller_snapshot) -> None:
     assert device.saved_backwash_schedule == "Monday 06:00"
 
 
+async def test_a_command_after_another_starts_from_the_current_word(
+    controller_snapshot, monkeypatch
+) -> None:
+    from pool_modbus.devices import pool_controller, writing
+
+    monkeypatch.setattr(writing, "CONFIRM_INTERVAL", 0)
+    monkeypatch.setattr(pool_controller, "LIGHT_WAIT", 0.05)
+    # The gateway answers reads from a cache: reads lag a write by two polls.
+    unit = FakeUnit(dict(controller_snapshot), stale_reads=2)
+    device = await read(unit)
+
+    await set_backwash_time(device, "06:05")  # ends with the save pulse
+    await set_light(device, True)  # its pulse must not set the save bit again
+
+    assert unit.registers[COMMAND] == 0x0001
+
+
 async def test_backwash_time_takes_any_minute(controller_snapshot) -> None:
     unit, device = await controller(controller_snapshot)
     await set_backwash_time(device, time(7, 31))
