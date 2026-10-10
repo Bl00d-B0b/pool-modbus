@@ -48,3 +48,19 @@ def test_writable_numbers_declare_their_range(key: str) -> None:
         assert value.number_mode in (None, "box", "slider"), value.name
         if value.number_mode is not None:
             assert value.writable and not value.binary, value.name
+
+
+@pytest.mark.parametrize("key", sorted(DEVICE_TYPES))
+def test_fields_name_fields_of_the_model(key: str, make_unit) -> None:
+    """Every ``fields`` is a tuple of the model's fields (a string in parentheses
+    without a comma would be read letter by letter)."""
+    device_type = DEVICE_TYPES[key]
+    known = set(type(device_type.model(make_unit({}))).declared_fields)
+    items = [*device_type.values, *device_type.actions]
+    if device_type.cover is not None:
+        items.append(device_type.cover)
+    if device_type.thermostat is not None:
+        items.append(device_type.thermostat)
+    for item in items:
+        assert isinstance(item.fields, tuple), item.name
+        assert set(item.fields) <= known, (item.name, set(item.fields) - known)

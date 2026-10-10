@@ -483,7 +483,7 @@ COVER = Cover(
     open_cover,
     close_cover,
     device_class="shutter",
-    fields=("command_word"),
+    fields=("command_word",),
     icon="pool:cover-open",  # the integration's own icons: the terrace over the pool
     icon_closed="pool:cover-closed",
 )
