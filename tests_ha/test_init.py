@@ -255,11 +255,21 @@ async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
 
 
 async def test_the_icon_set_is_served(hass: HomeAssistant) -> None:
+    from unittest.mock import AsyncMock, MagicMock
+
     from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    # As on a real installation: the http and frontend integrations are up.
+    hass.http = MagicMock(async_register_static_paths=AsyncMock())
+    hass.data[DATA_EXTRA_MODULE_URL] = MagicMock()
 
     await add(hass, "pool_controller", fake_unit("pool_controller"))
 
-    assert any("/pool_modbus/pool_icons.js" in url for url in hass.data[DATA_EXTRA_MODULE_URL].urls)
+    [[static]] = hass.http.async_register_static_paths.call_args.args
+    assert static.url_path == "/pool_modbus/pool_icons.js"
+    assert static.path.endswith("pool_icons.js")
+    [url] = [c.args[0] for c in hass.data[DATA_EXTRA_MODULE_URL].add.call_args_list]
+    assert url.startswith("/pool_modbus/pool_icons.js?v=")
     assert hass.states.get("cover.pool_controller_cover").attributes["icon"] == "pool:cover-closed"
 
 

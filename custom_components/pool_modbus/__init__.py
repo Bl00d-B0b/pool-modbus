@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL, add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.modbus import async_get_unit
 from homeassistant.const import Platform
@@ -50,12 +50,12 @@ ICONS_URL = f"/{DOMAIN}/pool_icons.js"
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the integration's icon set (``pool:``, drawn by script/make_pool_icons.py)
-    to the frontend; entities use its icons like Material Design ones."""
+    to the frontend; entities use its icons like Material Design ones. Without the
+    frontend (tests, a headless setup) the entities still work, with the icon names."""
     http = getattr(hass, "http", None)
-    if http is not None:
-        await http.async_register_static_paths(
-            [StaticPathConfig(ICONS_URL, str(ICONS_MODULE), True)]
-        )
+    if http is None or DATA_EXTRA_MODULE_URL not in hass.data:
+        return True
+    await http.async_register_static_paths([StaticPathConfig(ICONS_URL, str(ICONS_MODULE), True)])
     add_extra_js_url(hass, f"{ICONS_URL}?v={ICONS_MODULE.stat().st_mtime_ns}")
     return True
 
