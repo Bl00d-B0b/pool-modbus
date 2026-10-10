@@ -122,7 +122,7 @@ read-modify-writes of 40017.
 | Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
 | Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `filter`, `filter-off` | 40025 bits 1–2 | Fast |
 | Water Level | Sensor: Off, Minimum, Low, Normal, Maximum, Unknown | `enum` | `water-off`, `water-alert`, `water-minus`, `water-check`, `water-plus` | 40025 bits 6–10 | Fast |
-| Filter Pump, Filling | Binary sensors | `running` | `water-pump`, `water-plus` | 40025 bits 0, 4 | Fast |
+| Filter Pump, Filling | Binary sensors | `running` | `water-pump` / `water-pump-off`, `water-plus` / `water` | 40025 bits 0, 4 | Fast |
 | Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
 | Water Level Monitoring | Binary sensor | | `eye-outline` / `eye-off-outline` | 40025 bit 10 | Fast |
 | Start Backwash | Button | | `rotate-left` | 40017 bit 1 | Fast |
