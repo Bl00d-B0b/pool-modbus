@@ -146,9 +146,9 @@ Values the controller already holds are skipped. Channel 2's settings
 | Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
 | pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
 | pH Pulse Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40030 | Medium |
-| pH Probe Voltage, Cl Probe Voltage | Sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
-| RTC | Diagnostic sensor | `timestamp` | `clock` | 40044–40048 | Slow |
-| pH Dosing Mode | Select | | `tune-variant` | 40078 | Slow |
-| pH Max Value, pH Min Value | Numbers (input box), 0.01 steps | `ph` | `ph` | 40068, 40070 | Slow |
-| pH Max Pulse Rate, pH Min Pulse Rate | Numbers (input box) | | `pulse` | 40072, 40074 | Slow |
+| pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
+| RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
+| pH Dosing Mode | Select | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled) | 40078 | Slow |
+| pH Max Value, pH Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 | Slow |
+| pH Max Pulse Rate, pH Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 | Slow |
 | pH Pulse Speed | Number (input box), minutes | `duration` | `timer-cog-outline` | 40076 | Slow |

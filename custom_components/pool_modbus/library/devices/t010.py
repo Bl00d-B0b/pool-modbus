@@ -153,13 +153,13 @@ VALUES = (
         device_class="switch",
         write=lambda d, on: write_if_changed(d, "delaying", bool(on)),
         icon="mdi:timer-sand",
-        icon_off="mdi:timer-off-outline",
+        icon_off="mdi:timer-sand-empty",
     ),
     Value(
         "delay_remaining",
         "Delay Remaining",
         lambda d: d.delay_remaining,
-        icon="mdi:timer-sand",
+        icon="mdi:timer-outline",
     ),
     Value(
         "offset",
@@ -222,7 +222,8 @@ VALUES = (
         lambda d: d.eeprom_fault,
         binary=True,
         device_class="problem",
-        icon="mdi:memory",
+        icon="mdi:alert-circle-outline",
+        icon_off="mdi:memory",
     ),
     Value(
         "software_version",

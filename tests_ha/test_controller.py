@@ -70,14 +70,16 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert state(hass, DAY) == "Friday"
     assert state(hass, TIME) == "06:00:00"
     mode = hass.states.get(MODE)
-    assert (mode.state, mode.attributes["icon"]) == ("Filtering", "mdi:air-filter")
+    assert (mode.state, mode.attributes["icon"]) == ("Filtering", "mdi:filter")
     assert mode.attributes["device_class"] == "enum"
-    assert hass.states.get(COVER).attributes["device_class"] == "gate"
-    assert hass.states.get(COVER).attributes["icon"] == "mdi:gate"
+    assert hass.states.get(COVER).attributes["device_class"] == "shutter"
+    assert hass.states.get(COVER).attributes["icon"] == "mdi:window-shutter"
     assert hass.states.get(LIGHT).attributes["icon"] == "mdi:lightbulb-off"
     assert len(hass.states.get(DAY).attributes["options"]) == 8  # Off and the weekdays
     # The cover and light replace the old open/close buttons and status sensors.
     registry = er.async_get(hass)
+    assert registry.async_get(RESET).entity_category == "diagnostic"
+    assert registry.async_get(BACKWASH).entity_category is None  # a control
     for gone in (
         "binary_sensor.pool_controller_pool_light",
         "sensor.pool_controller_pool_cover",

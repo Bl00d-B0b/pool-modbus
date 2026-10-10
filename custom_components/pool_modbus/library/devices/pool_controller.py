@@ -299,8 +299,8 @@ VALUES = (
         binary=True,
         device_class="switch",
         write=lambda d, on: write_if_changed(d, "filtration_enabled", bool(on)),
-        icon="mdi:air-filter",
-        icon_off="mdi:water-pump-off",
+        icon="mdi:filter",
+        icon_off="mdi:filter-off",
     ),
     Value(
         "filling_blocked",
@@ -319,8 +319,8 @@ VALUES = (
         device_class="enum",
         icons={
             "Backwashing": "mdi:rotate-left",
-            "Filtering": "mdi:air-filter",
-            "Off": "mdi:water-pump-off",
+            "Filtering": "mdi:filter",
+            "Off": "mdi:filter-off",
         },
         options=("Backwashing", "Filtering", "Off"),
     ),
@@ -353,8 +353,8 @@ VALUES = (
         "Water Level Monitoring",
         lambda d: d.water_level_monitoring,
         binary=True,
-        icon="mdi:water",
-        icon_off="mdi:water-off",
+        icon="mdi:eye-outline",
+        icon_off="mdi:eye-off-outline",
     ),
     Value(
         "filling_up",
@@ -422,7 +422,7 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
-        icon="mdi:clock",
+        icon="mdi:clock-outline",
     ),
 )
 
@@ -439,6 +439,7 @@ ACTIONS = (
         "Reset Alarms",
         reset_alarms,
         fields=("reset_alarms_command",),
+        category="diagnostic",
         icon="mdi:restore-alert",
     ),
     Action(
@@ -457,7 +458,7 @@ ACTIONS = (
             "clock_century",
         ),
         feature="clock",
-        icon="mdi:home-clock",
+        icon="mdi:timer-sync-outline",
     ),
 )
 
@@ -467,10 +468,10 @@ COVER = Cover(
     lambda d: d.cover_closed,
     open_cover,
     close_cover,
-    device_class="gate",
+    device_class="shutter",
     fields=("open_command", "close_command"),
-    icon="mdi:pool",
-    icon_closed="mdi:gate",
+    icon="mdi:window-shutter-open",
+    icon_closed="mdi:window-shutter",
 )
 
 

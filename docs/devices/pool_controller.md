@@ -109,18 +109,19 @@ read-modify-writes of 40017.
 
 | Entity | Type | Device class | Icon | Registers | Read |
 |---|---|---|---|---|---|
-| Filtration | Switch | `switch` | `air-filter` / `water-pump-off` | 40017 bit 0 | Fast |
+| Filtration | Switch | `switch` | `filter` / `filter-off` | 40017 bit 0 | Fast |
 | Block Filling | Switch | `switch` | `water-off` / `water-plus-outline` | 40017 bit 5 | Fast |
-| Cover | Cover: open/close | `gate` | `pool` / `gate` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
+| Cover | Cover: open/close | `shutter` | `window-shutter-open` / `window-shutter` (closed) | 40017 bits 2–3, 40025 bit 3 | Fast |
 | Light | Light, on/off | | `lightbulb-on` / `lightbulb-off` | 40017 bit 4, 40025 bit 11 | Fast |
-| Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `air-filter`, `water-pump-off` | 40025 bits 1–2 | Fast |
+| Filtration Mode | Sensor: Backwashing, Filtering, Off | `enum` | `rotate-left`, `filter`, `filter-off` | 40025 bits 1–2 | Fast |
 | Water Level | Sensor: Off, Minimum, Low, Normal, Maximum, Unknown | `enum` | `water-off`, `water-alert`, `water-minus`, `water-check`, `water-plus` | 40025 bits 6–10 | Fast |
 | Filter Pump, Filling | Binary sensors | `running` | `water-pump`, `water-plus` | 40025 bits 0, 4 | Fast |
 | Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
-| Water Level Monitoring | Binary sensor | | `water` / `water-off` | 40025 bit 10 | Fast |
-| Start Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
+| Water Level Monitoring | Binary sensor | | `eye-outline` / `eye-off-outline` | 40025 bit 10 | Fast |
+| Start Backwash | Button | | `rotate-left` | 40017 bit 1 | Fast |
+| Reset Alarms | Diagnostic button | | `restore-alert` | 40017 bit 14 | Fast |
 | Backwash Day | Select: Off, Monday … Sunday | | `calendar-clock` | 40018, 40017 bit 15 | Slow |
 | Backwash Time | Time | | `clock-edit` | 40019–40020, 40017 bit 15 | Slow |
-| Saved Backwash Schedule | Sensor | | `calendar-check` | 40028–40030 | Slow |
-| RTC | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
-| Sync RTC | Diagnostic button | | `home-clock` | 40033–40036 | Slow |
+| Saved Backwash Schedule | Diagnostic sensor | | `calendar-check` | 40028–40030 | Slow |
+| RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40037–40040 | Slow |
+| Sync RTC | Diagnostic button | | `timer-sync-outline` | 40033–40036 | Slow |

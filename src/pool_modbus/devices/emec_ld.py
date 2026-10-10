@@ -408,7 +408,8 @@ VALUES = (
         "pH Probe Voltage",
         lambda d: d.probe_mv_ch1,
         "mV",
-        category="measurement",
+        category="diagnostic",
+        scan_group="medium",
         device_class="voltage",
         feature="probe_voltages",
         icon="mdi:sine-wave",
@@ -418,7 +419,8 @@ VALUES = (
         "Cl Probe Voltage",
         lambda d: d.probe_mv_ch2,
         "mV",
-        category="measurement",
+        category="diagnostic",
+        scan_group="medium",
         device_class="voltage",
         feature="probe_voltages",
         icon="mdi:sine-wave",
@@ -430,7 +432,7 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
-        icon="mdi:clock",
+        icon="mdi:clock-outline",
     ),
     Value(
         "ph_mode",
@@ -442,6 +444,11 @@ VALUES = (
         options=tuple(mode.label for mode in PulseMode),
         fields=("ch1_pulse_perc1", "ch1_pulse_perc2", "ch1_pulse_wait"),
         icon="mdi:tune-variant",
+        icons={
+            "ON/OFF": "mdi:toggle-switch-outline",
+            "Proportional": "mdi:chart-line-variant",
+            "Disabled": "mdi:cancel",
+        },
     ),
     # The pump only uses each dosing setting in some working modes.
     Value(
@@ -458,7 +465,7 @@ VALUES = (
         maximum=PH_RANGE[1],
         step=0.01,
         number_mode="box",
-        icon="mdi:ph",
+        icon="mdi:gauge-full",
     ),
     Value(
         "ph_min",
@@ -474,7 +481,7 @@ VALUES = (
         maximum=PH_RANGE[1],
         step=0.01,
         number_mode="box",
-        icon="mdi:ph",
+        icon="mdi:gauge-empty",
     ),
     Value(
         "ph_max_rate",
@@ -490,7 +497,7 @@ VALUES = (
         step=1,
         number_mode="box",
         fields=("ch1_pulse_perc2",),
-        icon="mdi:pulse",
+        icon="mdi:speedometer",
     ),
     Value(
         "ph_min_rate",
@@ -506,7 +513,7 @@ VALUES = (
         step=1,
         number_mode="box",
         fields=("ch1_pulse_perc1",),
-        icon="mdi:pulse",
+        icon="mdi:speedometer-slow",
     ),
     Value(
         "ph_pulse_speed",

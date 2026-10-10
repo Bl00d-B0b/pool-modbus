@@ -10,6 +10,7 @@ from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from modbus_connection import GatewayTargetError
 
 from custom_components.pool_modbus.library.devices import writing
@@ -55,6 +56,10 @@ async def test_dosing_settings_are_controls(hass: HomeAssistant) -> None:
     assert "unit_of_measurement" not in hass.states.get(PH_MAX).attributes
     assert hass.states.get(MAX_RATE).attributes["max"] == 180
     assert state(hass, SPEED) == STATE_UNAVAILABLE  # only used in ON/OFF mode
+    assert mode.attributes["icon"] == "mdi:chart-line-variant"
+    registry = er.async_get(hass)
+    assert registry.async_get("sensor.dosing_pump_ph_probe_voltage").entity_category == "diagnostic"
+    assert registry.async_get("sensor.dosing_pump_ph_level").entity_category is None
 
 
 async def test_ph_values_and_rates(hass: HomeAssistant) -> None:
