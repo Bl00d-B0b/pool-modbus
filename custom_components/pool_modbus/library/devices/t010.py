@@ -20,7 +20,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, bit, bits, gauge, integer
 
 from .base import DeviceType, Thermostat, Value
-from .writing import write_if_changed
+from .writing import write_bits, write_if_changed
 
 INSTRUMENT_TYPE = 0x15
 """What register 0's high byte holds on a T010."""
@@ -50,6 +50,11 @@ def _minutes(value: Any) -> int:
     return int(value)
 
 
+# Register 8 (40009), written as a whole word: the heating block and delay flags.
+HEATING_BLOCKED_BIT = 1 << 8
+DELAYING_BIT = 1 << 9
+
+
 class T010(Component):
     """T010 thermostat. Addresses are the on-wire register numbers."""
 
@@ -66,8 +71,9 @@ class T010(Component):
     setpoint = gauge(5, 0.1, unit="°C", writable=_tenths(*SETPOINT_RANGE))
     offset = gauge(6, 0.1, unit="°C", writable=_tenths(*OFFSET_RANGE))
     set_delay = integer(7, signed=False, unit="min", writable=_minutes)
-    heating_blocked = bit(8, 8, writable=True)
-    delaying = bit(8, 9, writable=True)
+    flags = integer(8, signed=False, writable=True)  # written whole, see write_bits
+    heating_blocked = bit(8, 8)
+    delaying = bit(8, 9)
     menu_mode = bit(8, 0)
     sensor_disconnected = bit(8, 1)  # raw temperature below 3.1 °C
     sensor_supply_fault = bit(8, 2)  # sensor supply below 6.0 V for about 2 s
@@ -120,7 +126,7 @@ class T010(Component):
 async def _set_mode(device: T010, mode: str) -> None:
     if mode not in ("heat", "off"):
         raise ValueError(f"{mode!r} is not a T010 mode; use heat or off")
-    await write_if_changed(device, "heating_blocked", mode == "off")
+    await write_bits(device, "flags", HEATING_BLOCKED_BIT, mode == "off")
 
 
 THERMOSTAT = Thermostat(
@@ -132,6 +138,7 @@ THERMOSTAT = Thermostat(
     action=lambda d: d.hvac_action,
     set_target_temperature=lambda d, t: write_if_changed(d, "setpoint", t),
     set_mode=_set_mode,
+    fields=("flags",),
     minimum=SETPOINT_RANGE[0],
     maximum=SETPOINT_RANGE[1],
     step=0.5,
@@ -151,7 +158,8 @@ VALUES = (
         lambda d: d.delaying,
         binary=True,
         device_class="switch",
-        write=lambda d, on: write_if_changed(d, "delaying", bool(on)),
+        write=lambda d, on: write_bits(d, "flags", DELAYING_BIT, bool(on)),
+        fields=("flags",),
         icon="mdi:timer-sand",
         icon_off="mdi:timer-sand-empty",
     ),

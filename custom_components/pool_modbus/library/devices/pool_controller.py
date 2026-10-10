@@ -6,8 +6,9 @@ see docs/devices/pool_controller.md.
 Writes. Register 16 holds two switches (filtration, block filling up) and the
 command bits: a command is a pulse, the bit set, held, then cleared. The cover
 and the backwash need more than 3 s, the light, alarm reset and schedule save
-about 0.5 s. Every write to register 16 reads it back and merges, so the other
-bits stay. A backwash schedule written to 17-19 only counts after the "save
+about 0.5 s. Register 16 is always written as a whole word computed from the
+last read of the block (``write_bits``), so the other bits stay, and confirmed
+by reading it back. A backwash schedule written to 17-19 only counts after the "save
 backwash timers" pulse; it is confirmed in 27-29, where the controller keeps it.
 """
 
@@ -22,7 +23,7 @@ from modbus_connection.model import Component, bit, bits, integer
 
 from .base import Action, Cover, DeviceType, Feature, Value
 from .reading import update_or_keep
-from .writing import pulse, wait_until, write_if_changed
+from .writing import pulse_bits, wait_until, write_bits
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 DAY_OPTIONS = ("Off", *DAYS)
@@ -35,6 +36,16 @@ SHORT_PULSE = 0.5
 
 LIGHT_WAIT = 3.0
 """Seconds to wait for the status to show the light switched after its toggle."""
+
+# Register 16, written as a whole word: the switches and the command bits.
+FILTRATION_BIT = 1 << 0
+BACKWASH_BIT = 1 << 1
+OPEN_BIT = 1 << 2
+CLOSE_BIT = 1 << 3
+LIGHT_BIT = 1 << 4
+BLOCK_FILLING_BIT = 1 << 5
+RESET_ALARMS_BIT = 1 << 14
+SAVE_SCHEDULE_BIT = 1 << 15
 
 
 def _within(low: int, high: int):
@@ -52,15 +63,16 @@ class PoolController(Component):
     max_span = 24
     register_ranges = ((16, 39),)
 
-    # 16: switches, which the controller keeps, and command pulses.
-    filtration_enabled = bit(16, 0, writable=True)
-    backwash_command = bit(16, 1, writable=True)
-    open_command = bit(16, 2, writable=True)
-    close_command = bit(16, 3, writable=True)
-    light_command = bit(16, 4, writable=True)  # toggles the light
-    filling_blocked = bit(16, 5, writable=True)
-    reset_alarms_command = bit(16, 14, writable=True)
-    save_backwash_command = bit(16, 15, writable=True)
+    # 16: switches, which the controller keeps, and command pulses; written whole.
+    command_word = integer(16, signed=False, writable=True)
+    filtration_enabled = bit(16, 0)
+    backwash_command = bit(16, 1)
+    open_command = bit(16, 2)
+    close_command = bit(16, 3)
+    light_command = bit(16, 4)  # toggles the light
+    filling_blocked = bit(16, 5)
+    reset_alarms_command = bit(16, 14)
+    save_backwash_command = bit(16, 15)
 
     # 17-19: backwash schedule as last written. The controller only keeps it
     # after the "save backwash timers" pulse (register 16, bit 15).
@@ -196,7 +208,7 @@ async def set_light(device: PoolController, on: bool) -> None:
     await update_or_keep(device)
     if device.light_on == bool(on):
         return
-    await pulse(device, "light_command", SHORT_PULSE)
+    await pulse_bits(device, "command_word", LIGHT_BIT, SHORT_PULSE)
     with contextlib.suppress(TimeoutError):
         await wait_until(
             device,
@@ -206,26 +218,26 @@ async def set_light(device: PoolController, on: bool) -> None:
         )
 
 
-async def _move_cover(device: PoolController, command: str, want_open: bool) -> None:
+async def _move_cover(device: PoolController, command: int, want_open: bool) -> None:
     """Pulse the open or close command unless the cover already is there. The cover
     takes a while to move, so the status is not waited for."""
     await update_or_keep(device)
     if device.pool_open == want_open:
         return
-    await pulse(device, command, LONG_PULSE)
+    await pulse_bits(device, "command_word", command, LONG_PULSE)
 
 
 async def open_cover(device: PoolController) -> None:
-    await _move_cover(device, "open_command", True)
+    await _move_cover(device, OPEN_BIT, True)
 
 
 async def close_cover(device: PoolController) -> None:
-    await _move_cover(device, "close_command", False)
+    await _move_cover(device, CLOSE_BIT, False)
 
 
 async def _save_schedule(device: PoolController, done: Any, what: str) -> None:
     """The save pulse, then wait until the controller keeps the schedule."""
-    await pulse(device, "save_backwash_command", SHORT_PULSE)
+    await pulse_bits(device, "command_word", SAVE_SCHEDULE_BIT, SHORT_PULSE)
     await wait_until(device, done, f"the controller has not saved {what}")
 
 
@@ -264,11 +276,11 @@ async def set_backwash_time(device: PoolController, value: time | str) -> None:
 
 
 async def backwash(device: PoolController, now: datetime) -> None:
-    await pulse(device, "backwash_command", LONG_PULSE)
+    await pulse_bits(device, "command_word", BACKWASH_BIT, LONG_PULSE)
 
 
 async def reset_alarms(device: PoolController, now: datetime) -> None:
-    await pulse(device, "reset_alarms_command", SHORT_PULSE)
+    await pulse_bits(device, "command_word", RESET_ALARMS_BIT, SHORT_PULSE)
 
 
 async def sync_clock(device: PoolController, now: datetime) -> None:
@@ -298,7 +310,8 @@ VALUES = (
         lambda d: d.filtration_enabled,
         binary=True,
         device_class="switch",
-        write=lambda d, on: write_if_changed(d, "filtration_enabled", bool(on)),
+        write=lambda d, on: write_bits(d, "command_word", FILTRATION_BIT, bool(on)),
+        fields=("command_word",),
         icon="mdi:filter",
         icon_off="mdi:filter-off",
     ),
@@ -308,7 +321,8 @@ VALUES = (
         lambda d: d.filling_blocked,
         binary=True,
         device_class="switch",
-        write=lambda d, on: write_if_changed(d, "filling_blocked", bool(on)),
+        write=lambda d, on: write_bits(d, "command_word", BLOCK_FILLING_BIT, bool(on)),
+        fields=("command_word",),
         icon="mdi:water-off",
         icon_off="mdi:water-plus-outline",
     ),
@@ -372,7 +386,7 @@ VALUES = (
         binary=True,
         write=set_light,
         light=True,
-        fields=("light_command",),
+        fields=("command_word",),
         icon="mdi:lightbulb-on",
         icon_off="mdi:lightbulb-off",
     ),
@@ -393,7 +407,7 @@ VALUES = (
         feature="backwash_schedule",
         write=set_backwash_day,
         options=DAY_OPTIONS,
-        fields=("backwash_days", "save_backwash_command"),
+        fields=("backwash_days", "command_word"),
         icon="mdi:calendar-clock",
     ),
     Value(
@@ -404,7 +418,7 @@ VALUES = (
         feature="backwash_schedule",
         write=set_backwash_time,
         time_of_day=True,
-        fields=("backwash_hour", "backwash_minute", "save_backwash_command"),
+        fields=("backwash_hour", "backwash_minute", "command_word"),
         icon="mdi:clock-edit",
     ),
     Value(
@@ -431,14 +445,14 @@ ACTIONS = (
         "backwash",
         "Start Backwash",
         backwash,
-        fields=("backwash_command",),
+        fields=("command_word",),
         icon="mdi:rotate-left",
     ),
     Action(
         "reset_alarms",
         "Reset Alarms",
         reset_alarms,
-        fields=("reset_alarms_command",),
+        fields=("command_word",),
         category="diagnostic",
         icon="mdi:restore-alert",
     ),
@@ -469,7 +483,7 @@ COVER = Cover(
     open_cover,
     close_cover,
     device_class="shutter",
-    fields=("open_command", "close_command"),
+    fields=("command_word"),
     icon="pool:cover-open",  # the integration's own icons: the terrace over the pool
     icon_closed="pool:cover-closed",
 )

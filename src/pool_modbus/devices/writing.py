@@ -20,21 +20,38 @@ NO_REPLY = (GatewayTargetError, ModbusTimeoutError)
 """Errors meaning a request got no reply, so the device may still have carried it out."""
 
 
-async def pulse(device: Component, field: str, seconds: float) -> None:
-    """Set a command bit, hold it for ``seconds``, then clear it.
+async def write_bits(device: Component, word_field: str, mask: int, on: bool) -> None:
+    """Set (``on``) or clear the bits of ``mask`` in the register behind ``word_field``.
 
-    Both writes read the register back and merge, so the register's other bits
-    stay as they are. The bit is cleared even if the wait is interrupted, and the
-    clearing is confirmed by reading it back before returning: behind a gateway
-    that answers reads from a cache, the next command's read-merge-write would
-    otherwise start from the word with this bit still set, and set it again.
+    The new word is computed from the device's own last read and written whole:
+    a read-modify-write that reads the register again inside the write can start
+    from a stale word behind a gateway that answers reads from a cache, and set
+    a just-cleared bit again. The write is confirmed by reading the device back.
     """
-    await device.write(field, True)
+    await update_or_keep(device)
+    word = getattr(device, word_field)
+    if word is None:
+        raise TimeoutError(f"{word_field} could not be read before writing it")
+    new = word | mask if on else word & ~mask
+    if new == word:
+        return
+    await device.write(word_field, new)
+    want = mask if on else 0
+    await wait_until(
+        device,
+        lambda d: (getattr(d, word_field) or 0) & mask == want,
+        f"{word_field} bits {mask:#x} are still {'clear' if on else 'set'}",
+    )
+
+
+async def pulse_bits(device: Component, word_field: str, mask: int, seconds: float) -> None:
+    """Set the bits of ``mask``, hold them for ``seconds``, then clear them; each
+    write as ``write_bits``. The bits are cleared even if the wait is interrupted."""
+    await write_bits(device, word_field, mask, True)
     try:
         await asyncio.sleep(seconds)
     finally:
-        await device.write(field, False)
-    await wait_until(device, lambda d: not getattr(d, field), f"{field} is still set")
+        await write_bits(device, word_field, mask, False)
 
 
 async def wait_until(device: Component, done: Any, what: str, timeout: float | None = None) -> None:

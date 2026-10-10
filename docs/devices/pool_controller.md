@@ -80,21 +80,23 @@ Backwash Schedule) and **clock** (RTC, Sync RTC).
 
 ## Writing
 
-- **Switches** (40017 bits 0 and 5) are written as a read-modify-write of 40017,
-  so the other bits are kept, and confirmed by reading them back.
-- **Commands** are pulses: the bit is set, held, then cleared, each with a
-  read-modify-write, and the clearing is confirmed by reading it back, so the
-  next command starts from the current word even behind a gateway that answers
-  reads from a cache. Open and close the cover (bits 2 and 3) and the manual
-  backwash (bit 1) are held 3.1 s, as the controller needs more than 3 s; the
-  light toggle (bit 4), alarm reset (bit 14) and schedule save (bit 15) 0.5 s.
+- **Switches** (filtration, block filling) and **commands** are bits of 40017,
+  written as a whole word: the new word is computed from the integration's last
+  read of the register block, never from a separate read of the register inside
+  the write (behind the Modbus TCP gateway such a read can be stale and set a
+  just-cleared bit again), and confirmed by reading the block back. Commands
+  are pulses: the bit is set, held, then cleared, each write confirmed. Open
+  and close the cover (bits 2 and 3) and the manual backwash (bit 1) are held
+  3.1 s, as the controller needs more than 3 s; the light toggle (bit 4), alarm
+  reset (bit 14) and schedule save (bit 15) 0.5 s.
 - **The cover** is only told to move when it is not already open or closed as
   asked; it takes a while to move, so the status is not waited for.
 - **The light** toggles, so it is only pulsed when it is not already as asked;
-  the integration then waits up to 3 s for 40025 bit 11 to follow. Whether the
-  light switches is the controller's decision: if the status does not follow,
-  that is no error, the light keeps showing its real state, and a switch in
-  Home Assistant goes back to it.
+  the integration then waits up to 3 s for 40025 bit 11 to follow. Whether and
+  when the light switches is the controller's decision: with the cover closed it
+  keeps the light off and carries the toggle out once the cover opens (seen on
+  the tested controller). A status that does not follow is no error: the light
+  keeps showing its real state, and a switch in Home Assistant goes back to it.
 - **The backwash schedule**: the day is written to 40018 (one day bit, or 0 for
   off), the time to 40019–40020 in one request, then the save pulse; the write
   is confirmed when the controller shows it in 40028–40030.

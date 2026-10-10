@@ -123,6 +123,9 @@ class Thermostat:
     attributes: Callable[[Any], dict[str, Any]] | None = None
     """More of the thermostat's state, shown as attributes of the climate entity."""
 
+    fields: tuple[str, ...] = ()
+    """Model fields to read beyond those the getters use, e.g. a field only written."""
+
     icon: str | None = None
     icon_off: str | None = None
     """Icons while the thermostat is on (any mode but off) and while it is off."""
