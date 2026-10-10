@@ -75,13 +75,14 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert hass.states.get(COVER).attributes["device_class"] == "gate"
     assert hass.states.get(COVER).attributes["icon"] == "mdi:gate"
     assert hass.states.get(LIGHT).attributes["icon"] == "mdi:lightbulb-off"
-    assert len(hass.states.get(TIME).attributes["options"]) == 24 * 12
+    assert len(hass.states.get(DAY).attributes["options"]) == 8  # Off and the weekdays
     # The cover and light replace the old open/close buttons and status sensors.
     registry = er.async_get(hass)
     for gone in (
         "binary_sensor.pool_controller_pool_light",
         "sensor.pool_controller_pool_cover",
         "button.pool_controller_open_pool",
+        "select.pool_controller_backwash_time",  # now a time entity
     ):
         assert registry.async_get(gone) is None, gone
 
