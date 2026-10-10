@@ -98,7 +98,7 @@ Optional parts, each a checkbox:
 | EMEC LD | Dosing settings (pH channel), probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
-a device lets you change become switches, numbers, selects or lights; the T010
+a device lets you change become switches, numbers, selects, times or lights; the T010
 also gets a thermostat (climate) entity, and the pool controller a cover and
 buttons for its commands. Settings you can change are configuration entities;
 read-only settings are diagnostic. The pool light is switched as the controller

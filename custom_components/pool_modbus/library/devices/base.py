@@ -87,6 +87,9 @@ class Value:
     light: bool = False
     """A writable on/off value that switches a light; Home Assistant shows a light."""
 
+    time_of_day: bool = False
+    """A writable time of day (``datetime.time``); Home Assistant shows a time entity."""
+
     @property
     def writable(self) -> bool:
         return self.write is not None

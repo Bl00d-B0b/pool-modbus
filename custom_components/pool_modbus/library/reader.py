@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from enum import Enum
 from typing import Any, Protocol
 
@@ -77,6 +77,8 @@ def format_value(value: Value, raw: Any) -> str:
         text = str(round(raw, 2))
     elif isinstance(raw, datetime):
         text = raw.isoformat(sep=" ")
+    elif isinstance(raw, time):
+        text = raw.strftime("%H:%M")
     else:
         text = str(raw)
     return f"{text} {value.unit}" if value.unit else text

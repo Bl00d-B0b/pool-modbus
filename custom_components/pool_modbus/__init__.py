@@ -30,6 +30,7 @@ PLATFORMS: list[Platform] = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.TIME,
 ]
 
 RENAMED_KEYS = {"clock": "rtc", "sync_clock": "sync_rtc"}

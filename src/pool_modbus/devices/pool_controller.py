@@ -14,7 +14,7 @@ backwash timers" pulse; it is confirmed in 27-29, where the controller keeps it.
 from __future__ import annotations
 
 import contextlib
-from datetime import datetime
+from datetime import datetime, time
 from typing import Any
 
 from modbus_connection import ModbusUnit
@@ -26,7 +26,6 @@ from .writing import pulse, wait_until, write_if_changed
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 DAY_OPTIONS = ("Off", *DAYS)
-TIME_OPTIONS = tuple(f"{hour:02d}:{minute:02d}" for hour in range(24) for minute in range(0, 60, 5))
 
 LONG_PULSE = 3.1
 """Seconds to hold the cover and backwash commands; the controller needs over 3 s."""
@@ -145,10 +144,10 @@ class PoolController(Component):
     def saved_backwash_schedule(self) -> str | None:
         """The schedule the controller keeps, e.g. "Friday 06:00", or "Off"."""
         day = _day(self.backwash_days)
-        time = _time(self.backwash_hour, self.backwash_minute)
-        if day is None or time is None:
+        at = _time(self.backwash_hour, self.backwash_minute)
+        if day is None or at is None:
             return None
-        return day if day == "Off" else f"{day} {time}"
+        return day if day == "Off" else f"{day} {at:%H:%M}"
 
     @property
     def clock(self) -> datetime | None:
@@ -178,10 +177,10 @@ def _day(bitmap: int | None) -> str | None:
     return next((name for index, name in enumerate(DAYS) if bitmap & (1 << index)), "Off")
 
 
-def _time(hour: int | None, minute: int | None) -> str | None:
-    if hour is None or minute is None:
+def _time(hour: int | None, minute: int | None) -> time | None:
+    if hour is None or minute is None or not (0 <= hour < 24 and 0 <= minute < 60):
         return None
-    return f"{hour:02d}:{minute:02d}"
+    return time(hour, minute)
 
 
 # -- writes -------------------------------------------------------------------
@@ -241,10 +240,15 @@ async def set_backwash_day(device: PoolController, day: str) -> None:
     await _save_schedule(device, lambda d: d.backwash_days == bitmap, f"the backwash day {day}")
 
 
-async def set_backwash_time(device: PoolController, time: str) -> None:
-    if time not in TIME_OPTIONS:
-        raise ValueError(f"{time!r} is not a time of day in 5 minute steps, like 06:00")
-    hour, minute = (int(part) for part in time.split(":"))
+async def set_backwash_time(device: PoolController, value: time | str) -> None:
+    """Write the backwash time (a ``datetime.time``, or "HH:MM"), then save it."""
+    try:
+        at = time.fromisoformat(value) if isinstance(value, str) else value
+    except ValueError:
+        at = None
+    if not isinstance(at, time):
+        raise ValueError(f"{value!r} is not a time of day like 06:00")
+    hour, minute = at.hour, at.minute
     await update_or_keep(device)
     written = (device.backwash_hour_written, device.backwash_minute_written)
     saved = (device.backwash_hour, device.backwash_minute)
@@ -255,7 +259,7 @@ async def set_backwash_time(device: PoolController, time: str) -> None:
     await _save_schedule(
         device,
         lambda d: (d.backwash_hour, d.backwash_minute) == (hour, minute),
-        f"the backwash time {time}",
+        f"the backwash time {hour:02d}:{minute:02d}",
     )
 
 
@@ -399,7 +403,7 @@ VALUES = (
         category="setting",
         feature="backwash_schedule",
         write=set_backwash_time,
-        options=TIME_OPTIONS,
+        time_of_day=True,
         fields=("backwash_hour", "backwash_minute", "save_backwash_command"),
         icon="mdi:clock-edit",
     ),

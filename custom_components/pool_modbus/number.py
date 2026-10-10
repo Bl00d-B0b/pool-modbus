@@ -21,7 +21,7 @@ async def async_setup_entry(
     async_add_entities(
         PoolModbusNumber(data, value)
         for value in data.values
-        if value.writable and not value.binary and value.options is None
+        if value.writable and not value.binary and value.options is None and not value.time_of_day
     )
 
 

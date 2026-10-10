@@ -117,7 +117,8 @@ read-modify-writes of 40017.
 | Flooding Alarm | Binary sensor | `moisture` | `home-flood` / `home` | 40025 bit 5 | Fast |
 | Water Level Monitoring | Binary sensor | | `water` / `water-off` | 40025 bit 10 | Fast |
 | Start Backwash, Reset Alarms | Buttons | | `rotate-left`, `restore-alert` | 40017 bits 1, 14 | Fast |
-| Backwash Day, Backwash Time | Selects (time in 5 minute steps) | | `calendar-clock`, `clock-edit` | 40018–40020, 40017 bit 15 | Slow |
+| Backwash Day | Select: Off, Monday … Sunday | | `calendar-clock` | 40018, 40017 bit 15 | Slow |
+| Backwash Time | Time | | `clock-edit` | 40019–40020, 40017 bit 15 | Slow |
 | Saved Backwash Schedule | Sensor | | `calendar-check` | 40028–40030 | Slow |
 | RTC | Diagnostic sensor | `timestamp` | `clock` | 40037–40040 | Slow |
 | Sync RTC | Diagnostic button | | `home-clock` | 40033–40036 | Slow |

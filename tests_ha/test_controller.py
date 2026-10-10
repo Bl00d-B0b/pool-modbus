@@ -23,6 +23,8 @@ from homeassistant.components.select import (
     DOMAIN as SELECT_DOMAIN,
 )
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.time import ATTR_TIME, SERVICE_SET_VALUE
+from homeassistant.components.time import DOMAIN as TIME_DOMAIN
 from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -37,7 +39,7 @@ FILTRATION = "switch.pool_controller_filtration"
 COVER = "cover.pool_controller_cover"
 LIGHT = "light.pool_controller_light"
 DAY = "select.pool_controller_backwash_day"
-TIME = "select.pool_controller_backwash_time"
+TIME = "time.pool_controller_backwash_time"
 BACKWASH = "button.pool_controller_start_backwash"
 RESET = "button.pool_controller_reset_alarms"
 SYNC = "button.pool_controller_sync_rtc"
@@ -138,7 +140,7 @@ async def test_backwash_schedule(hass: HomeAssistant) -> None:
     await add(hass, "pool_controller", unit)
 
     await call(hass, SELECT_DOMAIN, SERVICE_SELECT_OPTION, DAY, **{ATTR_OPTION: "Monday"})
-    await call(hass, SELECT_DOMAIN, SERVICE_SELECT_OPTION, TIME, **{ATTR_OPTION: "07:30"})
+    await call(hass, TIME_DOMAIN, SERVICE_SET_VALUE, TIME, **{ATTR_TIME: "07:30:00"})
 
     assert unit.writes == [
         (17, 1),
@@ -148,6 +150,7 @@ async def test_backwash_schedule(hass: HomeAssistant) -> None:
         (16, 0x8001),
         (16, 0x0001),
     ]
+    assert state(hass, TIME) == "07:30:00"
     assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Monday 07:30"
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 
 import pytest
 from conftest import FakeUnit
@@ -48,7 +48,7 @@ async def test_decodes_snapshot(make_unit, controller_snapshot) -> None:
     assert device.light_on is False
     assert device.room_flooding_alarm is False
     assert device.backwash_day_written == "Friday"
-    assert device.backwash_time_written == "06:00"
+    assert device.backwash_time_written == time(6, 0)
     assert device.saved_backwash_schedule == "Friday 06:00"
     assert device.clock == datetime(2026, 10, 5, 12, 16, 3)
     assert device.clock_weekday == 1  # Monday
@@ -101,7 +101,7 @@ async def test_unsaved_backwash_change(make_unit, controller_snapshot) -> None:
     registers = dict(controller_snapshot)
     registers[17], registers[18], registers[19] = 1 << 0, 7, 30  # written, not saved
     device = await read(make_unit(registers))
-    assert (device.backwash_day_written, device.backwash_time_written) == ("Monday", "07:30")
+    assert (device.backwash_day_written, device.backwash_time_written) == ("Monday", time(7, 30))
     assert device.saved_backwash_schedule == "Friday 06:00"
 
 
@@ -247,6 +247,13 @@ async def test_backwash_day_is_written_then_saved(controller_snapshot) -> None:
     assert device.saved_backwash_schedule == "Monday 06:00"
 
 
+async def test_backwash_time_takes_any_minute(controller_snapshot) -> None:
+    unit, device = await controller(controller_snapshot)
+    await set_backwash_time(device, time(7, 31))
+    assert unit.writes[0] == (18, [7, 31])
+    assert device.backwash_time_written == time(7, 31)
+
+
 async def test_backwash_time_is_written_then_saved(controller_snapshot) -> None:
     unit, device = await controller(controller_snapshot)
     await set_backwash_time(device, "07:30")
@@ -271,7 +278,7 @@ async def test_schedule_the_controller_does_not_keep_is_reported(controller_snap
 
 
 @pytest.mark.parametrize(
-    ("write", "value"), [(set_backwash_day, "Funday"), (set_backwash_time, "07:31")]
+    ("write", "value"), [(set_backwash_day, "Funday"), (set_backwash_time, "25:00")]
 )
 async def test_bad_schedule_values_are_refused(controller_snapshot, write, value) -> None:
     unit, device = await controller(controller_snapshot)
