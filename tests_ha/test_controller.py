@@ -68,7 +68,7 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert state(hass, COVER) == "closed"
     assert state(hass, LIGHT) == "off"
     assert state(hass, DAY) == "Friday"
-    assert state(hass, TIME) == "06:00"
+    assert state(hass, TIME) == "06:00:00"
     mode = hass.states.get(MODE)
     assert (mode.state, mode.attributes["icon"]) == ("Filtering", "mdi:air-filter")
     assert mode.attributes["device_class"] == "enum"
