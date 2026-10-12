@@ -15,13 +15,6 @@ from homeassistant.components.cover import (
     SERVICE_OPEN_COVER,
 )
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.select import (
-    ATTR_OPTION,
-    SERVICE_SELECT_OPTION,
-)
-from homeassistant.components.select import (
-    DOMAIN as SELECT_DOMAIN,
-)
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.components.time import ATTR_TIME, SERVICE_SET_VALUE
 from homeassistant.components.time import DOMAIN as TIME_DOMAIN
@@ -38,7 +31,8 @@ from .test_init import add, state
 FILTRATION = "switch.pool_controller_filtration"
 COVER = "cover.pool_controller_cover"
 LIGHT = "light.pool_controller_light"
-DAY = "select.pool_controller_backwash_day"
+DAY = "switch.pool_controller_backwash_saturday"
+FRIDAY = "switch.pool_controller_backwash_friday"
 TIME = "time.pool_controller_backwash_time"
 BACKWASH = "button.pool_controller_start_backwash"
 RESET = "button.pool_controller_reset_alarms"
@@ -67,7 +61,7 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert state(hass, FILTRATION) == "on"
     assert state(hass, COVER) == "closed"
     assert state(hass, LIGHT) == "off"
-    assert state(hass, DAY) == "Friday"
+    assert (state(hass, FRIDAY), state(hass, DAY)) == ("on", "off")
     assert state(hass, TIME) == "06:00:00"
     mode = hass.states.get(MODE)
     assert (mode.state, mode.attributes["icon"]) == ("Filtering", "mdi:filter")
@@ -75,7 +69,7 @@ async def test_entities_icons_and_classes(hass: HomeAssistant) -> None:
     assert hass.states.get(COVER).attributes["device_class"] == "shutter"
     assert hass.states.get(COVER).attributes["icon"] == "pool:cover-closed"
     assert hass.states.get(LIGHT).attributes["icon"] == "mdi:lightbulb-off"
-    assert len(hass.states.get(DAY).attributes["options"]) == 8  # Off and the weekdays
+    assert er.async_get(hass).async_get(FRIDAY).entity_category == "config"
     # The cover and light replace the old open/close buttons and status sensors.
     registry = er.async_get(hass)
     assert registry.async_get(RESET).entity_category == "diagnostic"
@@ -142,11 +136,11 @@ async def test_backwash_schedule(hass: HomeAssistant) -> None:
     unit = fake_unit("pool_controller")
     await add(hass, "pool_controller", unit)
 
-    await call(hass, SELECT_DOMAIN, SERVICE_SELECT_OPTION, DAY, **{ATTR_OPTION: "Monday"})
+    await call(hass, SWITCH_DOMAIN, SERVICE_TURN_ON, DAY)  # Saturday as well as Friday
     await call(hass, TIME_DOMAIN, SERVICE_SET_VALUE, TIME, **{ATTR_TIME: "07:30:00"})
 
     assert unit.writes == [
-        (17, 1),
+        (17, 0x30),
         (16, 0x8001),
         (16, 0x0001),
         (18, [7, 30]),
@@ -154,7 +148,8 @@ async def test_backwash_schedule(hass: HomeAssistant) -> None:
         (16, 0x0001),
     ]
     assert state(hass, TIME) == "07:30:00"
-    assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Monday 07:30"
+    assert state(hass, DAY) == "on"
+    assert state(hass, "sensor.pool_controller_saved_backwash_schedule") == "Friday, Saturday 07:30"
 
 
 async def test_buttons(hass: HomeAssistant, freezer) -> None:

@@ -68,14 +68,16 @@ Register 40025 (address 24):
   bit 1, else Off.
 - **Water Level:** the first match of Off (monitoring off), Minimum, Low,
   Normal, Maximum; Unknown if none is set.
-- **Backwash Day / Time:** the schedule as written (40018–40020).
+- **Backwash Monday … Sunday / Backwash Time:** the schedule as written
+  (40018–40020): one switch per weekday, so any set of days, and the time.
 - **Saved Backwash Schedule:** what the controller keeps (40028–40030), e.g.
-  "Friday 06:00", or "Off".
+  "Friday 06:00", "Monday, Wednesday, Friday 06:00", "Weekdays 06:00", "Every day
+  06:00", or "Off".
 - **RTC:** the clock from 40037–40040.
 
 Read groups in Home Assistant: the switches and status bits fast (40017 and
 40025, one request); the backwash schedule and the clock slow. Optional parts,
-both on by default: **backwash schedule** (Backwash Day, Backwash Time, Saved
+both on by default: **backwash schedule** (the seven weekday switches, Backwash Time, Saved
 Backwash Schedule) and **clock** (RTC, Sync RTC).
 
 ## Writing
@@ -97,7 +99,7 @@ Backwash Schedule) and **clock** (RTC, Sync RTC).
   the toggle (tested: the light stays off, also after the cover opens later). A
   status that does not follow is no error: the light keeps showing its real
   state, and a switch in Home Assistant goes back to it.
-- **The backwash schedule**: the day is written to 40018 (one day bit, or 0 for
+- **The backwash schedule**: the days are written to 40018 (a bit per weekday, 0 for
   off), the time to 40019–40020 in one request, then the save pulse; the write
   is confirmed when the controller shows it in 40028–40030.
 - **A manual backwash** on the tested installation: the valve was in the
@@ -127,7 +129,7 @@ read-modify-writes of 40017.
 | Water Level Monitoring | Binary sensor | | `eye-outline` / `eye-off-outline` | 40025 bit 10 | Fast |
 | Start Backwash | Button | | `rotate-left` | 40017 bit 1 | Fast |
 | Reset Alarms | Diagnostic button | | `restore-alert` | 40017 bit 14 | Fast |
-| Backwash Day | Select: Off, Monday … Sunday | | `calendar-clock` | 40018, 40017 bit 15 | Slow |
+| Backwash Monday … Sunday | Switches, one per weekday | `switch` | `calendar-check` / `calendar-blank-outline` | 40018, 40017 bit 15 | Slow |
 | Backwash Time | Time | | `clock-edit` | 40019–40020, 40017 bit 15 | Slow |
 | Saved Backwash Schedule | Diagnostic sensor | | `calendar-check` | 40028–40030 | Slow |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40037–40040 | Slow |

@@ -12,7 +12,7 @@ import contextlib
 from datetime import datetime, time
 from typing import Any
 
-from modbus_connection import ModbusUnit
+from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.model import Component, bit, bits, integer
 
 from .base import Action, Cover, DeviceType, Feature, Value
@@ -20,7 +20,8 @@ from .reading import update_or_keep
 from .writing import pulse_bits, wait_until, write_bits
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-DAY_OPTIONS = ("Off", *DAYS)
+EVERY_DAY = 0x7F
+WEEKDAYS, WEEKENDS = 0x1F, 0x60
 
 LONG_PULSE = 3.1
 """Seconds to hold the cover and backwash commands; the controller needs over 3 s."""
@@ -139,8 +140,9 @@ class PoolController(Component):
         return None if self.pool_open is None else not self.pool_open
 
     @property
-    def backwash_day_written(self) -> str | None:
-        return _day(self.backwash_days_written)
+    def backwash_days_text(self) -> str | None:
+        """The days as written, e.g. "Friday", "Weekdays", "Every day" or "Off"."""
+        return _days(self.backwash_days_written)
 
     @property
     def backwash_time_written(self) -> str | None:
@@ -149,7 +151,7 @@ class PoolController(Component):
     @property
     def saved_backwash_schedule(self) -> str | None:
         """The schedule the controller keeps, e.g. "Friday 06:00", or "Off"."""
-        day = _day(self.backwash_days)
+        day = _days(self.backwash_days)
         at = _time(self.backwash_hour, self.backwash_minute)
         if day is None or at is None:
             return None
@@ -176,11 +178,15 @@ class PoolController(Component):
             return None
 
 
-def _day(bitmap: int | None) -> str | None:
-    """The first day set in a Monday-first bitmap, or "Off"."""
+def _days(bitmap: int | None) -> str | None:
+    """A set of weekdays as text: Off, Every day, Weekdays, Weekends or the names."""
     if bitmap is None:
         return None
-    return next((name for index, name in enumerate(DAYS) if bitmap & (1 << index)), "Off")
+    bitmap &= EVERY_DAY
+    named = {0: "Off", EVERY_DAY: "Every day", WEEKDAYS: "Weekdays", WEEKENDS: "Weekends"}
+    if bitmap in named:
+        return named[bitmap]
+    return ", ".join(name for index, name in enumerate(DAYS) if bitmap & (1 << index))
 
 
 def _time(hour: int | None, minute: int | None) -> time | None:
@@ -237,16 +243,42 @@ async def _save_schedule(device: PoolController, done: Any, what: str) -> None:
     await wait_until(device, done, f"the controller has not saved {what}")
 
 
-async def set_backwash_day(device: PoolController, day: str) -> None:
-    """Write the backwash day ("Off" or a weekday), then save it."""
-    if day not in DAY_OPTIONS:
-        raise ValueError(f"{day!r} is not one of {', '.join(DAY_OPTIONS)}")
-    bitmap = 0 if day == "Off" else 1 << DAYS.index(day)
+async def set_backwash_days(device: PoolController, bitmap: int) -> None:
+    """Write the backwash days (bit 0 Monday ... bit 6 Sunday, 0 for off), then save."""
+    bitmap = _within(0, EVERY_DAY)(bitmap)
     await update_or_keep(device)
     if device.backwash_days_written == bitmap and device.backwash_days == bitmap:
         return
     await device.write("backwash_days_written", bitmap)
-    await _save_schedule(device, lambda d: d.backwash_days == bitmap, f"the backwash day {day}")
+    await _save_schedule(device, lambda d: d.backwash_days == bitmap, f"the days {_days(bitmap)}")
+
+
+async def set_backwash_weekday(device: PoolController, index: int, on: bool) -> None:
+    """Add weekday ``index`` (0 Monday) to the backwash days, or take it out."""
+    await update_or_keep(device)
+    current = device.backwash_days_written
+    if current is None:
+        raise ModbusError("the backwash days could not be read")
+    bit = 1 << index
+    await set_backwash_days(device, current | bit if on else current & ~bit)
+
+
+def _weekday_switch(index: int, name: str) -> Value:
+    return Value(
+        f"backwash_{name.lower()}",
+        f"Backwash {name}",
+        lambda d: (
+            None if d.backwash_days_written is None else bool(d.backwash_days_written & 1 << index)
+        ),
+        binary=True,
+        category="setting",
+        device_class="switch",
+        feature="backwash_schedule",
+        write=lambda d, on: set_backwash_weekday(d, index, bool(on)),
+        fields=("backwash_days", "command_word"),
+        icon="mdi:calendar-check",
+        icon_off="mdi:calendar-blank-outline",
+    )
 
 
 async def set_backwash_time(device: PoolController, value: time | str) -> None:
@@ -398,17 +430,7 @@ VALUES = (
         icon="mdi:home-flood",
         icon_off="mdi:home",
     ),
-    Value(
-        "backwash_day",
-        "Backwash Day",
-        lambda d: d.backwash_day_written,
-        category="setting",
-        feature="backwash_schedule",
-        write=set_backwash_day,
-        options=DAY_OPTIONS,
-        fields=("backwash_days", "command_word"),
-        icon="mdi:calendar-clock",
-    ),
+    *(_weekday_switch(index, name) for index, name in enumerate(DAYS)),
     Value(
         "backwash_time",
         "Backwash Time",
