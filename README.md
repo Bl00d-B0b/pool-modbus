@@ -53,7 +53,7 @@ map, tested on an LDPHCL with firmware 5.1.4.
 ## Home Assistant
 
 Requires Home Assistant **2026.9** or later, which shares Modbus connections
-between integrations. Tested with Home Assistant 2026.9.4.
+between integrations. Tested with Home Assistant 2026.10.1 (and 2026.9.4 before it).
 
 1. In HACS, add `https://github.com/Bl00d-B0b/pool-modbus` as a custom
    repository of type *Integration*, install *Pool equipment* and restart
@@ -269,7 +269,7 @@ The integration's own tests need Home Assistant, which runs on Linux and macOS
 but not Windows (CI runs them on every push):
 
 ```bash
-pip install "pytest-homeassistant-custom-component==0.13.367" "modbus-connection[tmodbus]==4.10.0"
+pip install "pytest-homeassistant-custom-component==0.13.372" "modbus-connection[tmodbus]==4.12.4"
 pytest tests_ha
 ```
 
