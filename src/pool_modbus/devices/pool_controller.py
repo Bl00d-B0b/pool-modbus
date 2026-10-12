@@ -179,14 +179,22 @@ class PoolController(Component):
 
 
 def _days(bitmap: int | None) -> str | None:
-    """A set of weekdays as text: Off, Every day, Weekdays, Weekends or the names."""
+    """A set of weekdays as text: Off, Every day, or the names, with Monday to Friday
+    shortened to Weekdays and Saturday plus Sunday to Weekend ("Friday, Weekend")."""
     if bitmap is None:
         return None
     bitmap &= EVERY_DAY
-    named = {0: "Off", EVERY_DAY: "Every day", WEEKDAYS: "Weekdays", WEEKENDS: "Weekends"}
-    if bitmap in named:
-        return named[bitmap]
-    return ", ".join(name for index, name in enumerate(DAYS) if bitmap & (1 << index))
+    if bitmap == 0:
+        return "Off"
+    if bitmap == EVERY_DAY:
+        return "Every day"
+    parts = []
+    for group, word in ((WEEKDAYS, "Weekdays"), (WEEKENDS, "Weekend")):
+        if bitmap & group == group:
+            parts.append(word)
+        else:
+            parts += [name for index, name in enumerate(DAYS) if group & bitmap & (1 << index)]
+    return ", ".join(parts)
 
 
 def _time(hour: int | None, minute: int | None) -> time | None:

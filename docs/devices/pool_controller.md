@@ -71,8 +71,8 @@ Register 40025 (address 24):
 - **Backwash Monday … Sunday / Backwash Time:** the schedule as written
   (40018–40020): one switch per weekday, so any set of days, and the time.
 - **Saved Backwash Schedule:** what the controller keeps (40028–40030), e.g.
-  "Friday 06:00", "Monday, Wednesday, Friday 06:00", "Weekdays 06:00", "Every day
-  06:00", or "Off".
+  "Friday 06:00", "Monday, Wednesday, Friday 06:00", "Friday, Weekend 06:00",
+  "Weekdays 06:00", "Every day 06:00", or "Off".
 - **RTC:** the clock from 40037–40040.
 
 Read groups in Home Assistant: the switches and status bits fast (40017 and

@@ -265,7 +265,9 @@ async def test_a_weekday_switch_adds_to_the_days(controller_snapshot) -> None:
         (0, "Off"),
         (0x7F, "Every day"),
         (0x1F, "Weekdays"),
-        (0x60, "Weekends"),
+        (0x60, "Weekend"),
+        (0x70, "Friday, Weekend"),
+        (0x3F, "Weekdays, Saturday"),
         (0x15, "Monday, Wednesday, Friday"),
     ],
 )
