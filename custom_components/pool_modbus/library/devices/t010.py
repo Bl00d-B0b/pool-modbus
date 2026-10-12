@@ -61,7 +61,7 @@ class T010(Component):
     heating_power = integer(2, signed=False, unit="%")  # relay: 0 or 100; PWM: steps of 20
     delay_minutes = bits(3, 8, 8)  # heating delay still to run
     delay_seconds = bits(3, 0, 8)
-    # Writes use function 06, one register each; register 8 is read back and merged.
+    # Writes use function 06, one register each; register 8 is written whole (flags).
     setpoint = gauge(5, 0.1, unit="°C", writable=_tenths(*SETPOINT_RANGE))
     offset = gauge(6, 0.1, unit="°C", writable=_tenths(*OFFSET_RANGE))
     set_delay = integer(7, signed=False, unit="min", writable=_minutes)

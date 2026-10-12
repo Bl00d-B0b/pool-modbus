@@ -40,8 +40,8 @@ def test_emec_optional_parts() -> None:
     bare = read_plan(device_type, EmecLD, set())
     assert not {"probe_mv_ch1", "probe_mv_ch2"} & bare["medium"]
     assert "slow" not in bare  # dosing settings and the clock are its only slow values
-    # every group also reads channel 1's divisor, to refuse a block of zeros
-    assert bare["fast"] == {"relay_ch1_raw", "relay_ch2_raw", "ch1_divisor"}
+    # every group also reads both divisors, to refuse a block of zeros
+    assert bare["fast"] == {"relay_ch1_raw", "relay_ch2_raw", "ch1_divisor", "ch2_divisor"}
 
 
 async def test_a_group_reads_only_its_registers(make_pump, ldphcl_snapshot) -> None:

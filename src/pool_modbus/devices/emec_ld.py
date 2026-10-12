@@ -71,10 +71,10 @@ class EmecUnit:
         raise NotImplementedError("EMEC LD controllers are written one value per request")
 
     async def write_coil(self, address: int, value: bool) -> None:
-        raise NotImplementedError("writing to EMEC LD controllers is not supported yet")
+        raise NotImplementedError("coil writes to EMEC LD controllers are untested")
 
     async def write_coils(self, address: int, values: list[bool]) -> None:
-        raise NotImplementedError("writing to EMEC LD controllers is not supported yet")
+        raise NotImplementedError("coil writes to EMEC LD controllers are untested")
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._unit, name)
@@ -194,11 +194,12 @@ class EmecLD(Component):
 
         The LDPHCL sometimes answers with zeros for one poll: all values, or some
         (both probe voltages, both relays). A divisor is never 0, so a read with
-        channel 1's divisor at 0 is refused; a value that drops to 0 is refused
-        once and accepted when the next read agrees (a real 0 shows a poll later).
+        a divisor at 0 is refused; a value that drops to 0 is refused once and
+        accepted when the next read agrees (a real 0 shows a poll later).
         """
-        if "ch1_divisor" in self.resolved_fields and not self.ch1_divisor:
-            raise ImplausibleReadError("the controller answered with zeros (channel 1 divisor 0)")
+        for name in ("ch1_divisor", "ch2_divisor"):
+            if name in self.resolved_fields and not getattr(self, name):
+                raise ImplausibleReadError(f"the controller answered with zeros ({name} is 0)")
         read = {
             name: getattr(self, name) for name in _GLITCH_FIELDS if name in self.resolved_fields
         }
@@ -544,5 +545,5 @@ DEVICE_TYPE = DeviceType(
     identify=_identify,
     default_unit_id=1,
     message_spacing=0.1,  # the protocol notes ask for at least 100 ms between requests
-    check_fields=("ch1_divisor",),
+    check_fields=("ch1_divisor", "ch2_divisor"),
 )

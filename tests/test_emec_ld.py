@@ -151,6 +151,18 @@ async def test_a_one_poll_zero_never_shows(make_pump, ldphcl_snapshot) -> None:
     assert (device.probe_mv_ch1, device.probe_mv_ch2) == (-27, 34)
 
 
+async def test_zeros_on_channel_2_alone_are_refused(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    for index in (2, 3):  # 40006, 40008: channel 2's reading and divisor
+        pump.registers[wire_address(index)] = 0
+
+    with pytest.raises(ImplausibleReadError, match="ch2_divisor"):
+        await update_or_keep(device)
+
+    assert device.ch2_value == pytest.approx(0.46)  # the last good value stays
+
+
 async def test_a_failed_request_leaves_the_values(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)
