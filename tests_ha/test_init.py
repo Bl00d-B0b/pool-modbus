@@ -189,6 +189,20 @@ async def test_a_missed_poll_keeps_the_last_values(hass: HomeAssistant) -> None:
     assert state(hass, "number.pool_thermostat_delay_setting") == "3"
 
 
+async def test_an_unexpected_read_error_keeps_the_last_values_too(
+    hass: HomeAssistant, caplog
+) -> None:
+    unit = fake_unit("t010")
+    entry = await add(hass, "t010", unit)
+
+    unit.fail = ValueError("short frame")  # not a Modbus error: still one missed poll
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+
+    assert state(hass, "climate.pool_thermostat") == "off"
+    assert "ValueError: short frame" in caplog.text
+
+
 async def test_a_block_of_zeros_never_shows(hass: HomeAssistant) -> None:
     unit = fake_unit("emec_ld")
     entry = await add(hass, "emec_ld", unit)

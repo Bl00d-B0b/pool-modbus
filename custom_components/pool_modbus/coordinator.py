@@ -108,9 +108,20 @@ class PoolModbusCoordinator(DataUpdateCoordinator[None]):
         kept for up to ``STALE_AFTER`` seconds before the entities go unavailable."""
         try:
             await self._read()
-        except (ModbusError, OSError, TimeoutError) as err:
+        except Exception as err:  # noqa: BLE001 -- any failure keeps the values
             if self._last_read is not None and time.monotonic() - self._last_read < STALE_AFTER:
-                _LOGGER.debug("%s: read failed (%s), showing the last values", self.name, err)
+                # A warning for the ones the retry does not cover, so they can be named.
+                log = (
+                    _LOGGER.debug
+                    if isinstance(err, ModbusError | OSError | TimeoutError)
+                    else _LOGGER.warning
+                )
+                log(
+                    "%s: read failed (%s: %s), showing the last values",
+                    self.name,
+                    type(err).__name__,
+                    err,
+                )
                 return
             raise UpdateFailed(f"{self.name} did not answer: {err}") from err
         self._last_read = time.monotonic()
