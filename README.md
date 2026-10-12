@@ -179,13 +179,13 @@ Pool controller (unit 1, tcp 192.168.1.50:502)
   Filling                  off
   Light                    off
   Flooding Alarm           off
-  Backwash Monday           off
-  Backwash Tuesday          off
-  Backwash Wednesday        off
-  Backwash Thursday         off
-  Backwash Friday           on
-  Backwash Saturday         off
-  Backwash Sunday           off
+  Backwash Monday          off
+  Backwash Tuesday         off
+  Backwash Wednesday       off
+  Backwash Thursday        off
+  Backwash Friday          on
+  Backwash Saturday        off
+  Backwash Sunday          off
   Backwash Time            06:00
   Saved Backwash Schedule  Friday 06:00
   RTC                      2026-10-05 12:16:03
