@@ -125,6 +125,12 @@ read before and after:
   position 43) and 46 (PM, read position 42), found by setting 9:00 AM and 7 PM
   on the keypad; a time set in Europe format keeps its 24-hour hour after a
   switch to USA. The RTC combines the hour with the PM flag (12 AM is 0).
+  Coil 46 takes function 05 writes (tested 2026-10-14 in Europe format: written
+  off, read position 42 cleared; written on, it came back; the hour stayed 19),
+  but **a write of coil 46 also makes the controller re-apply its clock
+  setpoint**, like a units switch: about 20 s later the clock showed the
+  setpoint's stale day, month and minute and the year 2000. The library does not
+  write coils 45 and 46.
   The library reads the coil: **Temperature** (°C) exists in Europe format,
   **Temperature °F** (whole °F, without HA's temperature conversion) in USA
   format, and RTC decodes the date in both. **A switch over Modbus makes the
