@@ -79,6 +79,36 @@ settings.
 
 The library never reads the password register (40542).
 
+### Not readable, and not yet usable
+
+Found on the tested LDPHCL (firmware 5.1.4) on 2026-10-14 by changing a setting
+on the keypad while every readable register (wire 1–1839) and the coils were
+read before and after:
+
+- **Output Manager** (Auto, Off, or one output run manually for 0–99 min, as the
+  instruction manual describes): Auto and Off change no register or coil. A
+  manual run shows only through its effect, the output's pulse rate (150 p/min
+  for Man. Ch1 pH pulse1); its countdown is not readable.
+- **Countdown after flow returns, temperature probe millivolts, calibration
+  dates and calibration-fail flags** (all on the status screens): no register
+  holds them.
+- **Labels** (40844–40857): 28 dashes, the placeholder of an unset instrument
+  name.
+- **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
+  later, field by field, but not in the layout the controller reports or the
+  protocol description gives. The controller takes the day from the high byte
+  of 41624, the month from the low byte of 41626, the hour from its high byte
+  and the minute from the low byte of 41628. No byte set the year (41624 low
+  and 41628 high tried as binary and BCD; 41630 takes no writes), so a write
+  left the year at 2000, which only the keypad can correct. The library does not
+  write the clock.
+- **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
+  changed one coil (128-coil read position 41) and the clock's year byte from 0
+  to 1, but not the hour display (17 stayed 17), so it is not the 12/24 h format.
+  The date format still has to be found on the keypad.
+- **Fixed PWM on and off times** of the switching relays: not documented and not
+  found yet.
+
 ## Values shown by this library
 
 Named as on an LDPHCL, where channel 1 is pH and channel 2 is free chlorine.
