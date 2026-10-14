@@ -148,10 +148,34 @@ class PoolModbusData:
     coordinators: dict[ScanGroup, PoolModbusCoordinator]
     device_info: DeviceInfo
     write_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    shown: frozenset[str] | None = None
+    """Keys of the values with an entity: those the device uses as last read at setup."""
 
     @property
     def values(self) -> tuple[Value, ...]:
-        return self.device_type.enabled_values(self.features)
+        """The values that have an entity: switched on, and used by the device's current
+        settings (a setting its working mode ignores has none, as in its own menu)."""
+        values = self.device_type.enabled_values(self.features)
+        if self.shown is None:
+            return values
+        return tuple(v for v in values if v.key in self.shown)
+
+    def used_keys(self) -> frozenset[str]:
+        """Keys of the switched-on values the device uses as it reads now."""
+        keys = set()
+        for value in self.device_type.enabled_values(self.features):
+            coordinator = self.coordinators.get(value.group)
+            try:
+                used = (
+                    value.available is None
+                    or coordinator is None
+                    or bool(value.available(coordinator.device))
+                )
+            except Exception:  # noqa: BLE001 - a value that cannot be judged keeps its entity
+                used = True
+            if used:
+                keys.add(value.key)
+        return frozenset(keys)
 
     @property
     def actions(self) -> tuple[Action, ...]:

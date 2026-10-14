@@ -393,6 +393,19 @@ async def test_a_write_answered_too_late_is_confirmed_by_reading(
     assert device.ch1_pulse1_val2 == pytest.approx(7.55)
 
 
+async def test_the_read_before_a_write_is_retried_once(
+    make_pump, ldphcl_snapshot, monkeypatch
+) -> None:
+    from pool_modbus.devices import writing
+
+    monkeypatch.setattr(writing, "READ_RETRY_DELAY", 0)
+    pump = make_pump(dict(ldphcl_snapshot))
+    device = await read(pump)
+    pump._failing_reads = 1  # the read ahead of the write gets no answer once
+    await WRITE_VALUES["ph1_min"].write(device, 7.55)
+    assert pump.writes == [(69, 755)]
+
+
 async def test_a_write_the_pump_did_not_store_is_an_error(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)

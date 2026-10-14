@@ -114,11 +114,11 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
     assert state(hass, "select.dosing_pump_ph_relay_1_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
-    assert state(hass, "number.dosing_pump_ph_relay_1_pulse_speed") == STATE_UNAVAILABLE
+    assert hass.states.get("number.dosing_pump_ph_relay_1_pulse_speed") is None
     # The second pH output has the same entities; disabled, so its settings are unavailable.
     assert state(hass, "select.dosing_pump_ph_relay_2_dosing_mode") == "Disabled"
-    assert state(hass, "number.dosing_pump_ph_relay_2_max_value") == STATE_UNAVAILABLE
-    assert state(hass, "number.dosing_pump_ph_relay_2_max_pulse_rate") == STATE_UNAVAILABLE
+    assert hass.states.get("number.dosing_pump_ph_relay_2_max_value") is None
+    assert hass.states.get("number.dosing_pump_ph_relay_2_max_pulse_rate") is None
     assert state(hass, "sensor.dosing_pump_ph_relay_2_pulse_rate") == "0"
     # Chlorine has one pulse output, named the same way.
     assert state(hass, "select.dosing_pump_cl_relay_dosing_mode") == "Proportional"

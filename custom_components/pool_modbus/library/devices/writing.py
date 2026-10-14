@@ -17,6 +17,9 @@ CONFIRM_INTERVAL = 0.25
 """Seconds between reads while waiting."""
 
 NO_REPLY = (GatewayTargetError, ModbusTimeoutError)
+
+READ_RETRY_DELAY = 0.5
+"""Seconds before the read ahead of a write is tried a second time."""
 """Errors meaning a request got no reply, so the device may still have carried it out."""
 
 
@@ -73,6 +76,16 @@ async def wait_until(device: Component, done: Any, what: str, timeout: float | N
         await asyncio.sleep(CONFIRM_INTERVAL)
 
 
+async def _read_with_retry(device: Component) -> None:
+    """Read the device, once more after a short pause if the first read gets no answer
+    (behind a shared gateway one request now and then times out, as polling sees)."""
+    try:
+        await update_or_keep(device)
+    except (ModbusError, OSError, TimeoutError):
+        await asyncio.sleep(READ_RETRY_DELAY)
+        await update_or_keep(device)
+
+
 async def write_if_changed(device: Component, field: str, value: Any) -> None:
     """Write ``field`` unless the device already holds ``value``, then confirm it.
 
@@ -85,7 +98,7 @@ async def write_if_changed(device: Component, field: str, value: Any) -> None:
     writable = getattr(type(device), field).writable
     if callable(writable):
         value = writable(value)
-    await update_or_keep(device)
+    await _read_with_retry(device)
     current = getattr(device, field)
     if current == value:
         return

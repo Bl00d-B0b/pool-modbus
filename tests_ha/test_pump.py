@@ -7,16 +7,17 @@ from homeassistant.components.number import ATTR_VALUE, SERVICE_SET_VALUE
 from homeassistant.components.number import DOMAIN as NUMBER_DOMAIN
 from homeassistant.components.select import ATTR_OPTION, SERVICE_SELECT_OPTION
 from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from modbus_connection import GatewayTargetError
 
+from custom_components.pool_modbus.const import DOMAIN
 from custom_components.pool_modbus.library.devices import writing
 
 from .conftest import fake_unit
-from .test_init import add, state
+from .test_init import add, make_entry, setup, state
 
 MODE = "select.dosing_pump_ph_relay_1_dosing_mode"
 PH_MAX = "number.dosing_pump_ph_relay_1_max_value"
@@ -55,7 +56,7 @@ async def test_dosing_settings_are_controls(hass: HomeAssistant) -> None:
     assert hass.states.get(PH_MAX).attributes["device_class"] == "ph"
     assert "unit_of_measurement" not in hass.states.get(PH_MAX).attributes
     assert hass.states.get(MAX_RATE).attributes["max"] == 180
-    assert state(hass, SPEED) == STATE_UNAVAILABLE  # only used in ON/OFF mode
+    assert hass.states.get(SPEED) is None  # only used in ON/OFF mode: no entity
     assert mode.attributes["icon"] == "mdi:chart-line-variant"
     registry = er.async_get(hass)
     assert registry.async_get("sensor.dosing_pump_ph_probe_voltage").entity_category == "diagnostic"
@@ -101,45 +102,81 @@ async def test_mode_switch(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", unit)
 
     await select(hass, "ON/OFF")
+    await hass.async_block_till_done()  # the entry reloads with the mode's settings
 
     assert unit.writes == [(71, 100), (75, 1), (77, 0)]
     assert state(hass, MODE) == "ON/OFF"
     assert state(hass, SPEED) == "1"
-    assert state(hass, MAX_RATE) == STATE_UNAVAILABLE  # proportional mode only
+    assert hass.states.get(MAX_RATE) is None  # proportional mode only
 
 
-async def test_settings_a_mode_does_not_use_are_hidden(hass: HomeAssistant) -> None:
-    """Like the controller's menu: only the settings of the current mode show on the
-    device page; the others are hidden by the integration and come back with the mode."""
+async def test_only_the_settings_of_the_current_mode_exist(hass: HomeAssistant) -> None:
+    """Like the controller's menu: a setting the mode does not use has no entity; the
+    entities follow when the mode changes, keeping their entity ids."""
     unit = fake_unit("emec_ld")
     await add(hass, "emec_ld", unit)
     registry = er.async_get(hass)
-
-    assert registry.async_get(SPEED).hidden_by is er.RegistryEntryHider.INTEGRATION
-    assert registry.async_get(MAX_RATE).hidden_by is None
-    assert registry.async_get(PH_MAX).hidden_by is None
+    assert registry.async_get(SPEED) is None
+    assert registry.async_get(MAX_RATE) is not None
 
     await select(hass, "ON/OFF")
+    await hass.async_block_till_done()
 
-    assert registry.async_get(SPEED).hidden_by is None
-    assert registry.async_get(MAX_RATE).hidden_by is er.RegistryEntryHider.INTEGRATION
-    assert registry.async_get(MIN_RATE).hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert registry.async_get(SPEED) is not None
+    assert registry.async_get(MAX_RATE) is None and registry.async_get(MIN_RATE) is None
+    assert state(hass, PH_MAX) == "10.0"
 
     await select(hass, "Disabled")
+    await hass.async_block_till_done()
 
-    assert registry.async_get(PH_MAX).hidden_by is er.RegistryEntryHider.INTEGRATION
-    assert registry.async_get(MODE).hidden_by is None  # the mode itself always shows
+    assert registry.async_get(PH_MAX) is None
+    assert state(hass, MODE) == "Disabled"  # the mode itself always exists
+
+    await select(hass, "Proportional")
+    await hass.async_block_till_done()
+
+    assert state(hass, MAX_RATE) == "100"  # back with the same id, as the keypad left it
+    assert registry.async_get(SPEED) is None
 
 
-async def test_a_setting_hidden_by_the_user_stays_hidden(hass: HomeAssistant) -> None:
+async def test_a_mode_changed_on_the_keypad_needs_two_reads(hass: HomeAssistant) -> None:
     unit = fake_unit("emec_ld")
-    await add(hass, "emec_ld", unit)
+    entry = await add(hass, "emec_ld", unit)
+    unit.registers[77] = 0  # ON/OFF, set on the controller
+
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+    assert hass.states.get(SPEED) is None  # one read is not enough
+
+    await entry.runtime_data.async_refresh_all()
+    await hass.async_block_till_done()
+    assert hass.states.get(SPEED) is not None
+
+
+async def test_leftover_entities_are_removed(hass: HomeAssistant) -> None:
+    """An entity of a key the integration no longer has (here coil 5's No Flow Alarm,
+    dropped on 2026-10-14) is removed instead of staying unavailable."""
+    entry = make_entry(hass, "emec_ld")
     registry = er.async_get(hass)
-    registry.async_update_entity(PH_MAX, hidden_by=er.RegistryEntryHider.USER)
+    old = registry.async_get_or_create(
+        "binary_sensor",
+        DOMAIN,
+        f"{entry.unique_id}_no_flow_alarm",
+        config_entry=entry,
+        suggested_object_id="dosing_pump_no_flow_alarm",
+    )
+    hidden = registry.async_get_or_create(
+        "number",
+        DOMAIN,
+        f"{entry.unique_id}_ph1_max",
+        config_entry=entry,
+        suggested_object_id="dosing_pump_ph_relay_1_max_value",
+        hidden_by=er.RegistryEntryHider.INTEGRATION,  # as hidden by the version before
+    )
+    await setup(hass, entry, fake_unit("emec_ld"))
 
-    await select(hass, "ON/OFF")  # pH Max is used in ON/OFF mode, but the user hid it
-
-    assert registry.async_get(PH_MAX).hidden_by is er.RegistryEntryHider.USER
+    assert registry.async_get(old.entity_id) is None
+    assert registry.async_get(hidden.entity_id).hidden_by is None
 
 
 async def test_values_the_pump_does_not_take(hass: HomeAssistant) -> None:

@@ -134,13 +134,72 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
         await coordinator.async_config_entry_first_refresh()
         coordinators[group] = coordinator
 
-    entry.runtime_data = PoolModbusData(
+    data = PoolModbusData(
         device_type, features, coordinators, device_info(entry, device_type, full)
     )
+    data.shown = data.used_keys()
+    entry.runtime_data = data
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     await er.async_migrate_entries(hass, entry.entry_id, _renamed_unique_id(hass, entry))
+    _remove_unused_entities(hass, entry, data)
+    _reload_when_used_settings_change(hass, entry, data)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+def _entity_keys(data: PoolModbusData) -> set[str]:
+    """The keys this entry creates entities for now."""
+    keys = {value.key for value in data.values}
+    keys |= {action.key for action in data.actions}
+    for main in (data.device_type.thermostat, data.device_type.cover):
+        if main is not None:
+            keys.add(main.key)
+    return keys
+
+
+@callback
+def _remove_unused_entities(
+    hass: HomeAssistant, entry: PoolModbusConfigEntry, data: PoolModbusData
+) -> None:
+    """Remove the registry entries this entry no longer creates: settings the device's
+    current mode does not use, parts switched off, keys of earlier versions. They come
+    back (same entity id) when created again. Entities an earlier version hid are shown."""
+    registry = er.async_get(hass)
+    prefix = f"{entry.unique_id or entry.entry_id}_"
+    keys = _entity_keys(data)
+    for registered in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if registered.unique_id.removeprefix(prefix) not in keys:
+            registry.async_remove(registered.entity_id)
+        elif registered.hidden_by is er.RegistryEntryHider.INTEGRATION:
+            registry.async_update_entity(registered.entity_id, hidden_by=None)
+
+
+@callback
+def _reload_when_used_settings_change(
+    hass: HomeAssistant, entry: PoolModbusConfigEntry, data: PoolModbusData
+) -> None:
+    """Reload the entry when the device's settings in use change (e.g. its dosing mode),
+    so the entities follow. Seen on two reads in a row, so one odd read cannot do it;
+    a change written from Home Assistant reloads at once (see ``async_write``)."""
+    groups = {v.group for v in data.device_type.enabled_values(data.features) if v.available}
+    pending: list[frozenset[str]] = []
+
+    @callback
+    def check() -> None:
+        if not all(c.last_update_success for c in data.coordinators.values()):
+            return
+        now = data.used_keys()
+        if now == data.shown:
+            pending.clear()
+        elif pending and pending[-1] == now:
+            hass.config_entries.async_schedule_reload(entry.entry_id)
+        else:
+            pending[:] = [now]
+
+    for group in groups:
+        coordinator = data.coordinators.get(group)
+        if coordinator is not None:
+            entry.async_on_unload(coordinator.async_add_listener(check))
 
 
 def _renamed_unique_id(hass: HomeAssistant, entry: PoolModbusConfigEntry):

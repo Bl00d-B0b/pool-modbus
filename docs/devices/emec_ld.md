@@ -91,10 +91,14 @@ follow the output's working mode, as on the controller:
 - **Max Pulse Rate / Min Pulse Rate** (perc1, perc2): proportional mode only.
 - **Pulse Speed** (wait): ON/OFF mode only.
 
-In Home Assistant a setting the current mode does not use is unavailable and
-hidden (registry `hidden_by: integration`), so the device page shows only the
-settings the output uses, like the controller's own menu; it comes back when the
-mode changes. A setting the user hid stays hidden.
+In Home Assistant a setting the current mode does not use has no entity, like
+in the controller's own menu. The entry creates the settings the modes use at
+setup and removes the registry entries of the others (and of keys earlier
+versions had); when a mode changes, the entry reloads and the entities follow,
+with the same entity ids. A mode chosen in Home Assistant reloads at once; one
+changed on the keypad is seen on two slow reads in a row first, so about 15 to
+30 s later. The values of a removed setting stay in the controller as the mode
+switch wrote them (see the order below), e.g. ON/OFF leaves the top rate at 100.
 
 On the tested controller output 2 is disabled, so only its Dosing Mode and
 Pulse Rate show a value.
