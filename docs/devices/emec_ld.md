@@ -103,8 +103,12 @@ read before and after:
   calls "00"). Day, month and hour are taken without a range check (day 32,
   month 13 and 14, hour 25 all showed on the clock); a minute of 61 was refused.
   **The year is copied into the buffer (6, 26, 99, 255 all showed at 1628) but
-  never into the clock**, so the year cannot be set over Modbus; a write in the
-  protocol's layout left the year at 2000, which only the keypad can correct.
+  never into the clock: every clock write sets the clock's year to 2000**,
+  whatever the year byte holds (1 to 4 tried as well). So a write can set the
+  time and date only at the cost of the year, which only the keypad corrects.
+  The clock's own New Year rollover works (31/12/2000 23:59 became 01/01/2001
+  00:00), but the next write resets the year again, so it cannot be used to
+  count the year up.
   41612–41622 also take writes (undocumented, read 0) and do not set the year;
   41630–41642 take none. The library does not write the clock.
 - **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
