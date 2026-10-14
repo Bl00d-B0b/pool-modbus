@@ -194,9 +194,10 @@ class EmecLD(Component):
     alarm_coil_15 = coil(14)
     alarm_coil_16 = coil(15)
 
-    # Timing (40522-40526): the start delay before dosing resumes after flow or
-    # power returns, the flow sensor's time and mode.
-    start_delay_minutes = integer(260, unit="min", writable=_whole(0, 60))
+    # Timing (40520-40526): the measurement filter (tau), the feeding delay before
+    # dosing resumes after flow or power returns, the flow sensor's time and mode.
+    tau = integer(259, writable=_whole(0, 30))
+    feeding_delay = integer(260, unit="min", writable=_whole(0, 60))
     flow_time = integer(261, unit="min", writable=_whole(0, 99))
     flow_mode = enum(262, FlowMode, writable=FlowMode)
 
@@ -689,19 +690,32 @@ VALUES = (
         icon="mdi:alert-circle-outline",
     ),
     Value(
-        "start_delay_time",
-        "Start Delay Time",
-        lambda d: d.start_delay_minutes,
+        "feeding_delay",
+        "Feeding Delay",
+        lambda d: d.feeding_delay,
         "min",
         category="setting",
         device_class="duration",
         feature="dosing_settings",
-        write=lambda d, v: write_if_changed(d, "start_delay_minutes", v),
+        write=lambda d, v: write_if_changed(d, "feeding_delay", v),
         minimum=0,
         maximum=60,
         step=1,
         number_mode="box",
         icon="mdi:timer-cog-outline",
+    ),
+    Value(
+        "tau",
+        "Tau",
+        lambda d: d.tau,
+        category="setting",
+        feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "tau", v),
+        minimum=0,
+        maximum=30,
+        step=1,
+        number_mode="box",
+        icon="mdi:chart-bell-curve-cumulative",
     ),
     Value(
         "flow_time",

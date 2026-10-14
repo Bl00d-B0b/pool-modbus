@@ -126,11 +126,13 @@ observed and noted ones are named.
 
 | Register | Index | Shown as |
 |---|---|---|
-| 40522 | 260 | **Start Delay Time** (number, 0–60 min, writable): how long dosing waits after flow or power returns |
+| 40520 | 259 | **Tau** (number, 0–30, writable): the controller's measurement filter setting, "Tau" in its menu; unit not documented |
+| 40522 | 260 | **Feeding Delay** (number, 0–60 min, writable): "Feeding delay" in the menu, how long dosing waits after flow or power returns |
 | 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it |
 | 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
 
-40520 (tau) is not read. The controller gives no countdown of the wait after
+The menu's pH priority switch is coil 58, which cannot be read reliably (see the
+coil note above), so it is not shown. The controller gives no countdown of the wait after
 flow returns (every readable register was scanned during one on 2026-10-14 and
 none counted down); Home Assistant can compute it from the moment the flow
 contact closed and the Flow Time.
@@ -179,7 +181,7 @@ worked.
 | Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
 | Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
 
-The timing values are written the same way: Start Delay Time (40522, 0–60 min),
+The timing values are written the same way: Tau (40520, 0–30), Feeding Delay (40522, 0–60 min),
 Flow Time (40524, 0–99 min) and Flow Mode (40526). Setting Flow Mode to
 Disabled makes the controller dose without flow, which its manual warns against.
 
@@ -222,7 +224,8 @@ controller yet.
 | Standby | Binary sensor | | `pause-circle` / `play-circle` | coil 11 | Fast |
 | No Flow, Cl Tank Empty, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 6, 7, 8 | Fast |
 | Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
-| Start Delay Time | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
+| Feeding Delay | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
+| Tau | Number (input box), 0–30 | | `chart-bell-curve-cumulative` | 40520 | Slow |
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 

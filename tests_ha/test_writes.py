@@ -189,7 +189,7 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert hass.states.async_entity_ids(SWITCH_DOMAIN) == []
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
-    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 17  # 5 per output + 2 timers
+    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 18  # 5 per output + 3 timing
     assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 4  # 3 dosing modes + flow mode
 
 

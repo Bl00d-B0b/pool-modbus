@@ -34,8 +34,8 @@ def test_wire_address(index: int, wire: int) -> None:
 async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    # values 0-81 and 260-262 (the timing block) in two reads, coils 0-15 in one
-    assert sorted(pump.requests) == [("coils", 0, 16), ("holding", 1, 82), ("holding", 521, 3)]
+    # values 0-81 and 259-262 (the timing block) in two reads, coils 0-15 in one
+    assert sorted(pump.requests) == [("coils", 0, 16), ("holding", 1, 82), ("holding", 519, 4)]
     assert pump.message_spacing == pytest.approx(0.1)
 
 
@@ -67,7 +67,8 @@ async def test_coils_are_always_read_as_the_whole_block(make_pump, ldphcl_snapsh
 
 async def test_timing_values(make_pump, ldphcl_snapshot) -> None:
     device = await read(make_pump(ldphcl_snapshot))
-    assert device.start_delay_minutes == 5
+    assert device.tau == 5
+    assert device.feeding_delay == 5
     assert device.flow_time == 5
     assert device.flow_mode is FlowMode.DIRECT
 
@@ -344,7 +345,8 @@ def quick_confirm(monkeypatch):
         ("cl1_max_rate", 12, [(157, 12)]),
         ("cl1_min_rate", 4, [(159, 4), (157, 0)]),
         ("cl1_mode", "Disabled", [(163, 2)]),
-        ("start_delay_time", 4, [(521, 4)]),  # 40522
+        ("feeding_delay", 4, [(521, 4)]),  # 40522
+        ("tau", 10, [(519, 10)]),  # 40520
         ("flow_time", 10, [(523, 10)]),  # 40524
         ("flow_mode", "Reverse", [(525, 1)]),  # 40526
     ],
@@ -433,6 +435,8 @@ async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
         ("ph1_mode", "Turbo"),
         ("cl1_max", 20.01),
         ("flow_time", 100),
+        ("tau", 31),
+        ("feeding_delay", 61),
         ("flow_mode", "Sideways"),
         ("cl1_mode", "Turbo"),
     ],

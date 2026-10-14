@@ -238,7 +238,8 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Tank Empty              off
   pH Tank Empty              off
   Alarm Coils                None
-  Start Delay Time           5 min
+  Feeding Delay              5 min
+  Tau                        5
   Flow Time                  5 min
   Flow Mode                  Direct
 
