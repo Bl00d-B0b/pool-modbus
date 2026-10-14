@@ -392,14 +392,15 @@ def _field(channel: int, output: int, name: str) -> str:
     return f"ch{channel}_pulse{output}_{name}"
 
 
-def _mode_steps(channel: int, output: int, mode: PulseMode) -> tuple[tuple[str, Any], ...]:
+def _mode_steps(
+    channel: int, output: int, mode: PulseMode, wait: int | None
+) -> tuple[tuple[str, Any], ...]:
+    """The writes the keypad makes for a mode: ON/OFF forces the top rate to 100 and
+    gives a 0 interval 1 minute, Proportional zeroes the interval, Off changes nothing."""
     f = lambda name: _field(channel, output, name)  # noqa: E731
     if mode is PulseMode.ON_OFF:
-        return (
-            (f("perc1"), 100),
-            (f("perc2"), 0),
-            (f("mode"), mode),
-        )  # wait stays, as on the keypad
+        interval = ((f("wait"), 1),) if not wait else ()
+        return ((f("perc1"), 100), (f("perc2"), 0), *interval, (f("mode"), mode))
     if mode is PulseMode.PROPORTIONAL:
         return ((f("wait"), 0), (f("mode"), mode))
     return ((f("mode"), mode),)
@@ -413,7 +414,8 @@ async def set_dosing_mode(device: EmecLD, label: str, channel: int = 1, output: 
     await update_or_keep(device)
     if getattr(device, _field(channel, output, "mode")) is mode:
         return
-    for field, value in _mode_steps(channel, output, mode):
+    wait = getattr(device, _field(channel, output, "wait"))
+    for field, value in _mode_steps(channel, output, mode, wait):
         await write_if_changed(device, field, value)
 
 

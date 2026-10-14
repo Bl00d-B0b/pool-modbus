@@ -389,8 +389,8 @@ async def test_a_setting_the_pump_holds_is_not_written(make_pump, ldphcl_snapsho
 @pytest.mark.parametrize(
     ("label", "writes"),
     [
-        # rate 100 (min rate already 0), then the mode; the pulse interval stays
-        ("ON/OFF", [(71, 100), (77, 0)]),
+        # rate 100 (min rate already 0), the 0 interval becomes 1 min, then the mode
+        ("ON/OFF", [(71, 100), (75, 1), (77, 0)]),
         ("Disabled", [(77, 2)]),
     ],
 )
@@ -402,6 +402,15 @@ async def test_mode_switch_writes_its_settings_in_order(
     await WRITE_VALUES["ph1_mode"].write(device, label)
     assert pump.writes == writes
     assert device.ch1_pulse1_mode.label == label
+
+
+async def test_on_off_keeps_a_set_interval(make_pump, ldphcl_snapshot) -> None:
+    registers = dict(ldphcl_snapshot)
+    registers[75] = 20  # the user's interval stays, as on the keypad
+    pump = make_pump(registers)
+    device = await read(pump)
+    await WRITE_VALUES["ph1_mode"].write(device, "ON/OFF")
+    assert pump.writes == [(71, 100), (77, 0)]
 
 
 async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:

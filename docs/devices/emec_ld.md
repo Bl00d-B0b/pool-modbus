@@ -184,13 +184,13 @@ set rate at the other, so setting one end's rate sets the other end's to 0:
 Max Pulse Rate writes perc1, then perc2 = 0; Min Pulse Rate writes perc2, then
 perc1 = 0. A working mode is entered by writing its settings in this order,
 which is what the controller's own keypad does (watched on 2026-10-14: ON/OFF
-forces the top rate to 100 and keeps the interval, Proportional zeroes the
+forces the top rate to 100 and keeps a set interval, giving a 0 interval 1 minute; Proportional zeroes the
 interval and keeps the rates, Off changes nothing else; the stored values show
 up to a minute after the keypad confirms them):
 
 | Mode | Writes, in order |
 |---|---|
-| ON/OFF | perc1 = 100, perc2 = 0, mode = 0 (the pulse interval `wait` stays as it is) |
+| ON/OFF | perc1 = 100, perc2 = 0, wait = 1 only if it was 0, mode = 0 |
 | Proportional | wait = 0, mode = 1 |
 | Disabled | mode = 2 |
 
