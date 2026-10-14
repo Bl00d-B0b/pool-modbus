@@ -142,8 +142,8 @@ class FlowMode(IntEnum):
 
 
 PH_RANGE = (0.0, 14.0)
-CL_RANGE = (0.0, 20.0)
-"""ppm; wider than any pool needs, the controller's own limit is not documented."""
+CL_RANGE = (0.0, 10.0)
+"""mg/l, the chlorine working range in the controller's instruction manual."""
 RATE_RANGE = (0, 180)
 """Pulses per minute; the controller's maximum."""
 SPEED_RANGE = (0, 99)
@@ -177,7 +177,7 @@ def high_byte(index: int) -> PackedBitsField:
 class EmecLD(Component):
     """EMEC LD-series controller. Addresses are value indices, see ``EmecUnit``.
 
-    On an LDPHCL, channel 1 is pH and channel 2 is free chlorine in ppm.
+    On an LDPHCL, channel 1 is pH and channel 2 is free chlorine in mg/l (Cl₂ on its display).
     """
 
     max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
@@ -303,7 +303,7 @@ class EmecLD(Component):
 
     @property
     def ch2_value(self) -> float | None:
-        """Channel 2 measurement (free chlorine in ppm on an LDPHCL)."""
+        """Channel 2 measurement (free chlorine in mg/l on an LDPHCL)."""
         return _ratio(self.ch2_reading, self.ch2_divisor)
 
     @property
@@ -481,7 +481,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
     "pH Relay 2" and "Cl Relay" as the user calls the dosing pumps on them.
     The pump only uses each setting in some working modes."""
     symbol, key, unit, device_class, value_range = (
-        ("pH", "ph", "pH", "ph", PH_RANGE) if channel == 1 else ("Cl", "cl", "ppm", None, CL_RANGE)
+        ("pH", "ph", "pH", "ph", PH_RANGE) if channel == 1 else ("Cl", "cl", "mg/L", None, CL_RANGE)
     )
     prefix = f"{symbol} Relay {output}" if channel == 1 else f"{symbol} Relay"  # Cl has one
     f = lambda name: _field(channel, output, name)  # noqa: E731
@@ -610,7 +610,7 @@ VALUES = (
         "chlorine",
         "Cl Level",
         lambda d: d.ch2_value,
-        "ppm",
+        "mg/L",
         category="measurement",
         icon="mdi:flask-outline",
     ),

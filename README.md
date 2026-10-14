@@ -205,7 +205,7 @@ T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
 
 EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Level                   7.51 pH
-  Cl Level                   0.46 ppm
+  Cl Level                   0.46 mg/L
   Temperature                17.6 °C
   pH Relay                   On
   Cl Relay                   On
@@ -228,8 +228,8 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Relay 2 Min Pulse Rate  unavailable
   pH Relay 2 Pulse Speed     unavailable
   Cl Relay Dosing Mode       Proportional
-  Cl Relay Max Value         0.0 ppm
-  Cl Relay Min Value         0.45 ppm
+  Cl Relay Max Value         0.0 mg/L
+  Cl Relay Min Value         0.45 mg/L
   Cl Relay Max Pulse Rate    13 p/min
   Cl Relay Min Pulse Rate    0 p/min
   Cl Relay Pulse Speed       unavailable
@@ -259,7 +259,7 @@ connection = ModbusConnection(ConnectionConfig(host="192.168.1.50").params(), ti
 await connection.connect()
 pump = device_type.model(connection.for_unit(3))
 await pump.async_update()
-print(pump.ch1_value, pump.ch2_value, pump.pulse_rate_ch2)  # pH, Cl ppm, p/min
+print(pump.ch1_value, pump.ch2_value, pump.pulse_rate_ch2)  # pH, Cl mg/l, p/min
 await connection.close()
 ```
 

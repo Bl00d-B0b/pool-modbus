@@ -46,7 +46,7 @@ model reports it as 0.
 |---|---|---|---|---|
 | 40002 | 1 | 0 | int16 | Channel 1 reading (pH ×100 on an LDPHCL) |
 | 40004 | 3 | 1 | uint16 | Channel 1 divisor: 1, 10, 100 or 1000 |
-| 40006 | 5 | 2 | int16 | Channel 2 reading (Cl ppm ×100) |
+| 40006 | 5 | 2 | int16 | Channel 2 reading (Cl mg/l ×100) |
 | 40008 | 7 | 3 | uint16 | Channel 2 divisor |
 | 40024 | 23 | 11 | high byte | Relay output, channel 2: 0 disabled, 1 on, 2 off |
 | 40026 | 25 | 12 | high byte | Pulse rate, channel 1 output IS1 (p/min) |
@@ -69,7 +69,7 @@ down, and stays at `perc1` beyond `val1`; this is a quick check that a decode
 is right. Verified live on 2026-10-14 by narrowing the bands around the
 readings: 40026 followed channel 1's pulse output 1 (3, 14 and 30 p/min at
 pH 7.47 for the bands 7.40–8.00, 7.00–8.00 and 7.00–7.40), 40030 followed
-channel 2 (3, 7 and 11 p/min at 0.46 ppm for 0.60–0.00, 1.00–0.00 and
+channel 2 (3, 7 and 11 p/min at 0.46 mg/l for 0.60–0.00, 1.00–0.00 and
 1.00–0.40), and 40028 stayed 0 (that controller's second channel 1 output,
 40140–40150, is disabled). The controller recomputes a rate on its own cycle,
 so a new rate shows up to about 20 s after a change of the reading or the
@@ -84,7 +84,7 @@ Channel 1 has two pulse outputs and channel 2 one, shown as **pH Relay 1**
 (40068–40078, rate 40026), **pH Relay 2** (40140–40150, rate 40028) and
 **Cl Relay** (40154–40164, rate 40030), each with the same seven values:
 Pulse Rate, Dosing Mode, Max Value, Min Value, Max Pulse Rate, Min Pulse Rate
-and Pulse Speed (pH values in pH, Cl values in ppm). The dosing settings
+and Pulse Speed (pH values in pH, Cl values in mg/l, the controller's unit; its display writes Cl₂). The dosing settings
 follow the output's working mode, as on the controller:
 
 - **Max Value / Min Value** (val1, val2): not used when the output is disabled.
@@ -185,7 +185,7 @@ worked.
 
 | Setting | pH Relay 1 | pH Relay 2 | Cl Relay | Range |
 |---|---|---|---|---|
-| Max Value, Min Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–20.00 ppm (a library limit, the controller's is not documented) |
+| Max Value, Min Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–10.00 mg/l (the working ranges in the instruction manual) |
 | Max Pulse Rate, Min Pulse Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 40158, 40160 | 0–180 p/min |
 | Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
 | Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
@@ -219,7 +219,7 @@ controller yet.
 | Entity | Type | Device class | Icon | Registers | Read |
 |---|---|---|---|---|---|
 | pH Level | Sensor | `ph` | `ph` | 40002–40004 | Medium |
-| Cl Level | Sensor, ppm | | `flask-outline` | 40006–40008 | Medium |
+| Cl Level | Sensor, mg/L | | `flask-outline` | 40006–40008 | Medium |
 | Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
 | pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
 | pH Relay 1/2 Pulse Rate, Cl Relay Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40028, 40030 | Medium |
@@ -227,7 +227,7 @@ controller yet.
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
 | pH Relay 1/2 Dosing Mode, Cl Relay Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
 | pH Relay 1/2 Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
-| Cl Relay Max Value, Min Value | Numbers (input box), ppm, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
+| Cl Relay Max Value, Min Value | Numbers (input box), mg/L, 0–10, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
 | pH Relay 1/2, Cl Relay Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
 | pH Relay 1/2, Cl Relay Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
 | Standby | Binary sensor | | `pause-circle` / `play-circle` | coil 11 | Fast |

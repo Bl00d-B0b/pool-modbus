@@ -109,7 +109,8 @@ async def test_output_uses_home_assistant_names(bus) -> None:
         "pH Relay 2 Dosing Mode Disabled",
         "pH Relay 2 Max Value unavailable",
         "Cl Relay Dosing Mode Proportional",
-        "Cl Relay Min Value 0.45 ppm",
+        "Cl Relay Min Value 0.45 mg/L",
+        "Cl Level 0.46 mg/L",
     ):
         assert expected in lines
 

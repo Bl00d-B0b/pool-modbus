@@ -100,7 +100,7 @@ async def test_decodes_ldphcl_snapshot(make_pump, ldphcl_snapshot) -> None:
     device = await read(make_pump(ldphcl_snapshot))
 
     assert device.ch1_value == pytest.approx(7.51)  # pH
-    assert device.ch2_value == pytest.approx(0.46)  # free chlorine, ppm
+    assert device.ch2_value == pytest.approx(0.46)  # free chlorine, mg/l
     assert device.temperature == pytest.approx(17.6)
     assert device.probe_mv_ch1 == -27
     assert device.probe_mv_ch2 == 34
@@ -131,7 +131,7 @@ async def test_decodes_dosing_settings(make_pump, ldphcl_snapshot) -> None:
     assert device.ch1_pulse2_wait == 0
     assert device.ch1_pulse2_mode is PulseMode.DISABLED
 
-    # Chlorine: 13 p/min at 0.00 ppm, falling to 0 p/min at 0.45 ppm
+    # Chlorine: 13 p/min at 0.00 mg/l, falling to 0 p/min at 0.45 mg/l
     assert device.ch2_pulse1_val1 == pytest.approx(0.0)
     assert device.ch2_pulse1_val2 == pytest.approx(0.45)
     assert device.ch2_pulse1_perc1 == 13
@@ -145,7 +145,7 @@ async def test_decodes_dosing_settings(make_pump, ldphcl_snapshot) -> None:
         (0x0000, 0),
         (0x0100, 1),
         (0x0500, 5),
-        (0x0800, 8),  # recorded at 0.14 ppm chlorine
+        (0x0800, 8),  # recorded at 0.14 mg/l chlorine
         (0xFF00, 0),  # one-poll transient while the rate sits at zero
     ],
 )
@@ -362,7 +362,7 @@ def quick_confirm(monkeypatch):
         ("ph2_min_rate", 5, [(145, 5), (143, 0)]),
         ("ph2_pulse_speed", 3, [(147, 3)]),
         ("ph2_mode", "Proportional", [(149, 1)]),  # wait is already 0
-        # Cl relay 1: 40154-40164 (wire 153-163), ppm values
+        # Cl relay 1: 40154-40164 (wire 153-163), mg/l values
         ("cl1_max", 0.5, [(153, 50)]),
         ("cl1_min", 0.4, [(155, 40)]),
         ("cl1_max_rate", 12, [(157, 12)]),
@@ -469,7 +469,7 @@ async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
         ("ph1_min_rate", 2.5),
         ("ph1_pulse_speed", 100),
         ("ph1_mode", "Turbo"),
-        ("cl1_max", 20.01),
+        ("cl1_max", 10.01),
         ("flow_time", 100),
         ("tau", 31),
         ("feeding_delay", 61),
