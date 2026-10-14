@@ -60,6 +60,7 @@ model reports it as 0.
 | 40056 | 55 | 27 | int16 | Probe channel 1 (mV) |
 | 40058 | 57 | 28 | int16 | Probe channel 2 (mV) |
 | 40068–40078 | 67–77 | 33–38 | int16 | Channel 1 pulse output 1: val1, val2 (×100), perc1, perc2 (p/min), wait (min), mode |
+| 40140–40150 | 139–149 | 69–74 | int16 | Channel 1 pulse output 2: same layout |
 | 40154–40164 | 153–163 | 76–81 | int16 | Channel 2 pulse output: same layout |
 
 Pulse modes: 0 ON/OFF, 1 proportional, 2 disabled. In proportional mode the
@@ -87,11 +88,17 @@ controller:
 - **pH Max Pulse Rate / pH Min Pulse Rate** (perc1, perc2): proportional mode only.
 - **pH Pulse Speed** (wait): ON/OFF mode only.
 
+The channel's second pulse output (40140–40150) is shown as **pH Output 2
+Mode / Max Value / Min Value / Max Pulse Rate / Min Pulse Rate / Pulse Speed**,
+read-only sensors that show the stored settings in every working mode, and its
+rate as **pH Output 2 Pulse Rate** (40028). On the tested controller that
+output is disabled.
+
 Read groups in Home Assistant: the relay states fast (40024, 40032); readings,
 temperature, pulse rates and probe voltages medium (40002–40058, one request);
-the clock and the channel 1 dosing settings slow (40044–40078, one request).
+the clock and the channel 1 dosing settings slow (40044–40150, one request).
 Every group also reads both divisors (40004, 40008), so the fast group reads
-40004–40032 and the slow group 40004–40078, each in one request.
+40004–40032 and the slow group 40004–40150, each in one request.
 
 The tested LDPHCL now and then answers a read with zeros for a few seconds:
 divisors 0 (so no pH or Cl value), temperature 0.0 °C, probe voltages 0 mV and
@@ -142,8 +149,8 @@ order:
 | Proportional | wait = 0, mode = 1 |
 | Disabled | mode = 2 |
 
-Values the controller already holds are skipped. Channel 2's settings
-(40154–40164) are read but not written.
+Values the controller already holds are skipped. Channel 1's second output
+(40140–40150) and channel 2's settings (40154–40164) are read but not written.
 
 ## In Home Assistant
 
@@ -154,9 +161,14 @@ Values the controller already holds are skipped. Channel 2's settings
 | Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
 | pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
 | pH Pulse Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40030 | Medium |
+| pH Output 2 Pulse Rate | Sensor, p/min | | `pulse` | 40028 | Medium |
 | pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
 | pH Dosing Mode | Select | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078 | Slow |
 | pH Max Value, pH Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 | Slow |
 | pH Max Pulse Rate, pH Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 | Slow |
 | pH Pulse Speed | Number (input box), minutes | `duration` | `timer-cog-outline` | 40076 | Slow |
+| pH Output 2 Mode | Diagnostic sensor: ON/OFF, Proportional, Disabled | `enum` | as pH Dosing Mode | 40150 | Slow |
+| pH Output 2 Max Value, pH Output 2 Min Value | Diagnostic sensors | `ph` | `gauge-full`, `gauge-empty` | 40140, 40142 | Slow |
+| pH Output 2 Max Pulse Rate, pH Output 2 Min Pulse Rate | Diagnostic sensors, p/min | | `speedometer`, `speedometer-slow` | 40144, 40146 | Slow |
+| pH Output 2 Pulse Speed | Diagnostic sensor, minutes | `duration` | `timer-cog-outline` | 40148 | Slow |

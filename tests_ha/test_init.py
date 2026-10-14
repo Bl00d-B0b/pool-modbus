@@ -115,6 +115,11 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "select.dosing_pump_ph_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
     assert state(hass, "number.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
+    # The second pH output is read only and shown as stored, even while disabled.
+    assert state(hass, "sensor.dosing_pump_ph_output_2_mode") == "Disabled"
+    assert state(hass, "sensor.dosing_pump_ph_output_2_max_value") == "7.8"
+    assert state(hass, "sensor.dosing_pump_ph_output_2_max_pulse_rate") == "180"
+    assert state(hass, "sensor.dosing_pump_ph_output_2_pulse_rate") == "0"
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:

@@ -58,6 +58,14 @@ async def test_decodes_dosing_settings(make_pump, ldphcl_snapshot) -> None:
     assert device.ch1_pulse_wait == 0
     assert device.ch1_pulse_mode is PulseMode.PROPORTIONAL
 
+    # pH, second pulse output: stored settings of an output that is disabled
+    assert device.ch1_pulse2_val1 == pytest.approx(7.8)
+    assert device.ch1_pulse2_val2 == pytest.approx(7.3)
+    assert device.ch1_pulse2_perc1 == 180
+    assert device.ch1_pulse2_perc2 == 0
+    assert device.ch1_pulse2_wait == 0
+    assert device.ch1_pulse2_mode is PulseMode.DISABLED
+
     # Chlorine: 13 p/min at 0.00 ppm, falling to 0 p/min at 0.45 ppm
     assert device.ch2_pulse_val1 == pytest.approx(0.0)
     assert device.ch2_pulse_val2 == pytest.approx(0.45)
@@ -83,6 +91,23 @@ async def test_pulse_rate_is_the_high_byte(
     registers[wire_address(14)] = word  # 40030, chlorine pulse output
     device = await read(make_pump(registers))
     assert device.pulse_rate_ch2 == rate
+
+
+async def test_second_output_is_shown_as_stored_in_every_mode(make_pump, ldphcl_snapshot) -> None:
+    """The second pH output's settings are read only and stay visible while it is disabled."""
+    registers = dict(ldphcl_snapshot)
+    registers[wire_address(13)] = 0x0300  # 40028: 3 p/min on output 2
+    device = await read(make_pump(registers))
+    values = {v.name: v for v in get_device_type("emec_ld").values}
+    texts = {name: value_text(values[name], device) for name in values}
+    assert texts["pH Output 2 Pulse Rate"] == "3 p/min"
+    assert texts["pH Output 2 Mode"] == "Disabled"
+    assert texts["pH Output 2 Max Value"] == "7.8 pH"
+    assert texts["pH Output 2 Min Value"] == "7.3 pH"
+    assert texts["pH Output 2 Max Pulse Rate"] == "180 p/min"
+    assert texts["pH Output 2 Min Pulse Rate"] == "0 p/min"
+    assert texts["pH Output 2 Pulse Speed"] == "0 min"
+    assert not any(values[name].writable for name in texts if name.startswith("pH Output 2"))
 
 
 @pytest.mark.parametrize(

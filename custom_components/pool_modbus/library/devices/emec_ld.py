@@ -176,6 +176,14 @@ class EmecLD(Component):
     ch1_pulse_wait = integer(37, unit="min", writable=_whole(*SPEED_RANGE))
     ch1_pulse_mode = enum(38, PulseMode, writable=PulseMode)
 
+    # Channel 1 dosing, pulse output 2 (40140-40150); read only so far.
+    ch1_pulse2_val1 = gauge(69, 0.01)
+    ch1_pulse2_val2 = gauge(70, 0.01)
+    ch1_pulse2_perc1 = integer(71, unit="p/min")
+    ch1_pulse2_perc2 = integer(72, unit="p/min")
+    ch1_pulse2_wait = integer(73, unit="min")
+    ch1_pulse2_mode = enum(74, PulseMode)
+
     # Channel 2 proportional dosing (40154-40164).
     ch2_pulse_val1 = gauge(76, 0.01)
     ch2_pulse_val2 = gauge(77, 0.01)
@@ -391,6 +399,14 @@ VALUES = (
         icon="mdi:pulse",
     ),
     Value(
+        "pulse_rate_ph_2",
+        "pH Output 2 Pulse Rate",
+        lambda d: d.pulse_rate_ch1_2,
+        "p/min",
+        category="measurement",
+        icon="mdi:pulse",
+    ),
+    Value(
         "probe_ph",
         "pH Probe Voltage",
         lambda d: d.probe_mv_ch1,
@@ -516,6 +532,71 @@ VALUES = (
         maximum=SPEED_RANGE[1],
         step=1,
         number_mode="box",
+        icon="mdi:timer-cog-outline",
+    ),
+    # Channel 1's second pulse output (40140-40150), shown as it is stored; not
+    # written yet, and shown in every working mode.
+    Value(
+        "ph2_mode",
+        "pH Output 2 Mode",
+        lambda d: d.ch1_pulse2_mode,
+        category="setting",
+        feature="dosing_settings",
+        device_class="enum",
+        options=tuple(mode.label for mode in PulseMode),
+        icons={
+            "ON/OFF": "mdi:toggle-switch-outline",
+            "Proportional": "mdi:chart-line-variant",
+            "Disabled": "mdi:cancel",
+        },
+        icon="mdi:tune-variant",
+    ),
+    Value(
+        "ph2_max",
+        "pH Output 2 Max Value",
+        lambda d: d.ch1_pulse2_val1,
+        "pH",
+        category="setting",
+        device_class="ph",
+        feature="dosing_settings",
+        icon="mdi:gauge-full",
+    ),
+    Value(
+        "ph2_min",
+        "pH Output 2 Min Value",
+        lambda d: d.ch1_pulse2_val2,
+        "pH",
+        category="setting",
+        device_class="ph",
+        feature="dosing_settings",
+        icon="mdi:gauge-empty",
+    ),
+    Value(
+        "ph2_max_rate",
+        "pH Output 2 Max Pulse Rate",
+        lambda d: d.ch1_pulse2_perc1,
+        "p/min",
+        category="setting",
+        feature="dosing_settings",
+        icon="mdi:speedometer",
+    ),
+    Value(
+        "ph2_min_rate",
+        "pH Output 2 Min Pulse Rate",
+        lambda d: d.ch1_pulse2_perc2,
+        "p/min",
+        category="setting",
+        feature="dosing_settings",
+        icon="mdi:speedometer-slow",
+    ),
+    Value(
+        "ph2_pulse_speed",
+        "pH Output 2 Pulse Speed",
+        lambda d: d.ch1_pulse2_wait,
+        "min",
+        category="setting",
+        device_class="duration",
+        feature="dosing_settings",
         icon="mdi:timer-cog-outline",
     ),
 )
