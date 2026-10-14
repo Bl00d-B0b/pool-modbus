@@ -93,6 +93,23 @@ async def test_usa_units_format(make_pump, ldphcl_snapshot) -> None:
     assert value_text(values["temperature"], device) == "unavailable"
 
 
+async def test_europe_units_format(make_pump, ldphcl_snapshot) -> None:
+    """Europe format: °C × 10, month in the date word's high byte, a 24-hour hour that the
+    PM flag does not change (seen live 2026-10-14: hour 19 with PM on, and with PM off)."""
+    registers = dict(ldphcl_snapshot)
+    registers[51] = 157  # 40052
+    registers[43] = 0x0A0E  # 40044: month 10 high, day 14 low
+    registers[45] = (9 << 8) | 26  # 40046: hour 9, year 26
+    registers[47] = 5  # 40048: minute
+    for pm in (False, True):
+        device = await read(make_pump(registers, coils={47: False, 46: pm}))
+        values = {v.key: v for v in get_device_type("emec_ld").values}
+        assert device.clock == datetime(2026, 10, 14, 9, 5)
+        assert value_text(values["units_format"], device) == "Europe"
+        assert value_text(values["temperature"], device) == "15.7 °C"
+        assert value_text(values["temperature_f"], device) == "unavailable"
+
+
 @pytest.mark.parametrize(
     ("hour", "pm", "expected"),
     [(9, False, 9), (12, False, 0), (12, True, 12), (7, True, 19), (11, True, 23)],
