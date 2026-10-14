@@ -82,7 +82,7 @@ The library never reads the password register (40542).
 Named as on an LDPHCL, where channel 1 is pH and channel 2 is free chlorine.
 Channel 1 has two pulse outputs and channel 2 one, shown as **pH Relay 1**
 (40068–40078, rate 40026), **pH Relay 2** (40140–40150, rate 40028) and
-**Cl Relay 1** (40154–40164, rate 40030), each with the same seven values:
+**Cl Relay** (40154–40164, rate 40030), each with the same seven values:
 Pulse Rate, Dosing Mode, Max Value, Min Value, Max Pulse Rate, Min Pulse Rate
 and Pulse Speed (pH values in pH, Cl values in ppm). The dosing settings
 follow the output's working mode, as on the controller:
@@ -131,7 +131,7 @@ Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
 within about 2 s, so the read-back, not the reply, decides whether a write
 worked.
 
-| Setting | pH Relay 1 | pH Relay 2 | Cl Relay 1 | Range |
+| Setting | pH Relay 1 | pH Relay 2 | Cl Relay | Range |
 |---|---|---|---|---|
 | Max Value, Min Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–20.00 ppm (a library limit, the controller's is not documented) |
 | Max Pulse Rate, Min Pulse Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 40158, 40160 | 0–180 p/min |
@@ -150,7 +150,7 @@ perc1 = 0. A working mode is entered by writing its settings in this order:
 | Disabled | mode = 2 |
 
 Values the controller already holds are skipped. Writes to pH relay 1 were
-tested live (2026-10-05); pH relay 2 and Cl relay 1 use the same code on
+tested live (2026-10-05); pH relay 2 and Cl relay use the same code on
 registers of the same layout, but their writes have not been tried on a
 controller yet.
 
@@ -162,17 +162,19 @@ controller yet.
 | Cl Level | Sensor, ppm | | `flask-outline` | 40006–40008 | Medium |
 | Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
 | pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
-| pH Relay 1/2 Pulse Rate, Cl Relay 1 Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40028, 40030 | Medium |
+| pH Relay 1/2 Pulse Rate, Cl Relay Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40028, 40030 | Medium |
 | pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
-| pH Relay 1/2 Dosing Mode, Cl Relay 1 Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
+| pH Relay 1/2 Dosing Mode, Cl Relay Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
 | pH Relay 1/2 Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
-| Cl Relay 1 Max Value, Min Value | Numbers (input box), ppm, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
-| pH Relay 1/2, Cl Relay 1 Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
-| pH Relay 1/2, Cl Relay 1 Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
+| Cl Relay Max Value, Min Value | Numbers (input box), ppm, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
+| pH Relay 1/2, Cl Relay Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
+| pH Relay 1/2, Cl Relay Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
 
-Entity ids carry the relay number: `select.dosing_pump_ph_relay_1_dosing_mode`,
-`number.dosing_pump_ph_relay_2_max_value`, `sensor.dosing_pump_cl_relay_1_pulse_rate`.
+Entity ids carry the relay number where there is more than one output:
+`select.dosing_pump_ph_relay_1_dosing_mode`, `number.dosing_pump_ph_relay_2_max_value`;
+chlorine has one pulse output, so its entities are just "Cl Relay ...":
+`sensor.dosing_pump_cl_relay_pulse_rate`, `select.dosing_pump_cl_relay_dosing_mode`.
 Before 2026-10-14 pH relay 1's entities had no number ("pH Dosing Mode",
 `number.dosing_pump_ph_max_value`) and the Cl rate was "Cl Pulse Rate"; an
 installation from before is moved to the new unique ids and, when the entity

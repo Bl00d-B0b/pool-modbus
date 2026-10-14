@@ -348,12 +348,12 @@ _RATE_FIELDS = {(1, 1): "pulse_rate_ch1", (1, 2): "pulse_rate_ch1_2", (2, 1): "p
 
 def _output_values(channel: int, output: int) -> tuple[Value, ...]:
     """The pulse rate and the dosing settings of one pulse output, named "pH Relay 1",
-    "pH Relay 2" and "Cl Relay 1" as the user calls the dosing pumps on them.
+    "pH Relay 2" and "Cl Relay" as the user calls the dosing pumps on them.
     The pump only uses each setting in some working modes."""
     symbol, key, unit, device_class, value_range = (
         ("pH", "ph", "pH", "ph", PH_RANGE) if channel == 1 else ("Cl", "cl", "ppm", None, CL_RANGE)
     )
-    prefix = f"{symbol} Relay {output}"
+    prefix = f"{symbol} Relay {output}" if channel == 1 else f"{symbol} Relay"  # Cl has one
     f = lambda name: _field(channel, output, name)  # noqa: E731
     mode_of = lambda d: getattr(d, f("mode"))  # noqa: E731
     writer = lambda name: lambda d, v: write_if_changed(d, f(name), v)  # noqa: E731

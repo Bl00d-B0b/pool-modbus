@@ -210,7 +210,7 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Relay                   On
   Cl Relay                   On
   pH Relay 1 Pulse Rate      0 p/min
-  Cl Relay 1 Pulse Rate      0 p/min
+  Cl Relay Pulse Rate        0 p/min
   pH Relay 2 Pulse Rate      0 p/min
   pH Probe Voltage           -27 mV
   Cl Probe Voltage           34 mV
@@ -227,12 +227,13 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Relay 2 Max Pulse Rate  unavailable
   pH Relay 2 Min Pulse Rate  unavailable
   pH Relay 2 Pulse Speed     unavailable
-  Cl Relay 1 Dosing Mode     Proportional
-  Cl Relay 1 Max Value       0.0 ppm
-  Cl Relay 1 Min Value       0.45 ppm
-  Cl Relay 1 Max Pulse Rate  13 p/min
-  Cl Relay 1 Min Pulse Rate  0 p/min
-  Cl Relay 1 Pulse Speed     unavailable
+  Cl Relay Dosing Mode       Proportional
+  Cl Relay Max Value         0.0 ppm
+  Cl Relay Min Value         0.45 ppm
+  Cl Relay Max Pulse Rate    13 p/min
+  Cl Relay Min Pulse Rate    0 p/min
+  Cl Relay Pulse Speed       unavailable
+
 
 
 ```

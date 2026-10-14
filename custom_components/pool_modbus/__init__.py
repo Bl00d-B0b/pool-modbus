@@ -56,25 +56,31 @@ RENAMED_KEYS = {
 }
 """Value and action keys that were renamed: old key to new key."""
 
-OLD_NAMES = {
-    "pulse_rate_ph_1": "pH Pulse Rate",
-    "ph1_mode": "pH Dosing Mode",
-    "ph1_max": "pH Max Value",
-    "ph1_min": "pH Min Value",
-    "ph1_max_rate": "pH Max Pulse Rate",
-    "ph1_min_rate": "pH Min Pulse Rate",
-    "ph1_pulse_speed": "pH Pulse Speed",
-    "pulse_rate_ph_2": "pH Output 2 Pulse Rate",
-    "ph2_mode": "pH Output 2 Mode",
-    "ph2_max": "pH Output 2 Max Value",
-    "ph2_min": "pH Output 2 Min Value",
-    "ph2_max_rate": "pH Output 2 Max Pulse Rate",
-    "ph2_min_rate": "pH Output 2 Min Pulse Rate",
-    "ph2_pulse_speed": "pH Output 2 Pulse Speed",
-    "pulse_rate_cl_1": "Cl Pulse Rate",
+OLD_NAMES: dict[str, tuple[str, ...]] = {
+    "pulse_rate_ph_1": ("pH Pulse Rate",),
+    "ph1_mode": ("pH Dosing Mode",),
+    "ph1_max": ("pH Max Value",),
+    "ph1_min": ("pH Min Value",),
+    "ph1_max_rate": ("pH Max Pulse Rate",),
+    "ph1_min_rate": ("pH Min Pulse Rate",),
+    "ph1_pulse_speed": ("pH Pulse Speed",),
+    "pulse_rate_ph_2": ("pH Output 2 Pulse Rate",),
+    "ph2_mode": ("pH Output 2 Mode",),
+    "ph2_max": ("pH Output 2 Max Value",),
+    "ph2_min": ("pH Output 2 Min Value",),
+    "ph2_max_rate": ("pH Output 2 Max Pulse Rate",),
+    "ph2_min_rate": ("pH Output 2 Min Pulse Rate",),
+    "ph2_pulse_speed": ("pH Output 2 Pulse Speed",),
+    "pulse_rate_cl_1": ("Cl Pulse Rate", "Cl Relay 1 Pulse Rate"),
+    "cl1_mode": ("Cl Relay 1 Dosing Mode",),
+    "cl1_max": ("Cl Relay 1 Max Value",),
+    "cl1_min": ("Cl Relay 1 Min Value",),
+    "cl1_max_rate": ("Cl Relay 1 Max Pulse Rate",),
+    "cl1_min_rate": ("Cl Relay 1 Min Pulse Rate",),
+    "cl1_pulse_speed": ("Cl Relay 1 Pulse Speed",),
 }
-"""Former entity names by (new) key: an entity still on the id made from its old
-name moves to the id of the new name, with its history."""
+"""Former entity names by (new) key: an entity still on the id made from one of
+its old names moves to the id of the new name, with its history."""
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -150,10 +156,10 @@ def _renamed_unique_id(hass: HomeAssistant, entry: PoolModbusConfigEntry):
         updates: dict[str, str] = {}
         if new_key != key:
             updates["new_unique_id"] = prefix + new_key
-        old_name = OLD_NAMES.get(new_key)
-        if old_name and new_key in names:
+        if new_key in names:
             domain = registered.domain
-            if registered.entity_id == entity_id(domain, entry, old_name):
+            old_ids = {entity_id(domain, entry, name) for name in OLD_NAMES.get(new_key, ())}
+            if registered.entity_id in old_ids:
                 wanted = entity_id(domain, entry, names[new_key])
                 if wanted != registered.entity_id and registry.async_get(wanted) is None:
                     updates["new_entity_id"] = wanted

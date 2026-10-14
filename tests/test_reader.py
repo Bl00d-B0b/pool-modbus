@@ -108,8 +108,8 @@ async def test_output_uses_home_assistant_names(bus) -> None:
         "pH Relay 1 Dosing Mode Proportional",
         "pH Relay 2 Dosing Mode Disabled",
         "pH Relay 2 Max Value unavailable",
-        "Cl Relay 1 Dosing Mode Proportional",
-        "Cl Relay 1 Min Value 0.45 ppm",
+        "Cl Relay Dosing Mode Proportional",
+        "Cl Relay Min Value 0.45 ppm",
     ):
         assert expected in lines
 
