@@ -108,6 +108,40 @@ async def test_mode_switch(hass: HomeAssistant) -> None:
     assert state(hass, MAX_RATE) == STATE_UNAVAILABLE  # proportional mode only
 
 
+async def test_settings_a_mode_does_not_use_are_hidden(hass: HomeAssistant) -> None:
+    """Like the controller's menu: only the settings of the current mode show on the
+    device page; the others are hidden by the integration and come back with the mode."""
+    unit = fake_unit("emec_ld")
+    await add(hass, "emec_ld", unit)
+    registry = er.async_get(hass)
+
+    assert registry.async_get(SPEED).hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert registry.async_get(MAX_RATE).hidden_by is None
+    assert registry.async_get(PH_MAX).hidden_by is None
+
+    await select(hass, "ON/OFF")
+
+    assert registry.async_get(SPEED).hidden_by is None
+    assert registry.async_get(MAX_RATE).hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert registry.async_get(MIN_RATE).hidden_by is er.RegistryEntryHider.INTEGRATION
+
+    await select(hass, "Disabled")
+
+    assert registry.async_get(PH_MAX).hidden_by is er.RegistryEntryHider.INTEGRATION
+    assert registry.async_get(MODE).hidden_by is None  # the mode itself always shows
+
+
+async def test_a_setting_hidden_by_the_user_stays_hidden(hass: HomeAssistant) -> None:
+    unit = fake_unit("emec_ld")
+    await add(hass, "emec_ld", unit)
+    registry = er.async_get(hass)
+    registry.async_update_entity(PH_MAX, hidden_by=er.RegistryEntryHider.USER)
+
+    await select(hass, "ON/OFF")  # pH Max is used in ON/OFF mode, but the user hid it
+
+    assert registry.async_get(PH_MAX).hidden_by is er.RegistryEntryHider.USER
+
+
 async def test_values_the_pump_does_not_take(hass: HomeAssistant) -> None:
     unit = fake_unit("emec_ld")
     await add(hass, "emec_ld", unit)

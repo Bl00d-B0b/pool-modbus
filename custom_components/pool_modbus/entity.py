@@ -15,7 +15,9 @@ from homeassistant.const import (
     UnitOfTemperature,
     UnitOfTime,
 )
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import slugify
 from modbus_connection import ModbusError
@@ -114,6 +116,34 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
         return self.device_value.available is None or bool(
             self.device_value.available(self.coordinator.device)
         )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self._hide_when_not_applicable()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._hide_when_not_applicable()
+        super()._handle_coordinator_update()
+
+    @callback
+    def _hide_when_not_applicable(self) -> None:
+        """A setting the device's working mode does not use is hidden on the device
+        page, like a control the device lacks, rather than shown unavailable; it comes
+        back when the mode uses it again. An entity the user hid stays hidden."""
+        value = self.device_value
+        if value.available is None or not self.coordinator.last_update_success:
+            return
+        registry = er.async_get(self.hass)
+        registered = registry.async_get(self.entity_id)
+        if registered is None or registered.hidden_by is er.RegistryEntryHider.USER:
+            return
+        hide = not value.available(self.coordinator.device)
+        hidden = registered.hidden_by is er.RegistryEntryHider.INTEGRATION
+        if hide != hidden:
+            registry.async_update_entity(
+                self.entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION if hide else None
+            )
 
     async def async_write_value(self, new: object) -> None:
         write = self.device_value.write

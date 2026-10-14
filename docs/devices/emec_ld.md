@@ -87,10 +87,14 @@ Pulse Rate, Dosing Mode, Max Value, Min Value, Max Pulse Rate, Min Pulse Rate
 and Pulse Speed (pH values in pH, Cl values in ppm). The dosing settings
 follow the output's working mode, as on the controller:
 
-- **Max Value / Min Value** (val1, val2): unavailable when the output is
-  disabled.
+- **Max Value / Min Value** (val1, val2): not used when the output is disabled.
 - **Max Pulse Rate / Min Pulse Rate** (perc1, perc2): proportional mode only.
 - **Pulse Speed** (wait): ON/OFF mode only.
+
+In Home Assistant a setting the current mode does not use is unavailable and
+hidden (registry `hidden_by: integration`), so the device page shows only the
+settings the output uses, like the controller's own menu; it comes back when the
+mode changes. A setting the user hid stays hidden.
 
 On the tested controller output 2 is disabled, so only its Dosing Mode and
 Pulse Rate show a value.
