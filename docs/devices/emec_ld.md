@@ -103,9 +103,11 @@ read before and after:
   left the year at 2000, which only the keypad can correct. The library does not
   write the clock.
 - **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
-  changed one coil (128-coil read position 41) and the clock's year byte from 0
-  to 1, but not the hour display (17 stayed 17), so it is not the 12/24 h format.
-  The date format still has to be found on the keypad.
+  changes one coil (128-coil read position 41) and not the hour (17 stays 17),
+  so it is not the 12/24 h format; once the clock's year byte moved from 0 to 1
+  at the same time, but a second try did not repeat that. The date format still
+  has to be found on the keypad. Year values 6, 26 and 0x26 in the setpoint's
+  unexplained bytes (41624 low, 41628 high) did not set the year either.
 - **Fixed PWM on and off times** of the switching relays: not documented and not
   found yet.
 
