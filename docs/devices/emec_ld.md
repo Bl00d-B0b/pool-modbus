@@ -107,9 +107,9 @@ and takes the slice it needs (`EmecUnit.read_coils`).
 | Coil | Shown as | Source |
 |---|---|---|
 | 11 | **Standby** (binary): on while the controller is held in standby, outputs off | seen live 2026-10-14: set within a minute of the filtration pump stopping, both relay outputs went Off; cleared within 15 s of flow returning |
-| 6 | **Start Delay** (binary, `running`): on while the start delay runs after flow or power returns | seen live 2026-10-14: on from flow return until dosing resumed 5 min 14 s later (40522 = 5 min) |
-| 5 | **No Flow Alarm** (binary, `problem`) | the user's notes for this controller; not seen yet |
-| 7 | **pH Tank Empty** (binary, `problem`) | the user's notes; not seen yet |
+| 6 | **No Flow** (binary, `problem`): on while the controller sees no flow and holds dosing, outputs off | seen live 2026-10-14 while the display said "no flow": for the flow time after flow returned (from flow return until dosing resumed 5 min 14 s later), and once with the filtration running |
+| 7 | **Cl Tank Empty** (binary, `problem`) | the user's notes, read as counting from 0 (their "5 = no flow" is coil 6); not seen yet |
+| 8 | **pH Tank Empty** (binary, `problem`) | the user's notes, read the same way; not seen yet |
 | all | **Alarm Coils** (diagnostic text): the set coils, e.g. "6, 11", or "None" | for naming the rest when they occur |
 
 The protocol description lists the coils as 1 Ch1 level 1, 2 Ch1 level 2,
@@ -126,9 +126,10 @@ observed and noted ones are named.
 | 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it |
 | 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
 
-40520 (tau) is not read. The controller gives no countdown of the start
-delay; Home Assistant can compute it from the Start Delay sensor's last change
-and the Start Delay Time.
+40520 (tau) is not read. The controller gives no countdown of the wait after
+flow returns (every readable register was scanned during one on 2026-10-14 and
+none counted down); Home Assistant can compute it from the moment the flow
+contact closed and the Flow Time.
 
 Read groups in Home Assistant: the relay states and the alarm coils fast
 (40024, 40032; coils 0–15); readings, temperature, pulse rates and probe
@@ -181,11 +182,15 @@ Disabled makes the controller dose without flow, which its manual warns against.
 In proportional mode the controller doses from 0 p/min at one pH value to the
 set rate at the other, so setting one end's rate sets the other end's to 0:
 Max Pulse Rate writes perc1, then perc2 = 0; Min Pulse Rate writes perc2, then
-perc1 = 0. A working mode is entered by writing its settings in this order:
+perc1 = 0. A working mode is entered by writing its settings in this order,
+which is what the controller's own keypad does (watched on 2026-10-14: ON/OFF
+forces the top rate to 100 and keeps the interval, Proportional zeroes the
+interval and keeps the rates, Off changes nothing else; the stored values show
+up to a minute after the keypad confirms them):
 
 | Mode | Writes, in order |
 |---|---|
-| ON/OFF | perc1 = 100, perc2 = 0, wait = 1, mode = 0 |
+| ON/OFF | perc1 = 100, perc2 = 0, mode = 0 (the pulse interval `wait` stays as it is) |
 | Proportional | wait = 0, mode = 1 |
 | Disabled | mode = 2 |
 
@@ -210,8 +215,8 @@ controller yet.
 | Cl Relay Max Value, Min Value | Numbers (input box), ppm, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
 | pH Relay 1/2, Cl Relay Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
 | pH Relay 1/2, Cl Relay Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
-| Standby, Start Delay | Binary sensors | , `running` | `pause-circle` / `play-circle`, `timer-sand` / `timer-outline` | coils 11, 6 | Fast |
-| No Flow Alarm, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 5, 7 | Fast |
+| Standby | Binary sensor | | `pause-circle` / `play-circle` | coil 11 | Fast |
+| No Flow, Cl Tank Empty, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 6, 7, 8 | Fast |
 | Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
 | Start Delay Time | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |

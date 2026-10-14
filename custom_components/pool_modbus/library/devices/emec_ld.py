@@ -173,16 +173,18 @@ class EmecLD(Component):
 
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
-    # filtration pump was off (standby), coil 6 for the 5 minutes after flow came
-    # back (the start delay, 40522). Coils 5 and 7 follow the user's notes.
+    # filtration pump was off (standby); coil 6 whenever the display says "no flow":
+    # for the flow time after flow came back, and once while the filtration ran.
+    # The tank coils follow the user's notes, read as counting from 0 (their
+    # "5 = no flow" is coil 6): 7 = Cl tank empty, 8 = pH tank empty.
     alarm_coil_01 = coil(0)
     alarm_coil_02 = coil(1)
     alarm_coil_03 = coil(2)
     alarm_coil_04 = coil(3)
-    alarm_coil_05 = coil(4)  # no flow alarm
-    alarm_coil_06 = coil(5)  # start delay running
-    alarm_coil_07 = coil(6)  # pH tank empty
-    alarm_coil_08 = coil(7)
+    alarm_coil_05 = coil(4)
+    alarm_coil_06 = coil(5)  # no flow
+    alarm_coil_07 = coil(6)  # Cl tank empty (user's note)
+    alarm_coil_08 = coil(7)  # pH tank empty (user's note)
     alarm_coil_09 = coil(8)
     alarm_coil_10 = coil(9)
     alarm_coil_11 = coil(10)  # standby (no flow)
@@ -310,17 +312,18 @@ class EmecLD(Component):
         return _pulse_rate(self.pulse_rate_ch2_raw)
 
     @property
-    def no_flow_alarm(self) -> bool | None:
-        return self.alarm_coil_05
-
-    @property
-    def start_delay_running(self) -> bool | None:
-        """On for the start delay (40522) after flow or power returns; dosing waits."""
+    def no_flow(self) -> bool | None:
+        """On while the controller sees no flow and holds dosing: the outputs stay off,
+        also for the flow time (40524) after the flow contact closes again."""
         return self.alarm_coil_06
 
     @property
-    def ph_tank_empty(self) -> bool | None:
+    def cl_tank_empty(self) -> bool | None:
         return self.alarm_coil_07
+
+    @property
+    def ph_tank_empty(self) -> bool | None:
+        return self.alarm_coil_08
 
     @property
     def standby(self) -> bool | None:
@@ -392,7 +395,11 @@ def _field(channel: int, output: int, name: str) -> str:
 def _mode_steps(channel: int, output: int, mode: PulseMode) -> tuple[tuple[str, Any], ...]:
     f = lambda name: _field(channel, output, name)  # noqa: E731
     if mode is PulseMode.ON_OFF:
-        return ((f("perc1"), 100), (f("perc2"), 0), (f("wait"), 1), (f("mode"), mode))
+        return (
+            (f("perc1"), 100),
+            (f("perc2"), 0),
+            (f("mode"), mode),
+        )  # wait stays, as on the keypad
     if mode is PulseMode.PROPORTIONAL:
         return ((f("wait"), 0), (f("mode"), mode))
     return ((f("mode"), mode),)
@@ -641,24 +648,24 @@ VALUES = (
         icon_off="mdi:play-circle",
     ),
     Value(
-        "start_delay",
-        "Start Delay",
-        lambda d: d.start_delay_running,
-        binary=True,
-        device_class="running",
-        feature="alarms",
-        icon="mdi:timer-sand",
-        icon_off="mdi:timer-outline",
-    ),
-    Value(
-        "no_flow_alarm",
-        "No Flow Alarm",
-        lambda d: d.no_flow_alarm,
+        "no_flow",
+        "No Flow",
+        lambda d: d.no_flow,
         binary=True,
         device_class="problem",
         feature="alarms",
         icon="mdi:water-off",
         icon_off="mdi:water-check",
+    ),
+    Value(
+        "cl_tank_empty",
+        "Cl Tank Empty",
+        lambda d: d.cl_tank_empty,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:cup-off-outline",
+        icon_off="mdi:cup-outline",
     ),
     Value(
         "ph_tank_empty",

@@ -234,8 +234,8 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Relay Min Pulse Rate    0 p/min
   Cl Relay Pulse Speed       unavailable
   Standby                    off
-  Start Delay                off
-  No Flow Alarm              off
+  No Flow                    off
+  Cl Tank Empty              off
   pH Tank Empty              off
   Alarm Coils                None
   Start Delay Time           5 min

@@ -40,16 +40,17 @@ async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_sn
 
 
 async def test_alarm_coils(make_pump, ldphcl_snapshot) -> None:
-    """Coil 11 = standby, coil 6 = start delay (both seen live), numbered from 1."""
+    """Coil 11 = standby, coil 6 = no flow (both seen live), numbered from 1."""
     device = await read(make_pump(ldphcl_snapshot, coils={10: True}))
     assert device.standby is True
-    assert device.start_delay_running is False
-    assert device.no_flow_alarm is False
+    assert device.no_flow is False
+    assert device.cl_tank_empty is False
     assert device.active_alarm_coils == "11"
-    device = await read(make_pump(ldphcl_snapshot, coils={5: True, 4: True}))
-    assert device.start_delay_running is True
-    assert device.no_flow_alarm is True
-    assert device.active_alarm_coils == "5, 6"
+    device = await read(make_pump(ldphcl_snapshot, coils={5: True, 6: True, 7: True}))
+    assert device.no_flow is True
+    assert device.cl_tank_empty is True
+    assert device.ph_tank_empty is True
+    assert device.active_alarm_coils == "6, 7, 8"
     device = await read(make_pump(ldphcl_snapshot))
     assert device.active_alarm_coils == "None"
 
@@ -388,8 +389,8 @@ async def test_a_setting_the_pump_holds_is_not_written(make_pump, ldphcl_snapsho
 @pytest.mark.parametrize(
     ("label", "writes"),
     [
-        # rate 100 (min rate already 0), one pulse a minute, then the mode
-        ("ON/OFF", [(71, 100), (75, 1), (77, 0)]),
+        # rate 100 (min rate already 0), then the mode; the pulse interval stays
+        ("ON/OFF", [(71, 100), (77, 0)]),
         ("Disabled", [(77, 2)]),
     ],
 )
