@@ -124,6 +124,12 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "select.dosing_pump_cl_relay_dosing_mode") == "Proportional"
     assert state(hass, "number.dosing_pump_cl_relay_min_value") == "0.45"
     assert state(hass, "sensor.dosing_pump_cl_relay_pulse_rate") == "0"
+    # Alarm coils (none set in the snapshot) and the timing settings.
+    assert state(hass, "binary_sensor.dosing_pump_standby") == "off"
+    assert state(hass, "binary_sensor.dosing_pump_start_delay") == "off"
+    assert state(hass, "sensor.dosing_pump_alarm_coils") == "None"
+    assert state(hass, "number.dosing_pump_start_delay_time") == "5"
+    assert state(hass, "sensor.dosing_pump_flow_mode") == "Direct"
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:

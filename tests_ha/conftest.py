@@ -48,6 +48,7 @@ class FakeUnit:
 
     def __init__(self, registers: dict[int, int], *, odd_step: bool = False) -> None:
         self.registers = registers
+        self.coils: dict[int, bool] = {}
         self.step = 2 if odd_step else 1
         self.fail: Exception | None = None
         self.fail_once: Exception | None = None
@@ -75,6 +76,11 @@ class FakeUnit:
                 if entry[1] == 0:
                     del self._stale[stale_address]
         return words
+
+    async def read_coils(self, address: int, count: int) -> list[bool]:
+        if self.fail is not None:
+            raise self.fail
+        return [self.coils.get(address + i, False) for i in range(count)]
 
     async def write_register(self, address: int, value: int) -> None:
         if self.fail is not None:

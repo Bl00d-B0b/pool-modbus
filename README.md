@@ -95,7 +95,7 @@ Optional parts, each a checkbox:
 | Device | Optional part | Default |
 |---|---|---|
 | Pool controller | Backwash schedule, clock | On |
-| EMEC LD | Dosing settings (pH and Cl pulse outputs), probe voltages, clock | On |
+| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing), alarms and standby (coils), probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches, numbers, selects, times or lights; the T010
@@ -233,6 +233,14 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Relay Max Pulse Rate    13 p/min
   Cl Relay Min Pulse Rate    0 p/min
   Cl Relay Pulse Speed       unavailable
+  Standby                    off
+  Start Delay                off
+  No Flow Alarm              off
+  pH Tank Empty              off
+  Alarm Coils                None
+  Start Delay Time           5 min
+  Flow Time                  5 min
+  Flow Mode                  Direct
 
 
 

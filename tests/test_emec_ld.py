@@ -9,7 +9,14 @@ from modbus_connection import ModbusError
 
 from pool_modbus import update_or_keep
 from pool_modbus.devices import ImplausibleReadError, get_device_type
-from pool_modbus.devices.emec_ld import EmecLD, EmecUnit, OutputState, PulseMode, wire_address
+from pool_modbus.devices.emec_ld import (
+    EmecLD,
+    EmecUnit,
+    FlowMode,
+    OutputState,
+    PulseMode,
+    wire_address,
+)
 from pool_modbus.reader import value_text
 
 
@@ -24,11 +31,44 @@ def test_wire_address(index: int, wire: int) -> None:
     assert wire_address(index) == wire
 
 
-async def test_one_read_from_an_odd_address(make_pump, ldphcl_snapshot) -> None:
+async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    assert pump.requests == [("holding", 1, 82)]  # values 0-81; the controller allows 125
+    # values 0-81 and 260-262 (the timing block) in two reads, coils 0-15 in one
+    assert sorted(pump.requests) == [("coils", 0, 16), ("holding", 1, 82), ("holding", 521, 3)]
     assert pump.message_spacing == pytest.approx(0.1)
+
+
+async def test_alarm_coils(make_pump, ldphcl_snapshot) -> None:
+    """Coil 11 = standby, coil 6 = start delay (both seen live), numbered from 1."""
+    device = await read(make_pump(ldphcl_snapshot, coils={10: True}))
+    assert device.standby is True
+    assert device.start_delay_running is False
+    assert device.no_flow_alarm is False
+    assert device.active_alarm_coils == "11"
+    device = await read(make_pump(ldphcl_snapshot, coils={5: True, 4: True}))
+    assert device.start_delay_running is True
+    assert device.no_flow_alarm is True
+    assert device.active_alarm_coils == "5, 6"
+    device = await read(make_pump(ldphcl_snapshot))
+    assert device.active_alarm_coils == "None"
+
+
+async def test_coils_are_always_read_as_the_whole_block(make_pump, ldphcl_snapshot) -> None:
+    pump = make_pump(ldphcl_snapshot, coils={10: True})
+    unit = EmecUnit(pump)
+    assert await unit.read_coils(10, 1) == [True]
+    assert await unit.read_coils(4, 3) == [False, False, False]
+    assert pump.requests == [("coils", 0, 16), ("coils", 0, 16)]
+    with pytest.raises(ValueError):
+        await unit.read_coils(16, 1)
+
+
+async def test_timing_values(make_pump, ldphcl_snapshot) -> None:
+    device = await read(make_pump(ldphcl_snapshot))
+    assert device.start_delay_minutes == 5
+    assert device.flow_time == 5
+    assert device.flow_mode is FlowMode.DIRECT
 
 
 async def test_decodes_ldphcl_snapshot(make_pump, ldphcl_snapshot) -> None:
@@ -303,6 +343,7 @@ def quick_confirm(monkeypatch):
         ("cl1_max_rate", 12, [(157, 12)]),
         ("cl1_min_rate", 4, [(159, 4), (157, 0)]),
         ("cl1_mode", "Disabled", [(163, 2)]),
+        ("start_delay_time", 4, [(521, 4)]),  # 40522
     ],
 )
 async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, writes) -> None:

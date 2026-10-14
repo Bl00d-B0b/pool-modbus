@@ -25,8 +25,9 @@ class FakeEmecPump:
     value. ``failed_reads`` makes that many reads after a write fail.
     """
 
-    def __init__(self, registers: dict[int, int]) -> None:
+    def __init__(self, registers: dict[int, int], coils: dict[int, bool] | None = None) -> None:
         self.registers = registers
+        self.coils = coils or {}
         self.requests: list[tuple[str, int, int]] = []
         self.message_spacing = 0.0
         self.connected = True
@@ -34,6 +35,15 @@ class FakeEmecPump:
         self.lose_writes = False
         self.failed_reads = 0
         self._failing_reads = 0
+
+    async def read_coils(self, address: int, count: int) -> list[bool]:
+        """Function 01; the real controller only answers a read of 0-15 consistently."""
+        self.requests.append(("coils", address, count))
+        assert (address, count) == (0, 16), f"coil read {address}+{count}: only 0-15 is stable"
+        if self._failing_reads:
+            self._failing_reads -= 1
+            raise GatewayTargetError
+        return [bool(self.coils.get(address + i, False)) for i in range(count)]
 
     def set_message_spacing(self, seconds: float) -> None:
         self.message_spacing = seconds

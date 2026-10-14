@@ -13,7 +13,7 @@ from enum import IntEnum
 from typing import Any
 
 from modbus_connection import ModbusUnit
-from modbus_connection.model import Component, PackedBitsField, bits, enum, gauge, integer
+from modbus_connection.model import Component, PackedBitsField, bits, coil, enum, gauge, integer
 
 from .base import DeviceType, Feature, ImplausibleReadError, Value
 from .reading import update_or_keep
@@ -41,6 +41,10 @@ def wire_address(index: int) -> int:
     return 2 * index + 1
 
 
+COIL_BLOCK = 16
+"""Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
+
+
 class EmecUnit:
     """A ``ModbusUnit`` view that maps EMEC value indices to odd wire addresses.
 
@@ -62,7 +66,15 @@ class EmecUnit:
         return await self._unit.read_input_registers(wire_address(address), count)
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
-        return await self._unit.read_coils(address, count)
+        """The tested controller answers a coil read with bits that shift with the
+        start address and the count; only a read of coils 0-15 from 0 is stable,
+        so every read asks for that and takes its slice."""
+        if address + count > COIL_BLOCK:
+            raise ValueError(
+                f"coils {address}-{address + count - 1}: only 0-{COIL_BLOCK - 1} are read"
+            )
+        block = await self._unit.read_coils(0, COIL_BLOCK)
+        return block[address : address + count]
 
     async def write_register(self, address: int, value: int) -> None:
         await self._unit.write_register(wire_address(address), value)
@@ -102,6 +114,18 @@ class PulseMode(IntEnum):
     @property
     def label(self) -> str:
         return "ON/OFF" if self is PulseMode.ON_OFF else self.name.capitalize()
+
+
+class FlowMode(IntEnum):
+    """How the flow sensor input is used (40526)."""
+
+    DISABLED = 0
+    REVERSE = 1
+    DIRECT = 2
+
+    @property
+    def label(self) -> str:
+        return self.name.capitalize()
 
 
 PH_RANGE = (0.0, 14.0)
@@ -145,6 +169,34 @@ class EmecLD(Component):
 
     max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
+    coil_ranges = ((0, COIL_BLOCK - 1),)  # the alarm block, always read whole
+
+    # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
+    # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
+    # filtration pump was off (standby), coil 6 for the 5 minutes after flow came
+    # back (the start delay, 40522). Coils 5 and 7 follow the user's notes.
+    alarm_coil_01 = coil(0)
+    alarm_coil_02 = coil(1)
+    alarm_coil_03 = coil(2)
+    alarm_coil_04 = coil(3)
+    alarm_coil_05 = coil(4)  # no flow alarm
+    alarm_coil_06 = coil(5)  # start delay running
+    alarm_coil_07 = coil(6)  # pH tank empty
+    alarm_coil_08 = coil(7)
+    alarm_coil_09 = coil(8)
+    alarm_coil_10 = coil(9)
+    alarm_coil_11 = coil(10)  # standby (no flow)
+    alarm_coil_12 = coil(11)
+    alarm_coil_13 = coil(12)
+    alarm_coil_14 = coil(13)
+    alarm_coil_15 = coil(14)
+    alarm_coil_16 = coil(15)
+
+    # Timing (40522-40526): the start delay before dosing resumes after flow or
+    # power returns, the flow sensor's time and mode.
+    start_delay_minutes = integer(260, unit="min", writable=_whole(0, 60))
+    flow_time = integer(261, unit="min")
+    flow_mode = enum(262, FlowMode)
 
     # Measurements (40002-40008); the value is reading / divisor.
     ch1_reading = integer(0)
@@ -256,6 +308,33 @@ class EmecLD(Component):
     def pulse_rate_ch2(self) -> int | None:
         """Pulses per minute of channel 2's pulse output."""
         return _pulse_rate(self.pulse_rate_ch2_raw)
+
+    @property
+    def no_flow_alarm(self) -> bool | None:
+        return self.alarm_coil_05
+
+    @property
+    def start_delay_running(self) -> bool | None:
+        """On for the start delay (40522) after flow or power returns; dosing waits."""
+        return self.alarm_coil_06
+
+    @property
+    def ph_tank_empty(self) -> bool | None:
+        return self.alarm_coil_07
+
+    @property
+    def standby(self) -> bool | None:
+        """On while the controller is held in standby, e.g. no flow: outputs off."""
+        return self.alarm_coil_11
+
+    @property
+    def active_alarm_coils(self) -> str | None:
+        """The set coils as "6, 11", or "None"; for coils not named yet."""
+        states = [getattr(self, f"alarm_coil_{n:02d}") for n in range(1, COIL_BLOCK + 1)]
+        if any(state is None for state in states):
+            return None
+        active = [str(n) for n, state in enumerate(states, start=1) if state]
+        return ", ".join(active) if active else "None"
 
     @property
     def clock(self) -> datetime | None:
@@ -543,6 +622,90 @@ VALUES = (
     *_output_values(1, 1),
     *_output_values(1, 2),
     *_output_values(2, 1),
+    # Alarm and state coils; the live-confirmed ones first, then the user's notes.
+    Value(
+        "standby",
+        "Standby",
+        lambda d: d.standby,
+        binary=True,
+        feature="alarms",
+        icon="mdi:pause-circle",
+        icon_off="mdi:play-circle",
+    ),
+    Value(
+        "start_delay",
+        "Start Delay",
+        lambda d: d.start_delay_running,
+        binary=True,
+        device_class="running",
+        feature="alarms",
+        icon="mdi:timer-sand",
+        icon_off="mdi:timer-outline",
+    ),
+    Value(
+        "no_flow_alarm",
+        "No Flow Alarm",
+        lambda d: d.no_flow_alarm,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:water-off",
+        icon_off="mdi:water-check",
+    ),
+    Value(
+        "ph_tank_empty",
+        "pH Tank Empty",
+        lambda d: d.ph_tank_empty,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:cup-off-outline",
+        icon_off="mdi:cup-outline",
+    ),
+    Value(
+        "alarm_coils",
+        "Alarm Coils",
+        lambda d: d.active_alarm_coils,
+        category="diagnostic",
+        scan_group="fast",
+        feature="alarms",
+        icon="mdi:alert-circle-outline",
+    ),
+    Value(
+        "start_delay_time",
+        "Start Delay Time",
+        lambda d: d.start_delay_minutes,
+        "min",
+        category="setting",
+        device_class="duration",
+        feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "start_delay_minutes", v),
+        minimum=0,
+        maximum=60,
+        step=1,
+        number_mode="box",
+        icon="mdi:timer-cog-outline",
+    ),
+    Value(
+        "flow_time",
+        "Flow Time",
+        lambda d: d.flow_time,
+        "min",
+        category="diagnostic",
+        device_class="duration",
+        feature="dosing_settings",
+        icon="mdi:timer-sand-complete",
+    ),
+    Value(
+        "flow_mode",
+        "Flow Mode",
+        lambda d: d.flow_mode,
+        category="diagnostic",
+        device_class="enum",
+        options=tuple(mode.label for mode in FlowMode),
+        feature="dosing_settings",
+        icon="mdi:waves-arrow-right",
+    ),
 )
 
 _DIVISORS = frozenset({1, 10, 100, 1000})
@@ -563,7 +726,8 @@ DEVICE_TYPE = DeviceType(
     create=_create,
     values=VALUES,
     features=(
-        Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs)"),
+        Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs, timing)"),
+        Feature("alarms", "Alarms and standby (coils 1-16)"),
         Feature("probe_voltages", "Probe voltages"),
         Feature("clock", "Clock"),
     ),

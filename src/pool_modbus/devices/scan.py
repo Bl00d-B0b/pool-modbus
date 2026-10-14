@@ -108,8 +108,12 @@ def group_model(device_type: DeviceType, unit: Any, fields: Iterable[str]) -> Co
     around the fields it does not use.
     """
     model = device_type.model(unit)
-    declared = type(model).register_ranges
+    declared = {
+        name: getattr(type(model), name)
+        for name in ("register_ranges", "coil_ranges", "discrete_ranges")
+    }
     model.restrict_fields(fields)
-    if declared is not None:
-        model.register_ranges = declared
+    for name, ranges in declared.items():
+        if ranges is not None:
+            setattr(model, name, ranges)
     return model

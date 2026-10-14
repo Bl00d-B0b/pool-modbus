@@ -95,11 +95,47 @@ follow the output's working mode, as on the controller:
 On the tested controller output 2 is disabled, so only its Dosing Mode and
 Pulse Rate show a value.
 
-Read groups in Home Assistant: the relay states fast (40024, 40032); readings,
-temperature, pulse rates and probe voltages medium (40002–40058, one request);
-the clock and the channel 1 dosing settings slow (40044–40150, one request).
-Every group also reads both divisors (40004, 40008), so the fast group reads
-40004–40032 and the slow group 40004–40150, each in one request.
+### Alarms and state (coils)
+
+The controller's alarms are coils (function 01), numbered 1–16 here as in the
+protocol description. The tested LDPHCL answers a coil read with bits that
+shift with the start address and the count (the same set coil showed at
+position 11 for a read of 16 from 0, at 12 for a read of 32, at 13 for a read
+of 16 from 1), so the library always reads coils 0–15 from 0 in one request
+and takes the slice it needs (`EmecUnit.read_coils`).
+
+| Coil | Shown as | Source |
+|---|---|---|
+| 11 | **Standby** (binary): on while the controller is held in standby, outputs off | seen live 2026-10-14: set within a minute of the filtration pump stopping, both relay outputs went Off; cleared within 15 s of flow returning |
+| 6 | **Start Delay** (binary, `running`): on while the start delay runs after flow or power returns | seen live 2026-10-14: on from flow return until dosing resumed 5 min 14 s later (40522 = 5 min) |
+| 5 | **No Flow Alarm** (binary, `problem`) | the user's notes for this controller; not seen yet |
+| 7 | **pH Tank Empty** (binary, `problem`) | the user's notes; not seen yet |
+| all | **Alarm Coils** (diagnostic text): the set coils, e.g. "6, 11", or "None" | for naming the rest when they occur |
+
+The protocol description lists the coils as 1 Ch1 level 1, 2 Ch1 level 2,
+3 Ch2 level, 4 Flow, 5–6 out of range 1–2, 7–11 dosing alarms (ch2 IS, ch2
+relay, ch1 IS1, ch1 relay, ch1 IS2), 12–13 probe fail, 14 standby; on the
+tested controller the observed meanings do not follow it, so only the
+observed and noted ones are named.
+
+### Timing
+
+| Register | Index | Shown as |
+|---|---|---|
+| 40522 | 260 | **Start Delay Time** (number, 0–60 min, writable): how long dosing waits after flow or power returns |
+| 40524 | 261 | **Flow Time** (diagnostic, min): the flow sensor's time |
+| 40526 | 262 | **Flow Mode** (diagnostic enum): Disabled, Reverse, Direct |
+
+40520 (tau) is not read. The controller gives no countdown of the start
+delay; Home Assistant can compute it from the Start Delay sensor's last change
+and the Start Delay Time.
+
+Read groups in Home Assistant: the relay states and the alarm coils fast
+(40024, 40032; coils 0–15); readings, temperature, pulse rates and probe
+voltages medium (40002–40058, one request); the clock, the dosing settings and
+the timing slow (40044–40150 and 40522–40526, two requests). Every group also
+reads both divisors (40004, 40008), so the fast group reads 40004–40032 in one
+request plus the coils.
 
 The tested LDPHCL now and then answers a read with zeros for a few seconds:
 divisors 0 (so no pH or Cl value), temperature 0.0 °C, probe voltages 0 mV and
@@ -115,8 +151,8 @@ drop to 0 whenever dosing stops. A refused read keeps the values from the last
 good one.
 
 Optional parts, all on by default: **dosing settings** (the Dosing Mode and
-the five settings of the three pulse outputs), **probe voltages** and
-**clock**. A part that is off is not read.
+the five settings of the three pulse outputs, the timing values), **alarms**
+(the coils), **probe voltages** and **clock**. A part that is off is not read.
 
 ## Writing
 
@@ -170,6 +206,12 @@ controller yet.
 | Cl Relay Max Value, Min Value | Numbers (input box), ppm, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
 | pH Relay 1/2, Cl Relay Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
 | pH Relay 1/2, Cl Relay Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
+| Standby, Start Delay | Binary sensors | , `running` | `pause-circle` / `play-circle`, `timer-sand` / `timer-outline` | coils 11, 6 | Fast |
+| No Flow Alarm, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 5, 7 | Fast |
+| Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
+| Start Delay Time | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
+| Flow Time | Diagnostic sensor, minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
+| Flow Mode | Diagnostic sensor: Disabled, Reverse, Direct | `enum` | `waves-arrow-right` | 40526 | Slow |
 
 Entity ids carry the relay number where there is more than one output:
 `select.dosing_pump_ph_relay_1_dosing_mode`, `number.dosing_pump_ph_relay_2_max_value`;
