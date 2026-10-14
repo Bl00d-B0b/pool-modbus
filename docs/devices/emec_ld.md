@@ -64,7 +64,15 @@ model reports it as 0.
 
 Pulse modes: 0 ON/OFF, 1 proportional, 2 disabled. In proportional mode the
 pulse rate moves linearly from `perc1` at `val1` to `perc2` at `val2`, rounded
-down; this is a quick check that a decode is right.
+down, and stays at `perc1` beyond `val1`; this is a quick check that a decode
+is right. Verified live on 2026-10-14 by narrowing the bands around the
+readings: 40026 followed channel 1's pulse output 1 (3, 14 and 30 p/min at
+pH 7.47 for the bands 7.40–8.00, 7.00–8.00 and 7.00–7.40), 40030 followed
+channel 2 (3, 7 and 11 p/min at 0.46 ppm for 0.60–0.00, 1.00–0.00 and
+1.00–0.40), and 40028 stayed 0 (that controller's second channel 1 output,
+40140–40150, is disabled). The controller recomputes a rate on its own cycle,
+so a new rate shows up to about 20 s after a change of the reading or the
+settings.
 
 The library never reads the password register (40542).
 
