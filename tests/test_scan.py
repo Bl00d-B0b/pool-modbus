@@ -39,20 +39,8 @@ def test_emec_optional_parts() -> None:
 
     bare = read_plan(device_type, EmecLD, set())
     assert not {"probe_mv_ch1", "probe_mv_ch2"} & bare["medium"]
-    # without the optional parts the slow group reads only what the Units switch needs
-    assert bare["slow"] == {
-        "us_format",
-        "clock_month",
-        "clock_day",
-        "clock_hour",
-        "clock_year",
-        "clock_minute",
-        "clock_set_day",
-        "clock_set_hour_month",
-        "clock_set_year_minute",
-        "ch1_divisor",
-        "ch2_divisor",
-    }
+    # without the optional parts the slow group reads only the units format
+    assert bare["slow"] == {"us_format", "ch1_divisor", "ch2_divisor"}
     # every group also reads both divisors, to refuse a block of zeros
     assert bare["fast"] == {"relay_ch1_raw", "relay_ch2_raw", "ch1_divisor", "ch2_divisor"}
 

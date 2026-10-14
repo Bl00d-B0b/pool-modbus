@@ -45,7 +45,7 @@ COIL_BLOCK = 16
 """Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
 
 CONFIG_COILS = {45: 43, 46: 42, 47: 41, 58: 62}
-WRITABLE_COILS = frozenset({47, 58})
+WRITABLE_COILS = frozenset({58})
 """Coils whose writes were tested; 45/46 (AM/PM) are only read."""
 """Configuration coils by write address, with the position the tested controller
 shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
@@ -216,16 +216,11 @@ class EmecLD(Component):
     no_ph_priority = coil(58, writable=True)
     # Units format (coil 47, the menu's Europe / USA): in USA format the controller
     # reports the temperature in whole °F and swaps day and month in the date word.
-    us_format = coil(47, writable=True)
+    # Read-only: a write flips only the flag (the readings stay in Europe form) and
+    # costs the clock's year, so the format is switched on the keypad.
+    us_format = coil(47)
     # PM flag (coil 46): in USA format the clock's hour is 1-12 and this tells the half.
     clock_pm = coil(46)
-
-    # Clock setpoint (41624-41628), written only before a units switch, which makes the
-    # controller re-apply it (see set_units). Applied layout, unlike the documented one:
-    # day | -, hour | month, year | minute; the year never reaches the clock.
-    clock_set_day = integer(811, signed=False, writable=True)
-    clock_set_hour_month = integer(812, signed=False, writable=True)
-    clock_set_year_minute = integer(813, signed=False, writable=True)
 
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
@@ -532,30 +527,6 @@ def _units(device: EmecLD) -> str | None:
     if device.us_format is None:
         return None
     return UNITS_OPTIONS[1] if device.us_format else UNITS_OPTIONS[0]
-
-
-async def set_units(device: EmecLD, label: str) -> None:
-    """Switch the controller's units format: Europe (°C, day/month) or USA (°F).
-
-    A switch makes the controller re-apply its clock setpoint, so the setpoint is first
-    written with the clock's current date and time in the layout the controller applies
-    (day, month, hour, minute survive). The year still becomes 2000: the controller never
-    takes the year from a Modbus write (firmware 5.1.4), only the keypad can set it.
-    """
-    if label not in UNITS_OPTIONS:
-        raise ValueError(f"{label!r} is not one of {', '.join(UNITS_OPTIONS)}")
-    usa = label == UNITS_OPTIONS[1]
-    await update_or_keep(device)
-    if device.us_format is usa:
-        return
-    now = device.clock
-    if now is not None:
-        await write_if_changed(device, "clock_set_day", now.day << 8)
-        await write_if_changed(device, "clock_set_hour_month", (now.hour << 8) | now.month)
-        await write_if_changed(
-            device, "clock_set_year_minute", ((now.year - 2000) << 8) | now.minute
-        )
-    await write_if_changed(device, "us_format", usa)
 
 
 def _priority(device: EmecLD) -> str | None:
@@ -1001,23 +972,15 @@ VALUES = (
         icon="mdi:sort-variant",
         icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
     ),
+    # Read-only since 2026-10-14 (a select before, hence the new key: the select's
+    # registry entry is removed as an unused key).
     Value(
-        "units",
+        "units_format",
         "Units",
         _units,
         category="setting",
-        write=set_units,
+        device_class="enum",
         options=UNITS_OPTIONS,
-        fields=(
-            "clock_month",
-            "clock_day",
-            "clock_hour",
-            "clock_year",
-            "clock_minute",
-            "clock_set_day",
-            "clock_set_hour_month",
-            "clock_set_year_minute",
-        ),
         icon="mdi:earth",
     ),
 )

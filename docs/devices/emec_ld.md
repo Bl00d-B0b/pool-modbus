@@ -168,11 +168,11 @@ read before and after:
   next minute came 43 s after an apply).
   The library reads the coil: **Temperature** (°C) exists in Europe format,
   **Temperature °F** (whole °F, without HA's temperature conversion) in USA
-  format, and RTC decodes the date in both. **A switch over Modbus makes the
-  controller re-apply its clock setpoint**, so **Units** first writes the clock's
-  current day, month, hour and minute into the setpoint in the applied layout;
-  the year still becomes 2000 (the bug above) and has to be set on the keypad. A
-  switch on the keypad leaves the clock alone.
+  format, and RTC decodes the date in both. **Units** shows the format and is
+  read-only (since 2026-10-14; it was a select before): a switch over Modbus is
+  only half a switch (above) and costs the clock's year, so switch the format on
+  the keypad, which converts the readings and leaves the clock alone. The library
+  writes no clock-related coil and not the clock setpoint.
 - **Fixed PWM on and off times** of the switching relays: not documented and not
   found yet.
 
@@ -359,7 +359,7 @@ not been tried live.
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 | Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
-| Units | Select: Europe, USA | | `earth` | coil 47 | Slow |
+| Units | Diagnostic sensor: Europe, USA | `enum` | `earth` | coil 47 | Slow |
 | Temperature °F | Sensor, °F (USA format only; no device class) | | `thermometer` | 40052 | Medium |
 
 Entity ids follow the names: `select.dosing_pump_ph_pulse_1_dosing_mode`,
