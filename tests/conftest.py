@@ -48,6 +48,9 @@ class FakeEmecPump:
             return [bool(self.coils.get(i, False)) for i in range(16)]
         bits = [False] * 128
         bits[62] = bool(self.coils.get(58, False))
+        bits[41] = bool(self.coils.get(47, False))
+        bits[42] = bool(self.coils.get(46, False))  # PM
+        bits[43] = bool(self.coils.get(45, False))  # AM
         return bits
 
     async def write_coil(self, address: int, value: bool) -> None:

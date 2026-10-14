@@ -115,8 +115,23 @@ read before and after:
   changes one coil (128-coil read position 41). While it is on, the low byte of
   40046, the year in Europe format, reads 1 (2000 reads as 2001, also with the
   hour at 9, so it is not an AM/PM flag) and the hour stays in 24 h form. How
-  the clock reads in USA format with a real year set is still to be seen, before
-  the RTC sensor can decode both formats.
+  the clock reads in USA format: see "Units format" below.
+- **Units format** (coil 47, the menu's Europe / USA; found 2026-10-14 by the
+  keypad switch, which sets the same read position 41 as a write of 47): in USA
+  format the temperature (40052) reads whole °F (60 for the display's 60.2 °F)
+  instead of °C × 10, and the date word 40044 holds the day in its high byte and
+  the month in its low byte. A time set on the keypad in USA format is stored as
+  a 12-hour hour (7 for 7 PM) with the AM/PM flags in coils 45 (AM, read
+  position 43) and 46 (PM, read position 42), found by setting 9:00 AM and 7 PM
+  on the keypad; a time set in Europe format keeps its 24-hour hour after a
+  switch to USA. The RTC combines the hour with the PM flag (12 AM is 0).
+  The library reads the coil: **Temperature** (°C) exists in Europe format,
+  **Temperature °F** (whole °F, without HA's temperature conversion) in USA
+  format, and RTC decodes the date in both. **A switch over Modbus makes the
+  controller re-apply its clock setpoint**, so **Units** first writes the clock's
+  current day, month, hour and minute into the setpoint in the applied layout;
+  the year still becomes 2000 (the bug above) and has to be set on the keypad. A
+  switch on the keypad leaves the clock alone.
 - **Fixed PWM on and off times** of the switching relays: not documented and not
   found yet.
 
@@ -303,6 +318,8 @@ not been tried live.
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 | Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
+| Units | Select: Europe, USA | | `earth` | coil 47 | Slow |
+| Temperature °F | Sensor, °F (USA format only; no device class) | | `thermometer` | 40052 | Medium |
 
 Entity ids follow the names: `select.dosing_pump_ph_pulse_1_dosing_mode`,
 `number.dosing_pump_ph_pulse_2_max_value`, `sensor.dosing_pump_cl_pulse_rate`,

@@ -26,7 +26,8 @@ async def test_every_value_is_known(snapshot_units, key: str) -> None:
     device_type = DEVICE_TYPES[key]
     device = device_type.model(snapshot_units[key])
     await device.async_update()
-    unknown = [v.name for v in device_type.values if format_value(v, v.get(device)) == "unknown"]
+    used = [v for v in device_type.values if v.available is None or v.available(device)]
+    unknown = [v.name for v in used if format_value(v, v.get(device)) == "unknown"]
     assert unknown == []
 
 

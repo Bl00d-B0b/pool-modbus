@@ -93,6 +93,9 @@ class FakeUnit:
         bits = [self.coils.get(address + i, False) for i in range(count)]
         if (address, count) == (0, 128):
             bits[58], bits[62] = False, self.coils.get(58, False)
+            bits[47], bits[41] = False, self.coils.get(47, False)
+            bits[46], bits[42] = False, self.coils.get(46, False)
+            bits[45], bits[43] = False, self.coils.get(45, False)
         return bits
 
     async def write_coil(self, address: int, value: bool) -> None:

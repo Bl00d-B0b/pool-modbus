@@ -25,7 +25,7 @@ from .writing import write_if_changed
 _GLITCH_FIELDS = (
     "ch1_reading",
     "ch2_reading",
-    "temperature",
+    "temperature_raw",
     "probe_mv_ch1",
     "probe_mv_ch2",
     "relay_ch1_raw",
@@ -44,13 +44,19 @@ def wire_address(index: int) -> int:
 COIL_BLOCK = 16
 """Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
 
-CONFIG_COILS = {58: 62}
+CONFIG_COILS = {45: 43, 46: 42, 47: 41, 58: 62}
+WRITABLE_COILS = frozenset({47, 58})
+"""Coils whose writes were tested; 45/46 (AM/PM) are only read."""
 """Configuration coils by write address, with the position the tested controller
 shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
 the keypad: coil 58, the dosing priority, reads at 62). Only these are read or
-written above the alarm block."""
+written above the alarm block. Coil 47 (units format, USA when on) was found the same
+way: the keypad's switch to USA and a write of 47 both set position 41. Coils 45 (AM) and
+46 (PM) were found by setting the clock to 9:00 AM and 7 PM on the keypad (43 and 42)."""
 
 CONFIG_BLOCK = 128
+CONFIG_SPAN = (min(CONFIG_COILS), max(CONFIG_COILS) + 1)
+"""The configuration coils are read as one span, so in one read of 128."""
 
 
 class EmecUnit:
@@ -79,12 +85,16 @@ class EmecUnit:
         16 from 0, the configuration coils from a read of 128 from 0 at the position
         found for each (``CONFIG_COILS``); any other coil is refused."""
         wanted = range(address, address + count)
-        unknown = [a for a in wanted if a >= COIL_BLOCK and a not in CONFIG_COILS]
-        if unknown:
-            raise ValueError(f"coils {unknown}: only 0-{COIL_BLOCK - 1} and {sorted(CONFIG_COILS)}")
+        outside = [a for a in wanted if COIL_BLOCK <= a < CONFIG_SPAN[0] or a >= CONFIG_SPAN[1]]
+        if outside:
+            raise ValueError(f"coils {outside}: only 0-{COIL_BLOCK - 1} and {CONFIG_SPAN}")
         alarms = await self._unit.read_coils(0, COIL_BLOCK) if wanted[0] < COIL_BLOCK else None
         config = await self._unit.read_coils(0, CONFIG_BLOCK) if wanted[-1] >= COIL_BLOCK else None
-        return [alarms[a] if a < COIL_BLOCK else config[CONFIG_COILS[a]] for a in wanted]
+        # Configuration coils with no known read position read as off; no value uses them.
+        return [
+            alarms[a] if a < COIL_BLOCK else bool(a in CONFIG_COILS and config[CONFIG_COILS[a]])
+            for a in wanted
+        ]
 
     async def write_register(self, address: int, value: int) -> None:
         await self._unit.write_register(wire_address(address), value)
@@ -93,9 +103,9 @@ class EmecUnit:
         raise NotImplementedError("EMEC LD controllers are written one value per request")
 
     async def write_coil(self, address: int, value: bool) -> None:
-        """Function 05; tested for the configuration coils in ``CONFIG_COILS`` only."""
-        if address not in CONFIG_COILS:
-            raise NotImplementedError(f"coil {address}: only {sorted(CONFIG_COILS)} were tested")
+        """Function 05; tested for the coils in ``WRITABLE_COILS`` only."""
+        if address not in WRITABLE_COILS:
+            raise NotImplementedError(f"coil {address}: only {sorted(WRITABLE_COILS)} were tested")
         await self._unit.write_coil(address, value)
 
     async def write_coils(self, address: int, values: list[bool]) -> None:
@@ -200,10 +210,22 @@ class EmecLD(Component):
     max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
     # the alarm block, always read whole, and the configuration coils
-    coil_ranges = ((0, COIL_BLOCK - 1), *((a, a) for a in sorted(CONFIG_COILS)))
+    coil_ranges = ((0, COIL_BLOCK - 1), (CONFIG_SPAN[0], CONFIG_SPAN[1] - 1))
 
     # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
     no_ph_priority = coil(58, writable=True)
+    # Units format (coil 47, the menu's Europe / USA): in USA format the controller
+    # reports the temperature in whole °F and swaps day and month in the date word.
+    us_format = coil(47, writable=True)
+    # PM flag (coil 46): in USA format the clock's hour is 1-12 and this tells the half.
+    clock_pm = coil(46)
+
+    # Clock setpoint (41624-41628), written only before a units switch, which makes the
+    # controller re-apply it (see set_units). Applied layout, unlike the documented one:
+    # day | -, hour | month, year | minute; the year never reaches the clock.
+    clock_set_day = integer(811, signed=False, writable=True)
+    clock_set_hour_month = integer(812, signed=False, writable=True)
+    clock_set_year_minute = integer(813, signed=False, writable=True)
 
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
@@ -255,7 +277,7 @@ class EmecLD(Component):
     clock_year = bits(22, 0, 8)
     clock_minute = bits(23, 0, 8)
 
-    temperature = gauge(25, 0.1, unit="°C")  # 40052
+    temperature_raw = integer(25)  # 40052: °C × 10, or whole °F in USA format
     probe_mv_ch1 = integer(27, unit="mV")  # 40056
     probe_mv_ch2 = integer(28, unit="mV")  # 40058
 
@@ -388,17 +410,39 @@ class EmecLD(Component):
         return ", ".join(active) if active else "None"
 
     @property
-    def clock(self) -> datetime | None:
-        """The controller's clock, without time zone; None if unread or invalid."""
-        parts = (self.clock_year, self.clock_month, self.clock_day, self.clock_hour)
-        if None in parts or self.clock_minute is None:
+    def temperature(self) -> float | None:
+        """Water temperature in °C, None in USA format (see ``temperature_f``)."""
+        if self.temperature_raw is None or self.us_format is not False:
             return None
+        return self.temperature_raw / 10
+
+    @property
+    def temperature_f(self) -> int | None:
+        """Water temperature in whole °F, as the controller reports it in USA format."""
+        if self.temperature_raw is None or self.us_format is not True:
+            return None
+        return self.temperature_raw
+
+    @property
+    def clock(self) -> datetime | None:
+        """The controller's clock, without time zone; None if unread or invalid.
+        In USA format the date word holds the day in its high byte, the month low, and
+        the hour runs 1-12 with the PM flag (coil 46) telling the half of the day."""
+        parts = (self.clock_year, self.clock_month, self.clock_day, self.clock_hour)
+        if None in parts or self.clock_minute is None or self.us_format is None:
+            return None
+        month, day, hour = self.clock_month, self.clock_day, self.clock_hour
+        if self.us_format:
+            if self.clock_pm is None:
+                return None
+            month, day = day, month
+            hour = hour % 12 + (12 if self.clock_pm else 0)
         try:
             return datetime(
                 2000 + self.clock_year,
-                self.clock_month,
-                self.clock_day,
-                self.clock_hour,
+                month,
+                day,
+                hour,
                 self.clock_minute,
             )
         except ValueError:
@@ -481,6 +525,37 @@ async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: in
 
 
 PRIORITY_OPTIONS = ("No priority", "pH priority")
+UNITS_OPTIONS = ("Europe", "USA")
+
+
+def _units(device: EmecLD) -> str | None:
+    if device.us_format is None:
+        return None
+    return UNITS_OPTIONS[1] if device.us_format else UNITS_OPTIONS[0]
+
+
+async def set_units(device: EmecLD, label: str) -> None:
+    """Switch the controller's units format: Europe (°C, day/month) or USA (°F).
+
+    A switch makes the controller re-apply its clock setpoint, so the setpoint is first
+    written with the clock's current date and time in the layout the controller applies
+    (day, month, hour, minute survive). The year still becomes 2000: the controller never
+    takes the year from a Modbus write (firmware 5.1.4), only the keypad can set it.
+    """
+    if label not in UNITS_OPTIONS:
+        raise ValueError(f"{label!r} is not one of {', '.join(UNITS_OPTIONS)}")
+    usa = label == UNITS_OPTIONS[1]
+    await update_or_keep(device)
+    if device.us_format is usa:
+        return
+    now = device.clock
+    if now is not None:
+        await write_if_changed(device, "clock_set_day", now.day << 8)
+        await write_if_changed(device, "clock_set_hour_month", (now.hour << 8) | now.month)
+        await write_if_changed(
+            device, "clock_set_year_minute", ((now.year - 2000) << 8) | now.minute
+        )
+    await write_if_changed(device, "us_format", usa)
 
 
 def _priority(device: EmecLD) -> str | None:
@@ -737,8 +812,22 @@ VALUES = (
         "Temperature",
         lambda d: d.temperature,
         "°C",
+        available=lambda d: d.us_format is not True,
         category="measurement",
         device_class="temperature",
+        fields=("us_format",),
+        icon="mdi:thermometer",
+    ),
+    # In USA format the controller reports whole °F; shown as such, without HA's
+    # temperature device class, which would convert it back to the system's unit.
+    Value(
+        "temperature_f",
+        "Temperature °F",
+        lambda d: d.temperature_f,
+        "°F",
+        available=lambda d: d.us_format is True,
+        category="measurement",
+        fields=("us_format",),
         icon="mdi:thermometer",
     ),
     Value(
@@ -786,6 +875,7 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
+        fields=("us_format", "clock_pm"),
         icon="mdi:clock-outline",
     ),
     *_output_values(1, 1),
@@ -910,6 +1000,25 @@ VALUES = (
         options=PRIORITY_OPTIONS,
         icon="mdi:sort-variant",
         icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
+    ),
+    Value(
+        "units",
+        "Units",
+        _units,
+        category="setting",
+        write=set_units,
+        options=UNITS_OPTIONS,
+        fields=(
+            "clock_month",
+            "clock_day",
+            "clock_hour",
+            "clock_year",
+            "clock_minute",
+            "clock_set_day",
+            "clock_set_hour_month",
+            "clock_set_year_minute",
+        ),
+        icon="mdi:earth",
     ),
 )
 

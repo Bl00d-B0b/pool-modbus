@@ -41,6 +41,7 @@ async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_sn
         ("coils", 0, 128),
         ("holding", 1, 110),
         ("holding", 519, 4),
+        ("holding", 1623, 3),  # the clock setpoint, for the Units switch
     ]
     assert pump.message_spacing == pytest.approx(0.1)
 
@@ -71,6 +72,46 @@ async def test_coils_are_always_read_as_the_whole_block(make_pump, ldphcl_snapsh
         await unit.read_coils(16, 1)
     with pytest.raises(NotImplementedError):
         await unit.write_coil(10, True)  # only the tested configuration coil
+
+
+async def test_usa_units_format(make_pump, ldphcl_snapshot) -> None:
+    """Seen live 2026-10-14: in USA format the temperature reads whole °F (60 for the
+    display's 60.2 °F) and the date word swaps day and month (0x0E0A for 14 October)."""
+    registers = dict(ldphcl_snapshot)
+    registers[51] = 60  # 40052
+    registers[43] = 0x0E0A  # 40044: day 14 high, month 10 low
+    registers[45] = (7 << 8) | 26  # 40046: hour 7 (12-hour, set in USA format), year 26
+    registers[47] = 13  # 40048: minute
+    pump = make_pump(registers, coils={47: True, 46: True})  # USA, PM
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert device.temperature is None
+    assert device.temperature_f == 60
+    assert device.clock == datetime(2026, 10, 14, 19, 13)
+    assert value_text(values["units"], device) == "USA"
+    assert value_text(values["temperature_f"], device) == "60 °F"
+    assert value_text(values["temperature"], device) == "unavailable"
+
+
+@pytest.mark.parametrize(
+    ("hour", "pm", "expected"),
+    [(9, False, 9), (12, False, 0), (12, True, 12), (7, True, 19), (11, True, 23)],
+)
+async def test_usa_clock_hours(make_pump, ldphcl_snapshot, hour, pm, expected) -> None:
+    registers = dict(ldphcl_snapshot)
+    registers[43], registers[45], registers[47] = 0x0E0A, (hour << 8) | 26, 0
+    coils = {47: True, 46: pm, 45: not pm}
+    device = await read(make_pump(registers, coils=coils))
+    assert device.clock == datetime(2026, 10, 14, expected, 0)
+
+
+async def test_a_units_switch_writes_the_clock_setpoint_first(make_pump, ldphcl_snapshot) -> None:
+    """A switch makes the controller re-apply its clock setpoint: refresh it first."""
+    pump = make_pump(dict(ldphcl_snapshot))  # Europe, clock 2026-10-01 20:32
+    device = await read(pump)
+    await get_device_type("emec_ld").values[-1].write(device, "USA")
+    assert pump.writes == [(1623, 1 << 8), (1625, (20 << 8) | 10), (1627, (26 << 8) | 32)]
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 47, True)]
 
 
 async def test_priority_is_coil_58(make_pump, ldphcl_snapshot) -> None:

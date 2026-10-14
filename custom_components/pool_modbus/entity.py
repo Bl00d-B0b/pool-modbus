@@ -68,7 +68,8 @@ def entity_id(domain: str, entry: ConfigEntry, name: str | None) -> str:
     """
     device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
     base = device_type.entity_id_base or device_type.key
-    parts = [base, entry.data.get(CONF_PREFIX, ""), name or ""]
+    # "°" would become "deg" ("Temperature °F" -> temperature_degf); drop it instead.
+    parts = [base, entry.data.get(CONF_PREFIX, ""), (name or "").replace("°", "")]
     return f"{domain}.{slugify(' '.join(part for part in parts if part))}"
 
 
