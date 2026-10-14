@@ -54,6 +54,7 @@ RENAMED_KEYS = {
     "ph_pulse_speed": "ph1_pulse_speed",
     "pulse_rate_cl": "pulse_rate_cl_1",
     "start_delay": "no_flow",
+    "delay": "no_flow",  # named Delay for a few minutes on 2026-10-14, then back
     "start_delay_time": "feeding_delay",
 }
 """Value and action keys that were renamed: old key to new key."""
@@ -85,7 +86,7 @@ OLD_NAMES: dict[str, tuple[str, ...]] = {
     # The switching relays' on/off state, "pH Relay" / "Cl Relay" until 2026-10-14.
     "relay_ph": ("pH Relay",),
     "relay_cl": ("Cl Relay",),
-    "no_flow": ("Start Delay",),
+    "no_flow": ("Start Delay", "Delay"),
     "feeding_delay": ("Start Delay Time",),
 }
 """Former entity names by (new) key: an entity still on the id made from one of
