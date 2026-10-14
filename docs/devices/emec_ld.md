@@ -133,6 +133,9 @@ read before and after:
   switch to USA. The RTC combines the hour with the PM flag (12 AM is 0).
   Coil 46 takes function 05 writes, but only the flag changes: written off and
   on in both formats (2026-10-14), the hour stayed 19 and the AM coil stayed off.
+  Coil 45 (AM) behaves the same (written on and off in Europe format at 20:05,
+  read position 43 followed, the hour stayed 20). The two flags are independent:
+  with 45 written on, AM and PM read on together.
   **A write of coil 46 also makes the controller re-apply its clock setpoint**,
   like a units switch: the first try, with a stale setpoint, put its old day,
   month and minute on the clock and the year 2000. The library does not write
