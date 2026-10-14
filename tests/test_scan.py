@@ -35,7 +35,7 @@ def test_emec_optional_parts() -> None:
     device_type = get_device_type("emec_ld")
     everything = read_plan(device_type, EmecLD, device_type.default_features())
     assert {"probe_mv_ch1", "probe_mv_ch2"} <= everything["medium"]
-    assert "ch1_pulse_mode" in everything["slow"]
+    assert "ch1_pulse1_mode" in everything["slow"]
 
     bare = read_plan(device_type, EmecLD, set())
     assert not {"probe_mv_ch1", "probe_mv_ch2"} & bare["medium"]

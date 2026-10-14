@@ -51,12 +51,12 @@ async def test_decodes_dosing_settings(make_pump, ldphcl_snapshot) -> None:
     device = await read(make_pump(ldphcl_snapshot))
 
     # pH: 0 p/min at 7.50, rising to 30 p/min at 10.00
-    assert device.ch1_pulse_val1 == pytest.approx(10.0)
-    assert device.ch1_pulse_val2 == pytest.approx(7.5)
-    assert device.ch1_pulse_perc1 == 30
-    assert device.ch1_pulse_perc2 == 0
-    assert device.ch1_pulse_wait == 0
-    assert device.ch1_pulse_mode is PulseMode.PROPORTIONAL
+    assert device.ch1_pulse1_val1 == pytest.approx(10.0)
+    assert device.ch1_pulse1_val2 == pytest.approx(7.5)
+    assert device.ch1_pulse1_perc1 == 30
+    assert device.ch1_pulse1_perc2 == 0
+    assert device.ch1_pulse1_wait == 0
+    assert device.ch1_pulse1_mode is PulseMode.PROPORTIONAL
 
     # pH, second pulse output: stored settings of an output that is disabled
     assert device.ch1_pulse2_val1 == pytest.approx(7.8)
@@ -93,21 +93,31 @@ async def test_pulse_rate_is_the_high_byte(
     assert device.pulse_rate_ch2 == rate
 
 
-async def test_second_output_is_shown_as_stored_in_every_mode(make_pump, ldphcl_snapshot) -> None:
-    """The second pH output's settings are read only and stay visible while it is disabled."""
+async def test_relay_2_has_the_same_values_as_relay_1(make_pump, ldphcl_snapshot) -> None:
+    """Channel 1's second pulse output: its own rate (40028) and settings (40140-40150),
+    which follow its working mode like relay 1's; disabled in the snapshot."""
     registers = dict(ldphcl_snapshot)
     registers[wire_address(13)] = 0x0300  # 40028: 3 p/min on output 2
     device = await read(make_pump(registers))
     values = {v.name: v for v in get_device_type("emec_ld").values}
     texts = {name: value_text(values[name], device) for name in values}
-    assert texts["pH Output 2 Pulse Rate"] == "3 p/min"
-    assert texts["pH Output 2 Mode"] == "Disabled"
-    assert texts["pH Output 2 Max Value"] == "7.8 pH"
-    assert texts["pH Output 2 Min Value"] == "7.3 pH"
-    assert texts["pH Output 2 Max Pulse Rate"] == "180 p/min"
-    assert texts["pH Output 2 Min Pulse Rate"] == "0 p/min"
-    assert texts["pH Output 2 Pulse Speed"] == "0 min"
-    assert not any(values[name].writable for name in texts if name.startswith("pH Output 2"))
+    assert texts["pH Relay 2 Pulse Rate"] == "3 p/min"
+    assert texts["pH Relay 2 Dosing Mode"] == "Disabled"
+    for name in ("Max Value", "Min Value", "Max Pulse Rate", "Min Pulse Rate", "Pulse Speed"):
+        assert texts[f"pH Relay 2 {name}"] == "unavailable"
+        assert values[f"pH Relay 2 {name}"].writable
+    assert {v.key for v in values.values() if v.name.startswith("pH Relay 2")} == {
+        f"ph2_{k}" for k in ("mode", "max", "min", "max_rate", "min_rate", "pulse_speed")
+    } | {"pulse_rate_ph_2"}
+
+    registers[wire_address(74)] = PulseMode.PROPORTIONAL  # 40150
+    device = await read(make_pump(registers))
+    texts = {name: value_text(values[name], device) for name in values}
+    assert texts["pH Relay 2 Max Value"] == "7.8 pH"
+    assert texts["pH Relay 2 Min Value"] == "7.3 pH"
+    assert texts["pH Relay 2 Max Pulse Rate"] == "180 p/min"
+    assert texts["pH Relay 2 Min Pulse Rate"] == "0 p/min"
+    assert texts["pH Relay 2 Pulse Speed"] == "unavailable"
 
 
 @pytest.mark.parametrize(
@@ -221,23 +231,28 @@ async def test_a_write_goes_to_the_odd_wire_address(make_pump, ldphcl_snapshot) 
     [
         (
             PulseMode.PROPORTIONAL,
-            {"pH Max Value", "pH Min Value", "pH Max Pulse Rate", "pH Min Pulse Rate"},
-            {"pH Pulse Speed"},
+            {
+                "pH Relay 1 Max Value",
+                "pH Relay 1 Min Value",
+                "pH Relay 1 Max Pulse Rate",
+                "pH Relay 1 Min Pulse Rate",
+            },
+            {"pH Relay 1 Pulse Speed"},
         ),
         (
             PulseMode.ON_OFF,
-            {"pH Max Value", "pH Min Value", "pH Pulse Speed"},
-            {"pH Max Pulse Rate", "pH Min Pulse Rate"},
+            {"pH Relay 1 Max Value", "pH Relay 1 Min Value", "pH Relay 1 Pulse Speed"},
+            {"pH Relay 1 Max Pulse Rate", "pH Relay 1 Min Pulse Rate"},
         ),
         (
             PulseMode.DISABLED,
             set(),
             {
-                "pH Max Value",
-                "pH Min Value",
-                "pH Max Pulse Rate",
-                "pH Min Pulse Rate",
-                "pH Pulse Speed",
+                "pH Relay 1 Max Value",
+                "pH Relay 1 Min Value",
+                "pH Relay 1 Max Pulse Rate",
+                "pH Relay 1 Min Pulse Rate",
+                "pH Relay 1 Pulse Speed",
             },
         ),
     ],
@@ -270,11 +285,18 @@ def quick_confirm(monkeypatch):
 @pytest.mark.parametrize(
     ("key", "value", "writes"),
     [
-        ("ph_max", 9.9, [(67, 990)]),
-        ("ph_min", 7.55, [(69, 755)]),
-        ("ph_max_rate", 29, [(71, 29)]),  # min rate already 0
-        ("ph_min_rate", 5, [(73, 5), (71, 0)]),  # the other end goes to 0, as on the pump
-        ("ph_pulse_speed", 3, [(75, 3)]),
+        ("ph1_max", 9.9, [(67, 990)]),
+        ("ph1_min", 7.55, [(69, 755)]),
+        ("ph1_max_rate", 29, [(71, 29)]),  # min rate already 0
+        ("ph1_min_rate", 5, [(73, 5), (71, 0)]),  # the other end goes to 0, as on the pump
+        ("ph1_pulse_speed", 3, [(75, 3)]),
+        # relay 2: the same layout at 40140-40150 (wire 139-149)
+        ("ph2_max", 7.85, [(139, 785)]),
+        ("ph2_min", 7.25, [(141, 725)]),
+        ("ph2_max_rate", 150, [(143, 150)]),
+        ("ph2_min_rate", 5, [(145, 5), (143, 0)]),
+        ("ph2_pulse_speed", 3, [(147, 3)]),
+        ("ph2_mode", "Proportional", [(149, 1)]),  # wait is already 0
     ],
 )
 async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, writes) -> None:
@@ -291,9 +313,9 @@ async def test_a_write_answered_too_late_is_confirmed_by_reading(
     device = await read(pump)
     pump.slow_write_reply = True  # stored, but the gateway reports exception 0x0B
     pump.failed_reads = 2  # and the next reads collide
-    await WRITE_VALUES["ph_min"].write(device, 7.55)
+    await WRITE_VALUES["ph1_min"].write(device, 7.55)
     assert pump.writes == [(69, 755)]
-    assert device.ch1_pulse_val2 == pytest.approx(7.55)
+    assert device.ch1_pulse1_val2 == pytest.approx(7.55)
 
 
 async def test_a_write_the_pump_did_not_store_is_an_error(make_pump, ldphcl_snapshot) -> None:
@@ -301,16 +323,16 @@ async def test_a_write_the_pump_did_not_store_is_an_error(make_pump, ldphcl_snap
     device = await read(pump)
     pump.lose_writes = True
     with pytest.raises(TimeoutError, match="still reads 7.5 .* after writing 7.55, which got no"):
-        await WRITE_VALUES["ph_min"].write(device, 7.55)
+        await WRITE_VALUES["ph1_min"].write(device, 7.55)
     assert pump.writes == [(69, 755)]
 
 
 async def test_a_setting_the_pump_holds_is_not_written(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)
-    await WRITE_VALUES["ph_max"].write(device, 10.0)
-    await WRITE_VALUES["ph_max_rate"].write(device, 30)
-    await WRITE_VALUES["ph_mode"].write(device, "Proportional")
+    await WRITE_VALUES["ph1_max"].write(device, 10.0)
+    await WRITE_VALUES["ph1_max_rate"].write(device, 30)
+    await WRITE_VALUES["ph1_mode"].write(device, "Proportional")
     assert pump.writes == []
 
 
@@ -327,9 +349,9 @@ async def test_mode_switch_writes_its_settings_in_order(
 ) -> None:
     pump = make_pump(dict(ldphcl_snapshot))
     device = await read(pump)
-    await WRITE_VALUES["ph_mode"].write(device, label)
+    await WRITE_VALUES["ph1_mode"].write(device, label)
     assert pump.writes == writes
-    assert device.ch1_pulse_mode.label == label
+    assert device.ch1_pulse1_mode.label == label
 
 
 async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
@@ -337,19 +359,19 @@ async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
     registers[75], registers[77] = 1, 0  # ON/OFF, one pulse a minute
     pump = make_pump(registers)
     device = await read(pump)
-    await WRITE_VALUES["ph_mode"].write(device, "Proportional")
+    await WRITE_VALUES["ph1_mode"].write(device, "Proportional")
     assert pump.writes == [(75, 0), (77, 1)]
 
 
 @pytest.mark.parametrize(
     ("key", "value"),
     [
-        ("ph_max", 14.01),
-        ("ph_min", -0.1),
-        ("ph_max_rate", 181),
-        ("ph_min_rate", 2.5),
-        ("ph_pulse_speed", 100),
-        ("ph_mode", "Turbo"),
+        ("ph1_max", 14.01),
+        ("ph1_min", -0.1),
+        ("ph1_max_rate", 181),
+        ("ph1_min_rate", 2.5),
+        ("ph1_pulse_speed", 100),
+        ("ph1_mode", "Turbo"),
     ],
 )
 async def test_values_the_pump_does_not_take_are_refused(

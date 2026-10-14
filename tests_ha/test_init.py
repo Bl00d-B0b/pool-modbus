@@ -112,14 +112,14 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
     assert state(hass, "sensor.dosing_pump_cl_level") == "0.46"
     assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
-    assert state(hass, "select.dosing_pump_ph_dosing_mode") == "Proportional"
+    assert state(hass, "select.dosing_pump_ph_relay_1_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
-    assert state(hass, "number.dosing_pump_ph_pulse_speed") == STATE_UNAVAILABLE
-    # The second pH output is read only and shown as stored, even while disabled.
-    assert state(hass, "sensor.dosing_pump_ph_output_2_mode") == "Disabled"
-    assert state(hass, "sensor.dosing_pump_ph_output_2_max_value") == "7.8"
-    assert state(hass, "sensor.dosing_pump_ph_output_2_max_pulse_rate") == "180"
-    assert state(hass, "sensor.dosing_pump_ph_output_2_pulse_rate") == "0"
+    assert state(hass, "number.dosing_pump_ph_relay_1_pulse_speed") == STATE_UNAVAILABLE
+    # The second pH output has the same entities; disabled, so its settings are unavailable.
+    assert state(hass, "select.dosing_pump_ph_relay_2_dosing_mode") == "Disabled"
+    assert state(hass, "number.dosing_pump_ph_relay_2_max_value") == STATE_UNAVAILABLE
+    assert state(hass, "number.dosing_pump_ph_relay_2_max_pulse_rate") == STATE_UNAVAILABLE
+    assert state(hass, "sensor.dosing_pump_ph_relay_2_pulse_rate") == "0"
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:
@@ -180,6 +180,36 @@ async def test_renamed_keys_keep_their_entities(hass: HomeAssistant) -> None:
     assert moved.unique_id == f"{entry.unique_id}_sync_rtc"
     assert hass.states.get(old.entity_id) is not None
     assert registry.async_get("button.pool_controller_sync_rtc") is None  # no duplicate
+
+
+async def test_renamed_ph_output_moves_to_the_relay_1_ids(hass: HomeAssistant) -> None:
+    """Before 2026-10-14 the pH pulse output had no number: its entities move to the
+    "pH Relay 1" unique ids and, if still on the old name's id, to the new entity id."""
+    entry = make_entry(hass, "emec_ld")
+    registry = er.async_get(hass)
+    old_id = registry.async_get_or_create(
+        "number",
+        DOMAIN,
+        f"{entry.unique_id}_ph_max",
+        config_entry=entry,
+        suggested_object_id="dosing_pump_ph_max_value",
+    ).entity_id
+    custom = registry.async_get_or_create(
+        "select",
+        DOMAIN,
+        f"{entry.unique_id}_ph_mode",
+        config_entry=entry,
+        suggested_object_id="acid_pump_mode",  # renamed by the user: keep that id
+    ).entity_id
+    await setup(hass, entry, fake_unit("emec_ld"))
+
+    assert old_id == "number.dosing_pump_ph_max_value"
+    assert registry.async_get(old_id) is None
+    moved = registry.async_get("number.dosing_pump_ph_relay_1_max_value")
+    assert moved.unique_id == f"{entry.unique_id}_ph1_max"
+    assert state(hass, "number.dosing_pump_ph_relay_1_max_value") == "10.0"
+    assert registry.async_get(custom).unique_id == f"{entry.unique_id}_ph1_mode"
+    assert state(hass, custom) == "Proportional"
 
 
 async def test_a_missed_poll_keeps_the_last_values(hass: HomeAssistant) -> None:
@@ -329,7 +359,7 @@ async def test_an_older_entry_keeps_its_interval_as_the_slow_one(hass: HomeAssis
 async def test_optional_parts_are_on_by_default(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
-    assert state(hass, "select.dosing_pump_ph_dosing_mode") == "Proportional"
+    assert state(hass, "select.dosing_pump_ph_relay_1_dosing_mode") == "Proportional"
 
 
 async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:

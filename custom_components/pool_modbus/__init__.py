@@ -25,6 +25,7 @@ from .coordinator import (
     device_info,
     enabled_features,
 )
+from .entity import entity_id
 from .library import get_device_type, group_model, read_plan
 
 PLATFORMS: list[Platform] = [
@@ -40,8 +41,38 @@ PLATFORMS: list[Platform] = [
     Platform.TIME,
 ]
 
-RENAMED_KEYS = {"clock": "rtc", "sync_clock": "sync_rtc"}
-"""Value and action keys renamed to the names other integrations use (RTC, Sync RTC)."""
+RENAMED_KEYS = {
+    "clock": "rtc",
+    "sync_clock": "sync_rtc",
+    # EMEC pH pulse output 1 became "pH Relay 1" when output 2 was added (2026-10-14).
+    "pulse_rate_ph": "pulse_rate_ph_1",
+    "ph_mode": "ph1_mode",
+    "ph_max": "ph1_max",
+    "ph_min": "ph1_min",
+    "ph_max_rate": "ph1_max_rate",
+    "ph_min_rate": "ph1_min_rate",
+    "ph_pulse_speed": "ph1_pulse_speed",
+}
+"""Value and action keys that were renamed: old key to new key."""
+
+OLD_NAMES = {
+    "pulse_rate_ph_1": "pH Pulse Rate",
+    "ph1_mode": "pH Dosing Mode",
+    "ph1_max": "pH Max Value",
+    "ph1_min": "pH Min Value",
+    "ph1_max_rate": "pH Max Pulse Rate",
+    "ph1_min_rate": "pH Min Pulse Rate",
+    "ph1_pulse_speed": "pH Pulse Speed",
+    "pulse_rate_ph_2": "pH Output 2 Pulse Rate",
+    "ph2_mode": "pH Output 2 Mode",
+    "ph2_max": "pH Output 2 Max Value",
+    "ph2_min": "pH Output 2 Min Value",
+    "ph2_max_rate": "pH Output 2 Max Pulse Rate",
+    "ph2_min_rate": "pH Output 2 Min Pulse Rate",
+    "ph2_pulse_speed": "pH Output 2 Pulse Speed",
+}
+"""Former entity names by (new) key: an entity still on the id made from its old
+name moves to the id of the new name, with its history."""
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -95,21 +126,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
         device_type, features, coordinators, device_info(entry, device_type, full)
     )
     entry.async_on_unload(entry.add_update_listener(_async_reload))
-    await er.async_migrate_entries(hass, entry.entry_id, _renamed_unique_id(entry))
+    await er.async_migrate_entries(hass, entry.entry_id, _renamed_unique_id(hass, entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
-def _renamed_unique_id(entry: PoolModbusConfigEntry):
-    """Give entities of a renamed key their new unique id, keeping entity id and history."""
+def _renamed_unique_id(hass: HomeAssistant, entry: PoolModbusConfigEntry):
+    """Give entities of a renamed key their new unique id, and entities of a renamed
+    name their new entity id (when they still use the old name's id), keeping history."""
     prefix = f"{entry.unique_id or entry.entry_id}_"
+    device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
+    names = {value.key: value.name for value in device_type.values}
+    registry = er.async_get(hass)
 
     @callback
     def migrate(registered: er.RegistryEntry) -> dict[str, str] | None:
         key = registered.unique_id.removeprefix(prefix)
-        if key == registered.unique_id or key not in RENAMED_KEYS:
+        if key == registered.unique_id:
             return None
-        return {"new_unique_id": prefix + RENAMED_KEYS[key]}
+        new_key = RENAMED_KEYS.get(key, key)
+        updates: dict[str, str] = {}
+        if new_key != key:
+            updates["new_unique_id"] = prefix + new_key
+        old_name = OLD_NAMES.get(new_key)
+        if old_name and new_key in names:
+            domain = registered.domain
+            if registered.entity_id == entity_id(domain, entry, old_name):
+                wanted = entity_id(domain, entry, names[new_key])
+                if wanted != registered.entity_id and registry.async_get(wanted) is None:
+                    updates["new_entity_id"] = wanted
+        return updates or None
 
     return migrate
 

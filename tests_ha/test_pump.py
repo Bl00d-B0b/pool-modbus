@@ -18,12 +18,12 @@ from custom_components.pool_modbus.library.devices import writing
 from .conftest import fake_unit
 from .test_init import add, state
 
-MODE = "select.dosing_pump_ph_dosing_mode"
-PH_MAX = "number.dosing_pump_ph_max_value"
-PH_MIN = "number.dosing_pump_ph_min_value"
-MAX_RATE = "number.dosing_pump_ph_max_pulse_rate"
-MIN_RATE = "number.dosing_pump_ph_min_pulse_rate"
-SPEED = "number.dosing_pump_ph_pulse_speed"
+MODE = "select.dosing_pump_ph_relay_1_dosing_mode"
+PH_MAX = "number.dosing_pump_ph_relay_1_max_value"
+PH_MIN = "number.dosing_pump_ph_relay_1_min_value"
+MAX_RATE = "number.dosing_pump_ph_relay_1_max_pulse_rate"
+MIN_RATE = "number.dosing_pump_ph_relay_1_min_pulse_rate"
+SPEED = "number.dosing_pump_ph_relay_1_pulse_speed"
 
 # The snapshot (wire addresses): proportional mode (77 = 1), pH Max 10.00 (67),
 # pH Min 7.50 (69), max rate 30 (71), min rate 0 (73), speed 0 (75).

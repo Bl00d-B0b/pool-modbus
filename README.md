@@ -204,29 +204,30 @@ T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
   Firmware             1.7
 
 EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
-  pH Level                    7.51 pH
-  Cl Level                    0.46 ppm
-  Temperature                 17.6 °C
-  pH Relay                    On
-  Cl Relay                    On
-  pH Pulse Rate               0 p/min
-  Cl Pulse Rate               0 p/min
-  pH Output 2 Pulse Rate      0 p/min
-  pH Probe Voltage            -27 mV
-  Cl Probe Voltage            34 mV
-  RTC                         2026-10-01 20:32:00
-  pH Dosing Mode              Proportional
-  pH Max Value                10.0 pH
-  pH Min Value                7.5 pH
-  pH Max Pulse Rate           30 p/min
-  pH Min Pulse Rate           0 p/min
-  pH Pulse Speed              unavailable
-  pH Output 2 Mode            Disabled
-  pH Output 2 Max Value       7.8 pH
-  pH Output 2 Min Value       7.3 pH
-  pH Output 2 Max Pulse Rate  180 p/min
-  pH Output 2 Min Pulse Rate  0 p/min
-  pH Output 2 Pulse Speed     0 min
+  pH Level                   7.51 pH
+  Cl Level                   0.46 ppm
+  Temperature                17.6 °C
+  pH Relay                   On
+  Cl Relay                   On
+  pH Relay 1 Pulse Rate      0 p/min
+  Cl Pulse Rate              0 p/min
+  pH Relay 2 Pulse Rate      0 p/min
+  pH Probe Voltage           -27 mV
+  Cl Probe Voltage           34 mV
+  RTC                        2026-10-01 20:32:00
+  pH Relay 1 Dosing Mode     Proportional
+  pH Relay 1 Max Value       10.0 pH
+  pH Relay 1 Min Value       7.5 pH
+  pH Relay 1 Max Pulse Rate  30 p/min
+  pH Relay 1 Min Pulse Rate  0 p/min
+  pH Relay 1 Pulse Speed     unavailable
+  pH Relay 2 Dosing Mode     Disabled
+  pH Relay 2 Max Value       unavailable
+  pH Relay 2 Min Value       unavailable
+  pH Relay 2 Max Pulse Rate  unavailable
+  pH Relay 2 Min Pulse Rate  unavailable
+  pH Relay 2 Pulse Speed     unavailable
+
 
 ```
 

@@ -105,7 +105,9 @@ async def test_output_uses_home_assistant_names(bus) -> None:
         "Firmware 1.7",
         "pH Level 7.51 pH",
         "pH Relay On",
-        "pH Dosing Mode Proportional",
+        "pH Relay 1 Dosing Mode Proportional",
+        "pH Relay 2 Dosing Mode Disabled",
+        "pH Relay 2 Max Value unavailable",
     ):
         assert expected in lines
 

@@ -80,19 +80,19 @@ The library never reads the password register (40542).
 ## Values shown by this library
 
 Named as on an LDPHCL, where channel 1 is pH and channel 2 is free chlorine.
-The dosing settings of channel 1 follow its working mode, as on the
-controller:
+Channel 1 has two pulse outputs, shown as **pH Relay 1** (40068–40078, rate
+40026) and **pH Relay 2** (40140–40150, rate 40028), each with the same seven
+values: Pulse Rate, Dosing Mode, Max Value, Min Value, Max Pulse Rate, Min
+Pulse Rate and Pulse Speed. The dosing settings follow the output's working
+mode, as on the controller:
 
-- **pH Max Value / pH Min Value** (val1, val2): unavailable when the output is
+- **Max Value / Min Value** (val1, val2): unavailable when the output is
   disabled.
-- **pH Max Pulse Rate / pH Min Pulse Rate** (perc1, perc2): proportional mode only.
-- **pH Pulse Speed** (wait): ON/OFF mode only.
+- **Max Pulse Rate / Min Pulse Rate** (perc1, perc2): proportional mode only.
+- **Pulse Speed** (wait): ON/OFF mode only.
 
-The channel's second pulse output (40140–40150) is shown as **pH Output 2
-Mode / Max Value / Min Value / Max Pulse Rate / Min Pulse Rate / Pulse Speed**,
-read-only sensors that show the stored settings in every working mode, and its
-rate as **pH Output 2 Pulse Rate** (40028). On the tested controller that
-output is disabled.
+On the tested controller output 2 is disabled, so only its Dosing Mode and
+Pulse Rate show a value.
 
 Read groups in Home Assistant: the relay states fast (40024, 40032); readings,
 temperature, pulse rates and probe voltages medium (40002–40058, one request);
@@ -113,16 +113,16 @@ near 0 mV at pH 7.00, shows one poll later. Pulse rates are not checked, as they
 drop to 0 whenever dosing stops. A refused read keeps the values from the last
 good one.
 
-Optional parts, all on by default: **dosing settings** (pH Dosing Mode
-and the five settings above), **probe voltages** and **clock**. A part that is
-off is not read.
+Optional parts, all on by default: **dosing settings** (the Dosing Mode and
+the five settings of both pH outputs), **probe voltages** and **clock**. A part
+that is off is not read.
 
 ## Writing
 
-Channel 1's dosing settings (40068–40078) are written one value per request
-with function 06, at the value's odd wire address. Each value is checked
-against its range first, not written when the controller already holds it, and
-confirmed by reading it back.
+The dosing settings of channel 1's two pulse outputs (40068–40078 and
+40140–40150) are written one value per request with function 06, at the
+value's odd wire address. Each value is checked against its range first, not
+written when the controller already holds it, and confirmed by reading it back.
 
 The tested LDPHCL stores a written value but answers function 06 later than its
 Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
@@ -130,18 +130,17 @@ Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
 within about 2 s, so the read-back, not the reply, decides whether a write
 worked.
 
-| Setting | Register | Range |
-|---|---|---|
-| pH Max Value, pH Min Value (val1, val2) | 40068, 40070 | 0.00–14.00 pH |
-| pH Max Pulse Rate, pH Min Pulse Rate (perc1, perc2) | 40072, 40074 | 0–180 p/min |
-| pH Pulse Speed (wait) | 40076 | 0–99 min |
-| pH Dosing Mode | 40078 | ON/OFF, Proportional, Disabled |
+| Setting | Relay 1 | Relay 2 | Range |
+|---|---|---|---|
+| Max Value, Min Value (val1, val2) | 40068, 40070 | 40140, 40142 | 0.00–14.00 pH |
+| Max Pulse Rate, Min Pulse Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 0–180 p/min |
+| Pulse Speed (wait) | 40076 | 40148 | 0–99 min |
+| Dosing Mode | 40078 | 40150 | ON/OFF, Proportional, Disabled |
 
 In proportional mode the controller doses from 0 p/min at one pH value to the
 set rate at the other, so setting one end's rate sets the other end's to 0:
-pH Max Pulse Rate writes perc1, then perc2 = 0; pH Min Pulse Rate writes perc2,
-then perc1 = 0. A working mode is entered by writing its settings in this
-order:
+Max Pulse Rate writes perc1, then perc2 = 0; Min Pulse Rate writes perc2, then
+perc1 = 0. A working mode is entered by writing its settings in this order:
 
 | Mode | Writes, in order |
 |---|---|
@@ -149,8 +148,10 @@ order:
 | Proportional | wait = 0, mode = 1 |
 | Disabled | mode = 2 |
 
-Values the controller already holds are skipped. Channel 1's second output
-(40140–40150) and channel 2's settings (40154–40164) are read but not written.
+Values the controller already holds are skipped. Channel 2's settings
+(40154–40164) are read but not written. Writes to relay 1 were tested live
+(2026-10-05); relay 2 uses the same code and registers of the same layout, but
+its writes have not been tried on a controller yet.
 
 ## In Home Assistant
 
@@ -160,15 +161,18 @@ Values the controller already holds are skipped. Channel 1's second output
 | Cl Level | Sensor, ppm | | `flask-outline` | 40006–40008 | Medium |
 | Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
 | pH Relay, Cl Relay | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
-| pH Pulse Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40030 | Medium |
-| pH Output 2 Pulse Rate | Sensor, p/min | | `pulse` | 40028 | Medium |
+| pH Relay 1 Pulse Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40030 | Medium |
+| pH Relay 2 Pulse Rate | Sensor, p/min | | `pulse` | 40028 | Medium |
 | pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
-| pH Dosing Mode | Select | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078 | Slow |
-| pH Max Value, pH Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 | Slow |
-| pH Max Pulse Rate, pH Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 | Slow |
-| pH Pulse Speed | Number (input box), minutes | `duration` | `timer-cog-outline` | 40076 | Slow |
-| pH Output 2 Mode | Diagnostic sensor: ON/OFF, Proportional, Disabled | `enum` | as pH Dosing Mode | 40150 | Slow |
-| pH Output 2 Max Value, pH Output 2 Min Value | Diagnostic sensors | `ph` | `gauge-full`, `gauge-empty` | 40140, 40142 | Slow |
-| pH Output 2 Max Pulse Rate, pH Output 2 Min Pulse Rate | Diagnostic sensors, p/min | | `speedometer`, `speedometer-slow` | 40144, 40146 | Slow |
-| pH Output 2 Pulse Speed | Diagnostic sensor, minutes | `duration` | `timer-cog-outline` | 40148 | Slow |
+| pH Relay 1 Dosing Mode, pH Relay 2 Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150 | Slow |
+| pH Relay 1/2 Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
+| pH Relay 1/2 Max Pulse Rate, Min Pulse Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 | Slow |
+| pH Relay 1/2 Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 | Slow |
+
+Entity ids carry the relay number: `select.dosing_pump_ph_relay_1_dosing_mode`,
+`number.dosing_pump_ph_relay_2_max_value`, `sensor.dosing_pump_ph_relay_1_pulse_rate`.
+Before 2026-10-14 relay 1's entities had no number ("pH Dosing Mode",
+`number.dosing_pump_ph_max_value`); an installation from before is moved to the
+new unique ids and, when the entity id is still the one made from the old
+name, to the new entity id, with its history.
