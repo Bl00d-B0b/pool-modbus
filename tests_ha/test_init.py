@@ -112,19 +112,24 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
 
     assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
     assert state(hass, "sensor.dosing_pump_cl_level") == "0.46"
-    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
-    assert state(hass, "select.dosing_pump_ph_relay_1_dosing_mode") == "Proportional"
+    assert state(hass, "sensor.dosing_pump_ph_relay_state") == "On"
+    assert state(hass, "select.dosing_pump_ph_pulse_1_dosing_mode") == "Proportional"
     # Only used in ON/OFF mode, so unavailable in proportional mode, as in the YAML setup.
-    assert hass.states.get("number.dosing_pump_ph_relay_1_pulse_speed") is None
+    assert hass.states.get("number.dosing_pump_ph_pulse_1_pulse_speed") is None
     # The second pH output has the same entities; disabled, so its settings are unavailable.
-    assert state(hass, "select.dosing_pump_ph_relay_2_dosing_mode") == "Disabled"
-    assert hass.states.get("number.dosing_pump_ph_relay_2_max_value") is None
-    assert hass.states.get("number.dosing_pump_ph_relay_2_max_pulse_rate") is None
-    assert state(hass, "sensor.dosing_pump_ph_relay_2_pulse_rate") == "0"
+    assert state(hass, "select.dosing_pump_ph_pulse_2_dosing_mode") == "Disabled"
+    assert hass.states.get("number.dosing_pump_ph_pulse_2_max_value") is None
+    assert hass.states.get("number.dosing_pump_ph_pulse_2_max_rate") is None
+    assert state(hass, "sensor.dosing_pump_ph_pulse_2_rate") == "0"
     # Chlorine has one pulse output, named the same way.
-    assert state(hass, "select.dosing_pump_cl_relay_dosing_mode") == "Proportional"
-    assert state(hass, "number.dosing_pump_cl_relay_min_value") == "0.45"
-    assert state(hass, "sensor.dosing_pump_cl_relay_pulse_rate") == "0"
+    assert state(hass, "select.dosing_pump_cl_pulse_dosing_mode") == "Proportional"
+    assert state(hass, "number.dosing_pump_cl_pulse_min_value") == "0.45"
+    assert state(hass, "sensor.dosing_pump_cl_pulse_rate") == "0"
+    # The switching relays, with their state sensors renamed to "... Relay State".
+    assert state(hass, "select.dosing_pump_ph_relay_dosing_mode") == "Proportional PWM"
+    assert state(hass, "number.dosing_pump_ph_relay_max_value") == "6.55"
+    assert state(hass, "number.dosing_pump_cl_relay_min_duty_cycle") == "0"
+    assert state(hass, "sensor.dosing_pump_cl_relay_state") == "On"
     # Alarm coils (none set in the snapshot) and the timing settings.
     assert state(hass, "binary_sensor.dosing_pump_standby") == "off"
     assert state(hass, "binary_sensor.dosing_pump_no_flow") == "off"
@@ -217,11 +222,11 @@ async def test_renamed_ph_output_moves_to_the_relay_1_ids(hass: HomeAssistant) -
     ).entity_id
     await setup(hass, entry, fake_unit("emec_ld"))
 
-    assert old_id == "number.dosing_pump_ph_max_value"
+    assert old_id == "number.dosing_pump_ph_max_value"  # the name before "pH Relay 1"
     assert registry.async_get(old_id) is None
-    moved = registry.async_get("number.dosing_pump_ph_relay_1_max_value")
+    moved = registry.async_get("number.dosing_pump_ph_pulse_1_max_value")
     assert moved.unique_id == f"{entry.unique_id}_ph1_max"
-    assert state(hass, "number.dosing_pump_ph_relay_1_max_value") == "10.0"
+    assert state(hass, "number.dosing_pump_ph_pulse_1_max_value") == "10.0"
     assert registry.async_get(custom).unique_id == f"{entry.unique_id}_ph1_mode"
     assert state(hass, custom) == "Proportional"
 
@@ -262,7 +267,7 @@ async def test_a_block_of_zeros_never_shows(hass: HomeAssistant) -> None:
 
     assert state(hass, "sensor.dosing_pump_ph_level") == "7.51"
     assert state(hass, "sensor.dosing_pump_temperature") == "17.6"
-    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
+    assert state(hass, "sensor.dosing_pump_ph_relay_state") == "On"
 
     unit.registers = registers
     await entry.runtime_data.async_refresh_all()
@@ -314,7 +319,7 @@ async def test_one_failed_read_is_tried_again(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
 
     assert entry.runtime_data.coordinators["fast"].last_update_success
-    assert state(hass, "sensor.dosing_pump_ph_relay") == "On"
+    assert state(hass, "sensor.dosing_pump_ph_relay_state") == "On"
 
 
 async def test_the_icon_set_is_served(hass: HomeAssistant) -> None:
@@ -373,7 +378,7 @@ async def test_an_older_entry_keeps_its_interval_as_the_slow_one(hass: HomeAssis
 async def test_optional_parts_are_on_by_default(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert state(hass, "sensor.dosing_pump_ph_probe_voltage") == "-27"
-    assert state(hass, "select.dosing_pump_ph_relay_1_dosing_mode") == "Proportional"
+    assert state(hass, "select.dosing_pump_ph_pulse_1_dosing_mode") == "Proportional"
 
 
 async def test_an_optional_part_switched_off(hass: HomeAssistant) -> None:

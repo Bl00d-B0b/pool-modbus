@@ -191,8 +191,9 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
     # the settings the outputs' modes use (relay 1 and Cl proportional: 4 each,
     # relay 2 disabled: none) and the three timing values
-    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 11
-    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 5  # 3 modes, flow mode, priority
+    # + the two relays' values and duty cycles (Proportional PWM: 4 each)
+    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 19
+    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 7  # 5 modes, flow, priority
 
 
 async def test_entity_shows_the_new_value_behind_a_caching_gateway(

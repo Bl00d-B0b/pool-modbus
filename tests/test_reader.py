@@ -104,12 +104,12 @@ async def test_output_uses_home_assistant_names(bus) -> None:
         "Thermostat off, 19.0 °C, target 20.0 °C",
         "Firmware 1.7",
         "pH Level 7.51 pH",
-        "pH Relay On",
-        "pH Relay 1 Dosing Mode Proportional",
-        "pH Relay 2 Dosing Mode Disabled",
-        "pH Relay 2 Max Value unavailable",
-        "Cl Relay Dosing Mode Proportional",
-        "Cl Relay Min Value 0.45 mg/L",
+        "pH Relay State On",
+        "pH Pulse 1 Dosing Mode Proportional",
+        "pH Pulse 2 Dosing Mode Disabled",
+        "pH Pulse 2 Max Value unavailable",
+        "Cl Pulse Dosing Mode Proportional",
+        "Cl Pulse Min Value 0.45 mg/L",
         "Cl Level 0.46 mg/L",
     ):
         assert expected in lines

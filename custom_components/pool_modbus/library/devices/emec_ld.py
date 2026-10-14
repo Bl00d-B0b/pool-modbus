@@ -129,6 +129,23 @@ class PulseMode(IntEnum):
         return "ON/OFF" if self is PulseMode.ON_OFF else self.name.capitalize()
 
 
+class RelayMode(IntEnum):
+    """Working mode of a switching relay output (40090, 40220)."""
+
+    PROPORTIONAL_PWM = 0
+    ON_OFF = 1
+    FIXED_PWM = 2
+    DISABLED = 3
+
+    @property
+    def label(self) -> str:
+        return {0: "Proportional PWM", 1: "ON/OFF", 2: "Fixed PWM", 3: "Disabled"}[self.value]
+
+
+DUTY_RANGE = (0, 100)
+"""Percent of the 100 s PWM cycle the relay is on (the instruction manual: 100 % = 100 s)."""
+
+
 class FlowMode(IntEnum):
     """How the flow sensor input is used (40526)."""
 
@@ -265,6 +282,19 @@ class EmecLD(Component):
     ch2_pulse1_perc2 = integer(79, unit="p/min", writable=_whole(*RATE_RANGE))
     ch2_pulse1_wait = integer(80, unit="min", writable=_whole(*SPEED_RANGE))
     ch2_pulse1_mode = enum(81, PulseMode, writable=PulseMode)
+
+    # Switching relays "CH1 PH RELAY" (40082-40090) and "CH2 CL2 RELAY" (40212-40220):
+    # val1, val2, the duty cycle (%) at each, mode. Ton/Toff of Fixed PWM are not mapped.
+    ch1_relay_val1 = gauge(40, 0.01, writable=_hundredths(*PH_RANGE))
+    ch1_relay_val2 = gauge(41, 0.01, writable=_hundredths(*PH_RANGE))
+    ch1_relay_perc1 = integer(42, unit="%", writable=_whole(*DUTY_RANGE))
+    ch1_relay_perc2 = integer(43, unit="%", writable=_whole(*DUTY_RANGE))
+    ch1_relay_mode = enum(44, RelayMode, writable=RelayMode)
+    ch2_relay_val1 = gauge(105, 0.01, writable=_hundredths(*CL_RANGE))
+    ch2_relay_val2 = gauge(106, 0.01, writable=_hundredths(*CL_RANGE))
+    ch2_relay_perc1 = integer(107, unit="%", writable=_whole(*DUTY_RANGE))
+    ch2_relay_perc2 = integer(108, unit="%", writable=_whole(*DUTY_RANGE))
+    ch2_relay_mode = enum(109, RelayMode, writable=RelayMode)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -414,14 +444,15 @@ def _mode_steps(
     channel: int, output: int, mode: PulseMode, wait: int | None
 ) -> tuple[tuple[str, Any], ...]:
     """The writes the keypad makes for a mode: ON/OFF forces the top rate to 100 and
-    gives a 0 interval 1 minute, Proportional zeroes the interval, Off changes nothing."""
+    gives a 0 interval 1 minute; Proportional and Off zero the interval (seen on the
+    keypad 2026-10-14: ON/OFF with 3 min -> Off left 0). Values already held are skipped."""
     f = lambda name: _field(channel, output, name)  # noqa: E731
     if mode is PulseMode.ON_OFF:
         interval = ((f("wait"), 1),) if not wait else ()
         return ((f("perc1"), 100), (f("perc2"), 0), *interval, (f("mode"), mode))
     if mode is PulseMode.PROPORTIONAL:
         return ((f("wait"), 0), (f("mode"), mode))
-    return ((f("mode"), mode),)
+    return ((f("wait"), 0), (f("mode"), mode))
 
 
 async def set_dosing_mode(device: EmecLD, label: str, channel: int = 1, output: int = 1) -> None:
@@ -476,21 +507,26 @@ async def set_flow_mode(device: EmecLD, label: str) -> None:
 _RATE_FIELDS = {(1, 1): "pulse_rate_ch1", (1, 2): "pulse_rate_ch1_2", (2, 1): "pulse_rate_ch2"}
 
 
+def _channel(channel: int) -> tuple[str, str, str, str | None, tuple[float, float]]:
+    """Symbol, key, unit, device class and value range of a measuring channel."""
+    if channel == 1:
+        return "pH", "ph", "pH", "ph", PH_RANGE
+    return "Cl", "cl", "mg/L", None, CL_RANGE
+
+
 def _output_values(channel: int, output: int) -> tuple[Value, ...]:
-    """The pulse rate and the dosing settings of one pulse output, named "pH Relay 1",
-    "pH Relay 2" and "Cl Relay" as the user calls the dosing pumps on them.
-    The pump only uses each setting in some working modes."""
-    symbol, key, unit, device_class, value_range = (
-        ("pH", "ph", "pH", "ph", PH_RANGE) if channel == 1 else ("Cl", "cl", "mg/L", None, CL_RANGE)
-    )
-    prefix = f"{symbol} Relay {output}" if channel == 1 else f"{symbol} Relay"  # Cl has one
+    """The pulse rate and the dosing settings of one pulse output, named as on the
+    controller: "pH Pulse 1", "pH Pulse 2" ("CH1 PH PULSE 1/2") and "Cl Pulse" ("CH2 CL2
+    PULSE"). The pump only uses each setting in some working modes."""
+    symbol, key, unit, device_class, value_range = _channel(channel)
+    prefix = f"{symbol} Pulse {output}" if channel == 1 else f"{symbol} Pulse"  # Cl has one
     f = lambda name: _field(channel, output, name)  # noqa: E731
     mode_of = lambda d: getattr(d, f("mode"))  # noqa: E731
     writer = lambda name: lambda d, v: write_if_changed(d, f(name), v)  # noqa: E731
     return (
         Value(
             f"pulse_rate_{key}_{output}",
-            f"{prefix} Pulse Rate",
+            f"{prefix} Rate",
             lambda d: getattr(d, _RATE_FIELDS[channel, output]),
             "p/min",
             category="measurement",
@@ -546,7 +582,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_max_rate",
-            f"{prefix} Max Pulse Rate",
+            f"{prefix} Max Rate",
             lambda d: getattr(d, f("perc1")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
@@ -562,7 +598,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_min_rate",
-            f"{prefix} Min Pulse Rate",
+            f"{prefix} Min Rate",
             lambda d: getattr(d, f("perc2")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
@@ -591,6 +627,88 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             step=1,
             number_mode="box",
             icon="mdi:timer-cog-outline",
+        ),
+    )
+
+
+def _relay_values(channel: int) -> tuple[Value, ...]:
+    """The settings of a switching relay, "pH Relay" ("CH1 PH RELAY") or "Cl Relay"
+    ("CH2 CL2 RELAY"): the two values, the duty cycle at each (Proportional PWM) and the
+    mode. Its on/off state is the "... Relay State" sensor (40032, 40024)."""
+    symbol, key, unit, device_class, value_range = _channel(channel)
+    prefix = f"{symbol} Relay"
+    f = lambda name: f"ch{channel}_relay_{name}"  # noqa: E731
+    mode_of = lambda d: getattr(d, f("mode"))  # noqa: E731
+    writer = lambda name: lambda d, v: write_if_changed(d, f(name), v)  # noqa: E731
+
+    async def set_mode(device: EmecLD, label: str) -> None:
+        mode = next((m for m in RelayMode if m.label == label), None)
+        if mode is None:
+            raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in RelayMode)}")
+        await write_if_changed(device, f("mode"), mode)
+
+    def number(suffix, name, field, unit_, minimum, maximum, step, icon, available, dc=None):
+        return Value(
+            f"{key}_relay_{suffix}",
+            f"{prefix} {name}",
+            lambda d: getattr(d, f(field)),
+            unit_,
+            available=available,
+            category="setting",
+            device_class=dc,
+            feature="dosing_settings",
+            write=writer(field),
+            minimum=minimum,
+            maximum=maximum,
+            step=step,
+            number_mode="box",
+            icon=icon,
+        )
+
+    in_use = lambda d: mode_of(d) is not RelayMode.DISABLED  # noqa: E731
+    pwm = lambda d: mode_of(d) is RelayMode.PROPORTIONAL_PWM  # noqa: E731
+    return (
+        Value(
+            f"{key}_relay_mode",
+            f"{prefix} Dosing Mode",
+            mode_of,
+            category="setting",
+            feature="dosing_settings",
+            write=set_mode,
+            options=tuple(mode.label for mode in RelayMode),
+            icon="mdi:tune-variant",
+            icons={
+                "Proportional PWM": "mdi:chart-line-variant",
+                "ON/OFF": "mdi:toggle-switch-outline",
+                "Fixed PWM": "mdi:square-wave",
+                "Disabled": "mdi:cancel",
+            },
+        ),
+        number(
+            "max",
+            "Max Value",
+            "val1",
+            unit,
+            *value_range,
+            0.01,
+            "mdi:gauge-full",
+            in_use,
+            device_class,
+        ),
+        number(
+            "min",
+            "Min Value",
+            "val2",
+            unit,
+            *value_range,
+            0.01,
+            "mdi:gauge-empty",
+            in_use,
+            device_class,
+        ),
+        number("max_duty", "Max Duty Cycle", "perc1", "%", *DUTY_RANGE, 1, "mdi:speedometer", pwm),
+        number(
+            "min_duty", "Min Duty Cycle", "perc2", "%", *DUTY_RANGE, 1, "mdi:speedometer-slow", pwm
         ),
     )
 
@@ -625,7 +743,7 @@ VALUES = (
     ),
     Value(
         "relay_ph",
-        "pH Relay",
+        "pH Relay State",
         lambda d: d.relay_ch1,
         device_class="enum",
         options=("On", "Off", "Disabled"),
@@ -633,7 +751,7 @@ VALUES = (
     ),
     Value(
         "relay_cl",
-        "Cl Relay",
+        "Cl Relay State",
         lambda d: d.relay_ch2,
         device_class="enum",
         options=("On", "Off", "Disabled"),
@@ -673,6 +791,8 @@ VALUES = (
     *_output_values(1, 1),
     *_output_values(1, 2),
     *_output_values(2, 1),
+    *_relay_values(1),
+    *_relay_values(2),
     # Alarm and state coils; the live-confirmed ones first, then the user's notes.
     Value(
         "standby",

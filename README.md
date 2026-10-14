@@ -204,48 +204,55 @@ T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
   Firmware             1.7
 
 EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
-  pH Level                   7.51 pH
-  Cl Level                   0.46 mg/L
-  Temperature                17.6 °C
-  pH Relay                   On
-  Cl Relay                   On
-  pH Relay 1 Pulse Rate      0 p/min
-  Cl Relay Pulse Rate        0 p/min
-  pH Relay 2 Pulse Rate      0 p/min
-  pH Probe Voltage           -27 mV
-  Cl Probe Voltage           34 mV
-  RTC                        2026-10-01 20:32:00
-  pH Relay 1 Dosing Mode     Proportional
-  pH Relay 1 Max Value       10.0 pH
-  pH Relay 1 Min Value       7.5 pH
-  pH Relay 1 Max Pulse Rate  30 p/min
-  pH Relay 1 Min Pulse Rate  0 p/min
-  pH Relay 1 Pulse Speed     unavailable
-  pH Relay 2 Dosing Mode     Disabled
-  pH Relay 2 Max Value       unavailable
-  pH Relay 2 Min Value       unavailable
-  pH Relay 2 Max Pulse Rate  unavailable
-  pH Relay 2 Min Pulse Rate  unavailable
-  pH Relay 2 Pulse Speed     unavailable
-  Cl Relay Dosing Mode       Proportional
-  Cl Relay Max Value         0.0 mg/L
-  Cl Relay Min Value         0.45 mg/L
-  Cl Relay Max Pulse Rate    13 p/min
-  Cl Relay Min Pulse Rate    0 p/min
-  Cl Relay Pulse Speed       unavailable
-  Standby                    off
-  No Flow                    off
-  Cl Tank Empty              off
-  pH Tank Empty              off
-  Alarm Coils                None
-  Feeding Delay              5 min
-  Tau                        5
-  Flow Time                  5 min
-  Flow Mode                  Direct
-  Priority                   No priority
-
-
-
+  pH Level                 7.51 pH
+  Cl Level                 0.46 mg/L
+  Temperature              17.6 °C
+  pH Relay State           On
+  Cl Relay State           On
+  pH Pulse 1 Rate          0 p/min
+  Cl Pulse Rate            0 p/min
+  pH Pulse 2 Rate          0 p/min
+  pH Probe Voltage         -27 mV
+  Cl Probe Voltage         34 mV
+  RTC                      2026-10-01 20:32:00
+  pH Pulse 1 Dosing Mode   Proportional
+  pH Pulse 1 Max Value     10.0 pH
+  pH Pulse 1 Min Value     7.5 pH
+  pH Pulse 1 Max Rate      30 p/min
+  pH Pulse 1 Min Rate      0 p/min
+  pH Pulse 1 Pulse Speed   unavailable
+  pH Pulse 2 Dosing Mode   Disabled
+  pH Pulse 2 Max Value     unavailable
+  pH Pulse 2 Min Value     unavailable
+  pH Pulse 2 Max Rate      unavailable
+  pH Pulse 2 Min Rate      unavailable
+  pH Pulse 2 Pulse Speed   unavailable
+  Cl Pulse Dosing Mode     Proportional
+  Cl Pulse Max Value       0.0 mg/L
+  Cl Pulse Min Value       0.45 mg/L
+  Cl Pulse Max Rate        13 p/min
+  Cl Pulse Min Rate        0 p/min
+  Cl Pulse Pulse Speed     unavailable
+  pH Relay Dosing Mode     Proportional PWM
+  pH Relay Max Value       6.55 pH
+  pH Relay Min Value       6.5 pH
+  pH Relay Max Duty Cycle  100 %
+  pH Relay Min Duty Cycle  0 %
+  Cl Relay Dosing Mode     Proportional PWM
+  Cl Relay Max Value       2.45 mg/L
+  Cl Relay Min Value       2.5 mg/L
+  Cl Relay Max Duty Cycle  100 %
+  Cl Relay Min Duty Cycle  0 %
+  Standby                  off
+  No Flow                  off
+  Cl Tank Empty            off
+  pH Tank Empty            off
+  Alarm Coils              None
+  Feeding Delay            5 min
+  Tau                      5
+  Flow Time                5 min
+  Flow Mode                Direct
+  Priority                 No priority
 ```
 
 ## Python
