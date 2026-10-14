@@ -146,6 +146,14 @@ read before and after:
   RTC decodes the USA date word as day and month swapped, so after a switch to
   USA from Home Assistant it shows unknown (month 14) until the date is set on
   the keypad.
+  **A clock write with day and month swapped** (41624 high byte = the month,
+  41626 low byte = the day), sent while the format is USA, gives the date word
+  the keypad's USA order (0x0E0A for 14 October; tested 2026-10-14 20:14), and RTC
+  then showed the right date and time again, with the year 2001. The hour is
+  stored as written: 20 or, written in 12-hour form, 8; the PM flag does not
+  change with it. Twice that evening a write's minute did not reach the clock (it
+  showed the minute of the write before), so a clock write can leave the minute
+  one or two behind.
   A clock write sets day, month, hour and minute (tested in Europe format: all
   four as written, the year 2000). It does not set the
   seconds: there is no register for them and the clock keeps its old seconds (the
