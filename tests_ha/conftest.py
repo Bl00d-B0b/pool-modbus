@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -22,6 +23,14 @@ FIXTURES = ROOT / "tests" / "fixtures"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
+
+@pytest.fixture(autouse=True)
+def keep_fake_units():
+    """Fake units set by ``setup`` stay patched in for the whole test, so an entry that
+    reloads (after a dosing mode change) gets its fake unit again."""
+    yield
+    patch.stopall()
 
 
 @pytest.fixture(autouse=True)

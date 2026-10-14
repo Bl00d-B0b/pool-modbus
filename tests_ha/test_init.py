@@ -64,9 +64,10 @@ def make_entry(
 
 
 async def setup(hass: HomeAssistant, entry: MockConfigEntry, unit: FakeUnit) -> None:
-    with patch("custom_components.pool_modbus.async_get_unit", return_value=unit):
-        assert await hass.config_entries.async_setup(entry.entry_id)
-        await hass.async_block_till_done()
+    # stays patched until the test ends (see conftest.keep_fake_units), for reloads
+    patch("custom_components.pool_modbus.async_get_unit", return_value=unit).start()
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
 
 
 def state(hass: HomeAssistant, entity_id: str) -> str:
