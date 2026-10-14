@@ -112,10 +112,16 @@ read before and after:
   41612–41622 also take writes (undocumented, read 0) and do not set the year;
   41630–41642 take none. The library does not write the clock.
 - **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
-  changes one coil (128-coil read position 41). While it is on, the low byte of
-  40046, the year in Europe format, reads 1 (2000 reads as 2001, also with the
-  hour at 9, so it is not an AM/PM flag) and the hour stays in 24 h form. How
-  the clock reads in USA format: see "Units format" below.
+  changes one coil (128-coil read position 41). How the clock reads in USA
+  format: see "Units format" below.
+- **Where 2001 comes from** (reproduced 2026-10-14 20:00): a clock write is
+  applied with the year 2000 in Europe format and **2001 in USA format**. A
+  Modbus switch to USA re-applies the setpoint, and the year went 0 → 1 with that
+  apply (14 s after the switch, together with the minute), not with the switch
+  itself; back in Europe format the next apply set it to 0 again. The first coil
+  47 test had shown the same, and its second try showed nothing because the coil
+  was switched back after 4 s, before the apply. The other way to 2001 is the
+  clock's own New Year rollover, the only one that counts the year.
 - **Units format** (coil 47, the menu's Europe / USA; found 2026-10-14 by the
   keypad switch, which sets the same read position 41 as a write of 47): in USA
   format the temperature (40052) reads whole °F (60 for the display's 60.2 °F)
@@ -125,12 +131,22 @@ read before and after:
   position 43) and 46 (PM, read position 42), found by setting 9:00 AM and 7 PM
   on the keypad; a time set in Europe format keeps its 24-hour hour after a
   switch to USA. The RTC combines the hour with the PM flag (12 AM is 0).
-  Coil 46 takes function 05 writes (tested 2026-10-14 in Europe format: written
-  off, read position 42 cleared; written on, it came back; the hour stayed 19),
-  but **a write of coil 46 also makes the controller re-apply its clock
-  setpoint**, like a units switch: about 20 s later the clock showed the
-  setpoint's stale day, month and minute and the year 2000. The library does not
-  write coils 45 and 46.
+  Coil 46 takes function 05 writes, but only the flag changes: written off and
+  on in both formats (2026-10-14), the hour stayed 19 and the AM coil stayed off.
+  **A write of coil 46 also makes the controller re-apply its clock setpoint**,
+  like a units switch: the first try, with a stale setpoint, put its old day,
+  month and minute on the clock and the year 2000. The library does not write
+  coils 45 and 46.
+  **A switch over Modbus does not convert the clock** the way the keypad does:
+  after a Modbus switch to USA the date word stayed in Europe order (0x0A0E for
+  14 October) and the hour in 24-hour form, and the year became 2001 (above).
+  RTC decodes the USA date word as day and month swapped, so after a switch to
+  USA from Home Assistant it shows unknown (month 14) until the date is set on
+  the keypad.
+  A clock write sets day, month, hour and minute (tested in Europe format: all
+  four as written, the year 2000). It does not set the
+  seconds: there is no register for them and the clock keeps its old seconds (the
+  next minute came 43 s after an apply).
   The library reads the coil: **Temperature** (°C) exists in Europe format,
   **Temperature °F** (whole °F, without HA's temperature conversion) in USA
   format, and RTC decodes the date in both. **A switch over Modbus makes the
