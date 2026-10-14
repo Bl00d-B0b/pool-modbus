@@ -111,6 +111,14 @@ read before and after:
   count the year up.
   41612–41622 also take writes (undocumented, read 0) and do not set the year;
   41630–41642 take none. The library does not write the clock.
+  **Function 16** (tested 2026-10-14 21:00, 3 registers from 41624; the gateway
+  answered 0x0B as for every write) is stored, but byte by byte: the 6 bytes go
+  to consecutive byte addresses in the order sent (high byte first), while a
+  function 06 write and every read put a register's low byte at its own address
+  and the high byte at the next. In byte terms the setpoint is one record:
+  day, month, hour, minute, year at byte addresses 1624–1628. A function 16
+  write did not make the controller apply the setpoint (the clock kept running
+  for 80 s), so it cannot set the clock on its own.
 - **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
   changes one coil (128-coil read position 41). How the clock reads in USA
   format: see "Units format" below.
