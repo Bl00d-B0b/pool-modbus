@@ -95,19 +95,24 @@ read before and after:
 - **Labels** (40844–40857): 28 dashes, the placeholder of an unset instrument
   name.
 - **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
-  later, field by field, but not in the layout the controller reports or the
-  protocol description gives. The controller takes the day from the high byte
-  of 41624, the month from the low byte of 41626, the hour from its high byte
-  and the minute from the low byte of 41628. No byte set the year (41624 low
-  and 41628 high tried as binary and BCD; 41630 takes no writes), so a write
-  left the year at 2000, which only the keypad can correct. The library does not
-  write the clock.
+  later, but not in the layout the controller reports or the protocol
+  description gives. The controller copies the written bytes into a buffer at
+  the even addresses 1624 (month, day), 1626 (minute, hour) and 1628 (year), and
+  from there into the clock. Source bytes: day = 41624 high, month = 41626 low,
+  hour = 41626 high, minute = 41628 low, year = 41628 high (the byte the protocol
+  calls "00"). Day, month and hour are taken without a range check (day 32,
+  month 13 and 14, hour 25 all showed on the clock); a minute of 61 was refused.
+  **The year is copied into the buffer (6, 26, 99, 255 all showed at 1628) but
+  never into the clock**, so the year cannot be set over Modbus; a write in the
+  protocol's layout left the year at 2000, which only the keypad can correct.
+  41612–41622 also take writes (undocumented, read 0) and do not set the year;
+  41630–41642 take none. The library does not write the clock.
 - **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
-  changes one coil (128-coil read position 41) and not the hour (17 stays 17),
-  so it is not the 12/24 h format; once the clock's year byte moved from 0 to 1
-  at the same time, but a second try did not repeat that. The date format still
-  has to be found on the keypad. Year values 6, 26 and 0x26 in the setpoint's
-  unexplained bytes (41624 low, 41628 high) did not set the year either.
+  changes one coil (128-coil read position 41). While it is on, the low byte of
+  40046, the year in Europe format, reads 1 (2000 reads as 2001, also with the
+  hour at 9, so it is not an AM/PM flag) and the hour stays in 24 h form. How
+  the clock reads in USA format with a real year set is still to be seen, before
+  the RTC sensor can decode both formats.
 - **Fixed PWM on and off times** of the switching relays: not documented and not
   found yet.
 
