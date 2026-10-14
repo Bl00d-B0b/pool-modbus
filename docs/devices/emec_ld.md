@@ -103,6 +103,11 @@ read before and after:
   mode changes and dosing in between). A live watch of every value (43 full scans
   in 150 s) changed only the pH reading, the clock's minute and the pH probe
   voltage: no register counts seconds.
+- **Past 41840** (tested 2026-10-14): a read can start at most at 41836; one
+  starting at 41838 or higher gets no reply, even for one value. A read that
+  starts lower runs on past 41840, though: 125 values from 41836 reach 42084.
+  The 122 values 41842–42084 are random-looking like the block before them and
+  did not change in 35 reads over 75 s.
 - **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
   later, but not in the layout the controller reports or the protocol
   description gives. The controller copies the written bytes into a buffer at
