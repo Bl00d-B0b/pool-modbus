@@ -67,11 +67,11 @@ async def test_decodes_dosing_settings(make_pump, ldphcl_snapshot) -> None:
     assert device.ch1_pulse2_mode is PulseMode.DISABLED
 
     # Chlorine: 13 p/min at 0.00 ppm, falling to 0 p/min at 0.45 ppm
-    assert device.ch2_pulse_val1 == pytest.approx(0.0)
-    assert device.ch2_pulse_val2 == pytest.approx(0.45)
-    assert device.ch2_pulse_perc1 == 13
-    assert device.ch2_pulse_perc2 == 0
-    assert device.ch2_pulse_mode is PulseMode.PROPORTIONAL
+    assert device.ch2_pulse1_val1 == pytest.approx(0.0)
+    assert device.ch2_pulse1_val2 == pytest.approx(0.45)
+    assert device.ch2_pulse1_perc1 == 13
+    assert device.ch2_pulse1_perc2 == 0
+    assert device.ch2_pulse1_mode is PulseMode.PROPORTIONAL
 
 
 @pytest.mark.parametrize(
@@ -297,6 +297,12 @@ def quick_confirm(monkeypatch):
         ("ph2_min_rate", 5, [(145, 5), (143, 0)]),
         ("ph2_pulse_speed", 3, [(147, 3)]),
         ("ph2_mode", "Proportional", [(149, 1)]),  # wait is already 0
+        # Cl relay 1: 40154-40164 (wire 153-163), ppm values
+        ("cl1_max", 0.5, [(153, 50)]),
+        ("cl1_min", 0.4, [(155, 40)]),
+        ("cl1_max_rate", 12, [(157, 12)]),
+        ("cl1_min_rate", 4, [(159, 4), (157, 0)]),
+        ("cl1_mode", "Disabled", [(163, 2)]),
     ],
 )
 async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, writes) -> None:
@@ -372,6 +378,8 @@ async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
         ("ph1_min_rate", 2.5),
         ("ph1_pulse_speed", 100),
         ("ph1_mode", "Turbo"),
+        ("cl1_max", 20.01),
+        ("cl1_mode", "Turbo"),
     ],
 )
 async def test_values_the_pump_does_not_take_are_refused(

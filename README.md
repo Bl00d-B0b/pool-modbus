@@ -17,7 +17,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 |---|---|---|---|
 | Pool controller (filtration, cover, light, water level) | `pool_controller` | Read and write | [register map](docs/devices/pool_controller.md) |
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
-| EMEC LD series pH/Cl controller | `emec_ld` | Read and write (channel 1 dosing settings) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
+| EMEC LD series pH/Cl controller | `emec_ld` | Read and write (pulse output dosing settings) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
 Each device type also defines the values a user sees, with generic names, and
 the rules that go with them (for example, which dosing settings apply in which
@@ -95,7 +95,7 @@ Optional parts, each a checkbox:
 | Device | Optional part | Default |
 |---|---|---|
 | Pool controller | Backwash schedule, clock | On |
-| EMEC LD | Dosing settings (pH channel), probe voltages, clock | On |
+| EMEC LD | Dosing settings (pH and Cl pulse outputs), probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches, numbers, selects, times or lights; the T010
@@ -210,7 +210,7 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Relay                   On
   Cl Relay                   On
   pH Relay 1 Pulse Rate      0 p/min
-  Cl Pulse Rate              0 p/min
+  Cl Relay 1 Pulse Rate      0 p/min
   pH Relay 2 Pulse Rate      0 p/min
   pH Probe Voltage           -27 mV
   Cl Probe Voltage           34 mV
@@ -227,6 +227,12 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   pH Relay 2 Max Pulse Rate  unavailable
   pH Relay 2 Min Pulse Rate  unavailable
   pH Relay 2 Pulse Speed     unavailable
+  Cl Relay 1 Dosing Mode     Proportional
+  Cl Relay 1 Max Value       0.0 ppm
+  Cl Relay 1 Min Value       0.45 ppm
+  Cl Relay 1 Max Pulse Rate  13 p/min
+  Cl Relay 1 Min Pulse Rate  0 p/min
+  Cl Relay 1 Pulse Speed     unavailable
 
 
 ```

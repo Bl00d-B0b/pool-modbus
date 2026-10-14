@@ -22,6 +22,7 @@ from homeassistant.components.number import (
 from homeassistant.components.number import (
     DOMAIN as NUMBER_DOMAIN,
 )
+from homeassistant.components.select import DOMAIN as SELECT_DOMAIN
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -188,7 +189,8 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     await add(hass, "emec_ld", fake_unit("emec_ld"))
     assert hass.states.async_entity_ids(SWITCH_DOMAIN) == []
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
-    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 5  # its dosing settings
+    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 15  # 5 settings per pulse output
+    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 3  # one dosing mode each
 
 
 async def test_entity_shows_the_new_value_behind_a_caching_gateway(

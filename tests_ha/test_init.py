@@ -120,6 +120,10 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "number.dosing_pump_ph_relay_2_max_value") == STATE_UNAVAILABLE
     assert state(hass, "number.dosing_pump_ph_relay_2_max_pulse_rate") == STATE_UNAVAILABLE
     assert state(hass, "sensor.dosing_pump_ph_relay_2_pulse_rate") == "0"
+    # Chlorine has one pulse output, named the same way.
+    assert state(hass, "select.dosing_pump_cl_relay_1_dosing_mode") == "Proportional"
+    assert state(hass, "number.dosing_pump_cl_relay_1_min_value") == "0.45"
+    assert state(hass, "sensor.dosing_pump_cl_relay_1_pulse_rate") == "0"
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:

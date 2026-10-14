@@ -52,6 +52,7 @@ RENAMED_KEYS = {
     "ph_max_rate": "ph1_max_rate",
     "ph_min_rate": "ph1_min_rate",
     "ph_pulse_speed": "ph1_pulse_speed",
+    "pulse_rate_cl": "pulse_rate_cl_1",
 }
 """Value and action keys that were renamed: old key to new key."""
 
@@ -70,6 +71,7 @@ OLD_NAMES = {
     "ph2_max_rate": "pH Output 2 Max Pulse Rate",
     "ph2_min_rate": "pH Output 2 Min Pulse Rate",
     "ph2_pulse_speed": "pH Output 2 Pulse Speed",
+    "pulse_rate_cl_1": "Cl Pulse Rate",
 }
 """Former entity names by (new) key: an entity still on the id made from its old
 name moves to the id of the new name, with its history."""

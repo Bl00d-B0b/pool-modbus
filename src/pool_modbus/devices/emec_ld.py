@@ -105,6 +105,8 @@ class PulseMode(IntEnum):
 
 
 PH_RANGE = (0.0, 14.0)
+CL_RANGE = (0.0, 20.0)
+"""ppm; wider than any pool needs, the controller's own limit is not documented."""
 RATE_RANGE = (0, 180)
 """Pulses per minute; the controller's maximum."""
 SPEED_RANGE = (0, 99)
@@ -184,13 +186,13 @@ class EmecLD(Component):
     ch1_pulse2_wait = integer(73, unit="min", writable=_whole(*SPEED_RANGE))
     ch1_pulse2_mode = enum(74, PulseMode, writable=PulseMode)
 
-    # Channel 2 proportional dosing (40154-40164).
-    ch2_pulse_val1 = gauge(76, 0.01)
-    ch2_pulse_val2 = gauge(77, 0.01)
-    ch2_pulse_perc1 = integer(78, unit="p/min")
-    ch2_pulse_perc2 = integer(79, unit="p/min")
-    ch2_pulse_wait = integer(80, unit="min")
-    ch2_pulse_mode = enum(81, PulseMode)
+    # Channel 2 dosing, its pulse output (40154-40164), the same layout.
+    ch2_pulse1_val1 = gauge(76, 0.01, writable=_hundredths(*CL_RANGE))
+    ch2_pulse1_val2 = gauge(77, 0.01, writable=_hundredths(*CL_RANGE))
+    ch2_pulse1_perc1 = integer(78, unit="p/min", writable=_whole(*RATE_RANGE))
+    ch2_pulse1_perc2 = integer(79, unit="p/min", writable=_whole(*RATE_RANGE))
+    ch2_pulse1_wait = integer(80, unit="min", writable=_whole(*SPEED_RANGE))
+    ch2_pulse1_mode = enum(81, PulseMode, writable=PulseMode)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -301,15 +303,15 @@ def _create(unit: ModbusUnit, variant: str | None) -> EmecLD:
 # -- writes -------------------------------------------------------------------
 # Proportional mode runs from 0 p/min at one pH end to the set rate at the other,
 # so one end's rate zeroes the other's; a mode is entered in a fixed write order.
-# Channel 1's two pulse outputs share the code; ``output`` is 1 or 2.
+# The pulse outputs share the code: channel 1 has outputs 1 and 2, channel 2 output 1.
 
 
-def _field(output: int, name: str) -> str:
-    return f"ch1_pulse{output}_{name}"
+def _field(channel: int, output: int, name: str) -> str:
+    return f"ch{channel}_pulse{output}_{name}"
 
 
-def _mode_steps(output: int, mode: PulseMode) -> tuple[tuple[str, Any], ...]:
-    f = lambda name: _field(output, name)  # noqa: E731
+def _mode_steps(channel: int, output: int, mode: PulseMode) -> tuple[tuple[str, Any], ...]:
+    f = lambda name: _field(channel, output, name)  # noqa: E731
     if mode is PulseMode.ON_OFF:
         return ((f("perc1"), 100), (f("perc2"), 0), (f("wait"), 1), (f("mode"), mode))
     if mode is PulseMode.PROPORTIONAL:
@@ -317,54 +319,60 @@ def _mode_steps(output: int, mode: PulseMode) -> tuple[tuple[str, Any], ...]:
     return ((f("mode"), mode),)
 
 
-async def set_ph_mode(device: EmecLD, label: str, output: int = 1) -> None:
-    """Switch a channel 1 pulse output to ON/OFF, Proportional or Disabled."""
+async def set_dosing_mode(device: EmecLD, label: str, channel: int = 1, output: int = 1) -> None:
+    """Switch a pulse output to ON/OFF, Proportional or Disabled."""
     mode = next((m for m in PulseMode if m.label == label), None)
     if mode is None:
         raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in PulseMode)}")
     await update_or_keep(device)
-    if getattr(device, _field(output, "mode")) is mode:
+    if getattr(device, _field(channel, output, "mode")) is mode:
         return
-    for field, value in _mode_steps(output, mode):
+    for field, value in _mode_steps(channel, output, mode):
         await write_if_changed(device, field, value)
 
 
-async def set_max_rate(device: EmecLD, rate: float, output: int = 1) -> None:
+async def set_max_rate(device: EmecLD, rate: float, channel: int = 1, output: int = 1) -> None:
     """The rate at the output's Max Value; the rate at its Min Value goes to 0."""
-    await write_if_changed(device, _field(output, "perc1"), rate)
-    await write_if_changed(device, _field(output, "perc2"), 0)
+    await write_if_changed(device, _field(channel, output, "perc1"), rate)
+    await write_if_changed(device, _field(channel, output, "perc2"), 0)
 
 
-async def set_min_rate(device: EmecLD, rate: float, output: int = 1) -> None:
+async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: int = 1) -> None:
     """The rate at the output's Min Value; the rate at its Max Value goes to 0."""
-    await write_if_changed(device, _field(output, "perc2"), rate)
-    await write_if_changed(device, _field(output, "perc1"), 0)
+    await write_if_changed(device, _field(channel, output, "perc2"), rate)
+    await write_if_changed(device, _field(channel, output, "perc1"), 0)
 
 
-def _ph_output_values(output: int) -> tuple[Value, ...]:
-    """The pulse rate and the dosing settings of channel 1's pulse output 1 or 2,
-    named "pH Relay 1 ..." / "pH Relay 2 ..." as the user calls the two outputs.
+_RATE_FIELDS = {(1, 1): "pulse_rate_ch1", (1, 2): "pulse_rate_ch1_2", (2, 1): "pulse_rate_ch2"}
+
+
+def _output_values(channel: int, output: int) -> tuple[Value, ...]:
+    """The pulse rate and the dosing settings of one pulse output, named "pH Relay 1",
+    "pH Relay 2" and "Cl Relay 1" as the user calls the dosing pumps on them.
     The pump only uses each setting in some working modes."""
-    prefix = f"pH Relay {output}"
-    f = lambda name: _field(output, name)  # noqa: E731
+    symbol, key, unit, device_class, value_range = (
+        ("pH", "ph", "pH", "ph", PH_RANGE) if channel == 1 else ("Cl", "cl", "ppm", None, CL_RANGE)
+    )
+    prefix = f"{symbol} Relay {output}"
+    f = lambda name: _field(channel, output, name)  # noqa: E731
     mode_of = lambda d: getattr(d, f("mode"))  # noqa: E731
     writer = lambda name: lambda d, v: write_if_changed(d, f(name), v)  # noqa: E731
     return (
         Value(
-            f"pulse_rate_ph_{output}",
+            f"pulse_rate_{key}_{output}",
             f"{prefix} Pulse Rate",
-            lambda d: getattr(d, f"pulse_rate_ch1{'_2' if output == 2 else ''}"),
+            lambda d: getattr(d, _RATE_FIELDS[channel, output]),
             "p/min",
             category="measurement",
             icon="mdi:pulse",
         ),
         Value(
-            f"ph{output}_mode",
+            f"{key}{output}_mode",
             f"{prefix} Dosing Mode",
             mode_of,
             category="setting",
             feature="dosing_settings",
-            write=lambda d, label: set_ph_mode(d, label, output),
+            write=lambda d, label: set_dosing_mode(d, label, channel, output),
             options=tuple(mode.label for mode in PulseMode),
             fields=(f("perc1"), f("perc2"), f("wait")),
             icon="mdi:tune-variant",
@@ -375,46 +383,46 @@ def _ph_output_values(output: int) -> tuple[Value, ...]:
             },
         ),
         Value(
-            f"ph{output}_max",
+            f"{key}{output}_max",
             f"{prefix} Max Value",
             lambda d: getattr(d, f("val1")),
-            "pH",
+            unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
             category="setting",
-            device_class="ph",
+            device_class=device_class,
             feature="dosing_settings",
             write=writer("val1"),
-            minimum=PH_RANGE[0],
-            maximum=PH_RANGE[1],
+            minimum=value_range[0],
+            maximum=value_range[1],
             step=0.01,
             number_mode="box",
             icon="mdi:gauge-full",
         ),
         Value(
-            f"ph{output}_min",
+            f"{key}{output}_min",
             f"{prefix} Min Value",
             lambda d: getattr(d, f("val2")),
-            "pH",
+            unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
             category="setting",
-            device_class="ph",
+            device_class=device_class,
             feature="dosing_settings",
             write=writer("val2"),
-            minimum=PH_RANGE[0],
-            maximum=PH_RANGE[1],
+            minimum=value_range[0],
+            maximum=value_range[1],
             step=0.01,
             number_mode="box",
             icon="mdi:gauge-empty",
         ),
         Value(
-            f"ph{output}_max_rate",
+            f"{key}{output}_max_rate",
             f"{prefix} Max Pulse Rate",
             lambda d: getattr(d, f("perc1")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
             category="setting",
             feature="dosing_settings",
-            write=lambda d, v: set_max_rate(d, v, output),
+            write=lambda d, v: set_max_rate(d, v, channel, output),
             minimum=RATE_RANGE[0],
             maximum=RATE_RANGE[1],
             step=1,
@@ -423,14 +431,14 @@ def _ph_output_values(output: int) -> tuple[Value, ...]:
             icon="mdi:speedometer",
         ),
         Value(
-            f"ph{output}_min_rate",
+            f"{key}{output}_min_rate",
             f"{prefix} Min Pulse Rate",
             lambda d: getattr(d, f("perc2")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
             category="setting",
             feature="dosing_settings",
-            write=lambda d, v: set_min_rate(d, v, output),
+            write=lambda d, v: set_min_rate(d, v, channel, output),
             minimum=RATE_RANGE[0],
             maximum=RATE_RANGE[1],
             step=1,
@@ -439,7 +447,7 @@ def _ph_output_values(output: int) -> tuple[Value, ...]:
             icon="mdi:speedometer-slow",
         ),
         Value(
-            f"ph{output}_pulse_speed",
+            f"{key}{output}_pulse_speed",
             f"{prefix} Pulse Speed",
             lambda d: getattr(d, f("wait")),
             "min",
@@ -502,14 +510,6 @@ VALUES = (
         icons={"On": "mdi:pump", "Off": "mdi:pump-off", "Disabled": "mdi:pump-off"},
     ),
     Value(
-        "pulse_rate_cl",
-        "Cl Pulse Rate",
-        lambda d: d.pulse_rate_ch2,
-        "p/min",
-        category="measurement",
-        icon="mdi:pulse",
-    ),
-    Value(
         "probe_ph",
         "pH Probe Voltage",
         lambda d: d.probe_mv_ch1,
@@ -540,8 +540,9 @@ VALUES = (
         feature="clock",
         icon="mdi:clock-outline",
     ),
-    *_ph_output_values(1),
-    *_ph_output_values(2),
+    *_output_values(1, 1),
+    *_output_values(1, 2),
+    *_output_values(2, 1),
 )
 
 _DIVISORS = frozenset({1, 10, 100, 1000})
@@ -562,7 +563,7 @@ DEVICE_TYPE = DeviceType(
     create=_create,
     values=VALUES,
     features=(
-        Feature("dosing_settings", "Dosing settings (pH channel)"),
+        Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs)"),
         Feature("probe_voltages", "Probe voltages"),
         Feature("clock", "Clock"),
     ),
