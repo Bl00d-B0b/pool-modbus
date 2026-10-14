@@ -140,6 +140,12 @@ read before and after:
   like a units switch: the first try, with a stale setpoint, put its old day,
   month and minute on the clock and the year 2000. The library does not write
   coils 45 and 46.
+  **A switch over Modbus does not switch the readings either**: after a keypad
+  switch to USA the temperature read 60 (whole °F), after each of three Modbus
+  switches (2026-10-14 19:56, 20:13, 20:25) it kept reading 157 (°C × 10), so
+  Temperature °F showed 157. In USA format the year byte of a write is ignored
+  as well (26 tried in 41628 high and 41624 low, and in 41612–41622; the year
+  stayed 2001).
   **A switch over Modbus does not convert the clock** the way the keypad does:
   after a Modbus switch to USA the date word stayed in Europe order (0x0A0E for
   14 October) and the hour in 24-hour form, and the year became 2001 (above).
@@ -151,9 +157,11 @@ read before and after:
   the keypad's USA order (0x0E0A for 14 October; tested 2026-10-14 20:14), and RTC
   then showed the right date and time again, with the year 2001. The hour is
   stored as written: 20 or, written in 12-hour form, 8; the PM flag does not
-  change with it. Twice that evening a write's minute did not reach the clock (it
-  showed the minute of the write before), so a clock write can leave the minute
-  one or two behind.
+  change with it. Three times that evening the clock took the minute (or day) of
+  the write before: once the controller had answered the word's write with 0x0B
+  and not stored it (the read-back showed the old word), and the apply copied the
+  rest; the apply also copies field by field (a half-applied date word 0x0A0A
+  showed for a few seconds), so a write must be read back word by word.
   A clock write sets day, month, hour and minute (tested in Europe format: all
   four as written, the year 2000). It does not set the
   seconds: there is no register for them and the clock keeps its old seconds (the
