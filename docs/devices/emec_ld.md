@@ -92,8 +92,17 @@ read before and after:
 - **Countdown after flow returns, temperature probe millivolts, calibration
   dates and calibration-fail flags** (all on the status screens): no register
   holds them.
-- **Labels** (40844–40857): 28 dashes, the placeholder of an unset instrument
+- **Label** (the protocol's "chr0-chr1" … "chr26-chr27", R/W): the instrument's
+  28-character NAME, two characters per value, at 40844–40870 (14 values two
+  addresses apart; the protocol numbers them 40844–40857). The instruction
+  manual sets the instrument ID and NAME in the "RS485 Setup" menu; the NAME goes
+  into SMS messages, the USB log and ERMES. It reads 28 dashes here, an unset
   name.
+- **41664–41840**: undocumented, random-looking values that did not change in any
+  of 17 scans between 2026-10-01 and 2026-10-14 (clock writes, format switches,
+  mode changes and dosing in between). A live watch of every value (43 full scans
+  in 150 s) changed only the pH reading, the clock's minute and the pH probe
+  voltage: no register counts seconds.
 - **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
   later, but not in the layout the controller reports or the protocol
   description gives. The controller copies the written bytes into a buffer at
