@@ -344,6 +344,8 @@ def quick_confirm(monkeypatch):
         ("cl1_min_rate", 4, [(159, 4), (157, 0)]),
         ("cl1_mode", "Disabled", [(163, 2)]),
         ("start_delay_time", 4, [(521, 4)]),  # 40522
+        ("flow_time", 10, [(523, 10)]),  # 40524
+        ("flow_mode", "Reverse", [(525, 1)]),  # 40526
     ],
 )
 async def test_dosing_setting_writes(make_pump, ldphcl_snapshot, key, value, writes) -> None:
@@ -420,6 +422,8 @@ async def test_back_to_proportional(make_pump, ldphcl_snapshot) -> None:
         ("ph1_pulse_speed", 100),
         ("ph1_mode", "Turbo"),
         ("cl1_max", 20.01),
+        ("flow_time", 100),
+        ("flow_mode", "Sideways"),
         ("cl1_mode", "Turbo"),
     ],
 )

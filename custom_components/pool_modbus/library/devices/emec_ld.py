@@ -195,8 +195,8 @@ class EmecLD(Component):
     # Timing (40522-40526): the start delay before dosing resumes after flow or
     # power returns, the flow sensor's time and mode.
     start_delay_minutes = integer(260, unit="min", writable=_whole(0, 60))
-    flow_time = integer(261, unit="min")
-    flow_mode = enum(262, FlowMode)
+    flow_time = integer(261, unit="min", writable=_whole(0, 99))
+    flow_mode = enum(262, FlowMode, writable=FlowMode)
 
     # Measurements (40002-40008); the value is reading / divisor.
     ch1_reading = integer(0)
@@ -420,6 +420,14 @@ async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: in
     """The rate at the output's Min Value; the rate at its Max Value goes to 0."""
     await write_if_changed(device, _field(channel, output, "perc2"), rate)
     await write_if_changed(device, _field(channel, output, "perc1"), 0)
+
+
+async def set_flow_mode(device: EmecLD, label: str) -> None:
+    """How the flow contact is read (40526): Disabled, Reverse (N.O.) or Direct (N.C.)."""
+    mode = next((m for m in FlowMode if m.label == label), None)
+    if mode is None:
+        raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in FlowMode)}")
+    await write_if_changed(device, "flow_mode", mode)
 
 
 _RATE_FIELDS = {(1, 1): "pulse_rate_ch1", (1, 2): "pulse_rate_ch1_2", (2, 1): "pulse_rate_ch2"}
@@ -691,20 +699,30 @@ VALUES = (
         "Flow Time",
         lambda d: d.flow_time,
         "min",
-        category="diagnostic",
+        category="setting",
         device_class="duration",
         feature="dosing_settings",
+        write=lambda d, v: write_if_changed(d, "flow_time", v),
+        minimum=0,
+        maximum=99,
+        step=1,
+        number_mode="box",
         icon="mdi:timer-sand-complete",
     ),
     Value(
         "flow_mode",
         "Flow Mode",
         lambda d: d.flow_mode,
-        category="diagnostic",
-        device_class="enum",
-        options=tuple(mode.label for mode in FlowMode),
+        category="setting",
         feature="dosing_settings",
+        write=set_flow_mode,
+        options=tuple(mode.label for mode in FlowMode),
         icon="mdi:waves-arrow-right",
+        icons={
+            "Disabled": "mdi:cancel",
+            "Reverse": "mdi:swap-horizontal",
+            "Direct": "mdi:waves-arrow-right",
+        },
     ),
 )
 

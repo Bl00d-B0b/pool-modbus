@@ -123,8 +123,8 @@ observed and noted ones are named.
 | Register | Index | Shown as |
 |---|---|---|
 | 40522 | 260 | **Start Delay Time** (number, 0–60 min, writable): how long dosing waits after flow or power returns |
-| 40524 | 261 | **Flow Time** (diagnostic, min): the flow sensor's time |
-| 40526 | 262 | **Flow Mode** (diagnostic enum): Disabled, Reverse, Direct |
+| 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it |
+| 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
 
 40520 (tau) is not read. The controller gives no countdown of the start
 delay; Home Assistant can compute it from the Start Delay sensor's last change
@@ -174,6 +174,10 @@ worked.
 | Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
 | Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
 
+The timing values are written the same way: Start Delay Time (40522, 0–60 min),
+Flow Time (40524, 0–99 min) and Flow Mode (40526). Setting Flow Mode to
+Disabled makes the controller dose without flow, which its manual warns against.
+
 In proportional mode the controller doses from 0 p/min at one pH value to the
 set rate at the other, so setting one end's rate sets the other end's to 0:
 Max Pulse Rate writes perc1, then perc2 = 0; Min Pulse Rate writes perc2, then
@@ -210,8 +214,8 @@ controller yet.
 | No Flow Alarm, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 5, 7 | Fast |
 | Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
 | Start Delay Time | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
-| Flow Time | Diagnostic sensor, minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
-| Flow Mode | Diagnostic sensor: Disabled, Reverse, Direct | `enum` | `waves-arrow-right` | 40526 | Slow |
+| Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
+| Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 
 Entity ids carry the relay number where there is more than one output:
 `select.dosing_pump_ph_relay_1_dosing_mode`, `number.dosing_pump_ph_relay_2_max_value`;

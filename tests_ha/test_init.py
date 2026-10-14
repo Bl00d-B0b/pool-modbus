@@ -129,7 +129,8 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "binary_sensor.dosing_pump_start_delay") == "off"
     assert state(hass, "sensor.dosing_pump_alarm_coils") == "None"
     assert state(hass, "number.dosing_pump_start_delay_time") == "5"
-    assert state(hass, "sensor.dosing_pump_flow_mode") == "Direct"
+    assert state(hass, "select.dosing_pump_flow_mode") == "Direct"
+    assert state(hass, "number.dosing_pump_flow_time") == "5"
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:
