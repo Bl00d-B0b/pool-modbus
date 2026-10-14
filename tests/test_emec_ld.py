@@ -34,8 +34,14 @@ def test_wire_address(index: int, wire: int) -> None:
 async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    # values 0-81 and 259-262 (the timing block) in two reads, coils 0-15 in one
-    assert sorted(pump.requests) == [("coils", 0, 16), ("holding", 1, 82), ("holding", 519, 4)]
+    # values 0-81 and 259-262 (the timing block) in two reads; the alarm coils in a
+    # read of 16, the priority coil from a read of 128
+    assert sorted(pump.requests) == [
+        ("coils", 0, 16),
+        ("coils", 0, 128),
+        ("holding", 1, 82),
+        ("holding", 519, 4),
+    ]
     assert pump.message_spacing == pytest.approx(0.1)
 
 
@@ -63,6 +69,23 @@ async def test_coils_are_always_read_as_the_whole_block(make_pump, ldphcl_snapsh
     assert pump.requests == [("coils", 0, 16), ("coils", 0, 16)]
     with pytest.raises(ValueError):
         await unit.read_coils(16, 1)
+    with pytest.raises(NotImplementedError):
+        await unit.write_coil(10, True)  # only the tested configuration coil
+
+
+async def test_priority_is_coil_58(make_pump, ldphcl_snapshot) -> None:
+    """Seen live 2026-10-14: No priority sets the coil, which a 128-coil read shows at 62."""
+    pump = make_pump(ldphcl_snapshot, coils={58: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert value_text(values["priority"], device) == "No priority"
+
+    pump.slow_write_reply = True  # the gateway answers the write with 0x0B, as live
+    await values["priority"].write(device, "pH priority")
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 58, False)]
+    assert value_text(values["priority"], device) == "pH priority"
+    with pytest.raises(ValueError):
+        await values["priority"].write(device, "Cl priority")
 
 
 async def test_timing_values(make_pump, ldphcl_snapshot) -> None:

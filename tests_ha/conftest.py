@@ -78,9 +78,21 @@ class FakeUnit:
         return words
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
+        """Coils by address; a read of 128 from 0 shows coil 58 at 62, like the EMEC LD."""
         if self.fail is not None:
             raise self.fail
-        return [self.coils.get(address + i, False) for i in range(count)]
+        bits = [self.coils.get(address + i, False) for i in range(count)]
+        if (address, count) == (0, 128):
+            bits[58], bits[62] = False, self.coils.get(58, False)
+        return bits
+
+    async def write_coil(self, address: int, value: bool) -> None:
+        if self.fail is not None:
+            raise self.fail
+        self.writes.append(("coil", address, value))
+        self.coils[address] = bool(value)
+        if self.write_reply is not None:
+            raise self.write_reply
 
     async def write_register(self, address: int, value: int) -> None:
         if self.fail is not None:

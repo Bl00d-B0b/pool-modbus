@@ -44,6 +44,14 @@ def wire_address(index: int) -> int:
 COIL_BLOCK = 16
 """Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
 
+CONFIG_COILS = {58: 62}
+"""Configuration coils by write address, with the position the tested controller
+shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
+the keypad: coil 58, the dosing priority, reads at 62). Only these are read or
+written above the alarm block."""
+
+CONFIG_BLOCK = 128
+
 
 class EmecUnit:
     """A ``ModbusUnit`` view that maps EMEC value indices to odd wire addresses.
@@ -67,14 +75,16 @@ class EmecUnit:
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
         """The tested controller answers a coil read with bits that shift with the
-        start address and the count; only a read of coils 0-15 from 0 is stable,
-        so every read asks for that and takes its slice."""
-        if address + count > COIL_BLOCK:
-            raise ValueError(
-                f"coils {address}-{address + count - 1}: only 0-{COIL_BLOCK - 1} are read"
-            )
-        block = await self._unit.read_coils(0, COIL_BLOCK)
-        return block[address : address + count]
+        start address and the count. The alarm coils 0-15 are taken from a read of
+        16 from 0, the configuration coils from a read of 128 from 0 at the position
+        found for each (``CONFIG_COILS``); any other coil is refused."""
+        wanted = range(address, address + count)
+        unknown = [a for a in wanted if a >= COIL_BLOCK and a not in CONFIG_COILS]
+        if unknown:
+            raise ValueError(f"coils {unknown}: only 0-{COIL_BLOCK - 1} and {sorted(CONFIG_COILS)}")
+        alarms = await self._unit.read_coils(0, COIL_BLOCK) if wanted[0] < COIL_BLOCK else None
+        config = await self._unit.read_coils(0, CONFIG_BLOCK) if wanted[-1] >= COIL_BLOCK else None
+        return [alarms[a] if a < COIL_BLOCK else config[CONFIG_COILS[a]] for a in wanted]
 
     async def write_register(self, address: int, value: int) -> None:
         await self._unit.write_register(wire_address(address), value)
@@ -83,7 +93,10 @@ class EmecUnit:
         raise NotImplementedError("EMEC LD controllers are written one value per request")
 
     async def write_coil(self, address: int, value: bool) -> None:
-        raise NotImplementedError("coil writes to EMEC LD controllers are untested")
+        """Function 05; tested for the configuration coils in ``CONFIG_COILS`` only."""
+        if address not in CONFIG_COILS:
+            raise NotImplementedError(f"coil {address}: only {sorted(CONFIG_COILS)} were tested")
+        await self._unit.write_coil(address, value)
 
     async def write_coils(self, address: int, values: list[bool]) -> None:
         raise NotImplementedError("coil writes to EMEC LD controllers are untested")
@@ -169,7 +182,11 @@ class EmecLD(Component):
 
     max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
-    coil_ranges = ((0, COIL_BLOCK - 1),)  # the alarm block, always read whole
+    # the alarm block, always read whole, and the configuration coils
+    coil_ranges = ((0, COIL_BLOCK - 1), *((a, a) for a in sorted(CONFIG_COILS)))
+
+    # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
+    no_ph_priority = coil(58, writable=True)
 
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
@@ -430,6 +447,22 @@ async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: in
     """The rate at the output's Min Value; the rate at its Max Value goes to 0."""
     await write_if_changed(device, _field(channel, output, "perc2"), rate)
     await write_if_changed(device, _field(channel, output, "perc1"), 0)
+
+
+PRIORITY_OPTIONS = ("No priority", "pH priority")
+
+
+def _priority(device: EmecLD) -> str | None:
+    if device.no_ph_priority is None:
+        return None
+    return PRIORITY_OPTIONS[0] if device.no_ph_priority else PRIORITY_OPTIONS[1]
+
+
+async def set_priority(device: EmecLD, label: str) -> None:
+    """The dosing priority, as in the controller's menu: No priority or pH priority."""
+    if label not in PRIORITY_OPTIONS:
+        raise ValueError(f"{label!r} is not one of {', '.join(PRIORITY_OPTIONS)}")
+    await write_if_changed(device, "no_ph_priority", label == PRIORITY_OPTIONS[0])
 
 
 async def set_flow_mode(device: EmecLD, label: str) -> None:
@@ -746,6 +779,17 @@ VALUES = (
             "Reverse": "mdi:swap-horizontal",
             "Direct": "mdi:waves-arrow-right",
         },
+    ),
+    Value(
+        "priority",
+        "Priority",
+        _priority,
+        category="setting",
+        feature="dosing_settings",
+        write=set_priority,
+        options=PRIORITY_OPTIONS,
+        icon="mdi:sort-variant",
+        icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
     ),
 )
 

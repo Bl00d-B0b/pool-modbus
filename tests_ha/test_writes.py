@@ -190,7 +190,7 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     assert hass.states.async_entity_ids(SWITCH_DOMAIN) == []
     assert hass.states.async_entity_ids(CLIMATE_DOMAIN) == []
     assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 18  # 5 per output + 3 timing
-    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 4  # 3 dosing modes + flow mode
+    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 5  # 3 modes, flow mode, priority
 
 
 async def test_entity_shows_the_new_value_behind_a_caching_gateway(

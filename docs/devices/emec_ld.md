@@ -131,8 +131,13 @@ observed and noted ones are named.
 | 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it |
 | 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
 
-The menu's pH priority switch is coil 58, which cannot be read reliably (see the
-coil note above), so it is not shown. The controller gives no countdown of the wait after
+**Priority** (select, writable) is the menu's "Mode: No priority / pH priority",
+coil 58 (protocol: 0 = pH priority, 1 = no priority). It is written at address 58
+with function 05 and read from a read of 128 coils from 0, where the tested
+controller shows it at position 62: found on 2026-10-14 by switching it on the
+keypad (only that bit moved), and a write of 58 = on set the keypad back to No
+priority with no other coil changed. Other configuration coils are not read,
+since their positions are unknown. The controller gives no countdown of the wait after
 flow returns (every readable register was scanned during one on 2026-10-14 and
 none counted down); Home Assistant can compute it from the moment the flow
 contact closed and the Flow Time.
@@ -228,6 +233,7 @@ controller yet.
 | Tau | Number (input box), 0–30 | | `chart-bell-curve-cumulative` | 40520 | Slow |
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
+| Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
 
 Entity ids carry the relay number where there is more than one output:
 `select.dosing_pump_ph_relay_1_dosing_mode`, `number.dosing_pump_ph_relay_2_max_value`;

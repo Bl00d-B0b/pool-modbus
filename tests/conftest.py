@@ -37,13 +37,27 @@ class FakeEmecPump:
         self._failing_reads = 0
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
-        """Function 01; the real controller only answers a read of 0-15 consistently."""
+        """Function 01, as the real controller answers it: the alarm coils in a read of
+        16 from 0, configuration coil 58 at position 62 of a read of 128 from 0."""
         self.requests.append(("coils", address, count))
-        assert (address, count) == (0, 16), f"coil read {address}+{count}: only 0-15 is stable"
+        assert (address, count) in ((0, 16), (0, 128)), f"coil read {address}+{count} shifts"
         if self._failing_reads:
             self._failing_reads -= 1
             raise GatewayTargetError
-        return [bool(self.coils.get(address + i, False)) for i in range(count)]
+        if count == 16:
+            return [bool(self.coils.get(i, False)) for i in range(16)]
+        bits = [False] * 128
+        bits[62] = bool(self.coils.get(58, False))
+        return bits
+
+    async def write_coil(self, address: int, value: bool) -> None:
+        """Function 05; like a register write, the reply comes too late for the gateway."""
+        self.requests.append(("write_coil", address, value))
+        if not self.lose_writes:
+            self.coils[address] = bool(value)
+        self._failing_reads = self.failed_reads
+        if self.slow_write_reply or self.lose_writes:
+            raise GatewayTargetError
 
     def set_message_spacing(self, seconds: float) -> None:
         self.message_spacing = seconds

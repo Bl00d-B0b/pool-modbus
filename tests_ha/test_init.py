@@ -130,6 +130,7 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "sensor.dosing_pump_alarm_coils") == "None"
     assert state(hass, "number.dosing_pump_feeding_delay") == "5"
     assert state(hass, "number.dosing_pump_tau") == "5"
+    assert state(hass, "select.dosing_pump_priority") == "pH priority"  # coil 58 off
     assert state(hass, "select.dosing_pump_flow_mode") == "Direct"
     assert state(hass, "number.dosing_pump_flow_time") == "5"
 
