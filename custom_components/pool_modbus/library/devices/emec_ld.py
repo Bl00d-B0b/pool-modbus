@@ -15,7 +15,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, coil, enum, gauge, integer
 
-from .base import Action, DeviceType, Feature, ImplausibleReadError, Value
+from .base import DeviceType, Feature, ImplausibleReadError, Value
 from .reading import update_or_keep
 from .writing import write_if_changed
 
@@ -44,15 +44,15 @@ def wire_address(index: int) -> int:
 COIL_BLOCK = 16
 """Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
 
-CONFIG_COILS = {45: 43, 46: 42, 47: 41, 58: 62}
-WRITABLE_COILS = frozenset({47, 58})
-"""Coils whose writes were tested and are used; 45/46 (AM/PM) are only read."""
+CONFIG_COILS = {58: 62}
 """Configuration coils by write address, with the position the tested controller
 shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
 the keypad: coil 58, the dosing priority, reads at 62). Only these are read or
-written above the alarm block. Coil 47 (units format, USA when on) was found the same
-way: the keypad's switch to USA and a write of 47 both set position 41. Coils 45 (AM) and
-46 (PM) were found by setting the clock to 9:00 AM and 7 PM on the keypad (43 and 42)."""
+written above the alarm block. The units-format coils (45 AM at 43, 46 PM at 42, 47 USA
+at 41) are documented in docs/devices/emec_ld.md but not used: the library reads the
+controller in Europe format only."""
+WRITABLE_COILS = frozenset({58})
+"""Coils whose writes were tested and are used."""
 
 CONFIG_BLOCK = 128
 CONFIG_SPAN = (min(CONFIG_COILS), max(CONFIG_COILS) + 1)
@@ -214,22 +214,6 @@ class EmecLD(Component):
 
     # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
     no_ph_priority = coil(58, writable=True)
-    # Units format (coil 47, the menu's Europe / USA): in USA format the controller
-    # reports the temperature in whole °F and swaps day and month in the date word.
-    # Firmware 5.1.4: a write flips only the flag (the readings stay in Europe form) and
-    # makes the controller re-apply its clock setpoint; the keypad converts both.
-    us_format = coil(47, writable=True)
-    # PM flag (coil 46): in USA format the clock's hour is 1-12 and this tells the half.
-    clock_pm = coil(46)
-
-    # Clock setpoint (41624-41628), written by Sync RTC in the layout the controller
-    # applies (measured 2026-10-14; the protocol's MONTH|DAY, HOUR|YEAR, 00|MINUTES is
-    # not it): day | -, hour | month, year | minute. Applied 10-60 s after the write.
-    # Firmware 5.1.4 never takes the year (the clock gets 2000, 2001 in USA format).
-    clock_set_day = integer(811, signed=False, writable=True)
-    clock_set_hour_month = integer(812, signed=False, writable=True)
-    clock_set_year_minute = integer(813, signed=False, writable=True)
-
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
     # filtration pump was off (standby); coil 6 whenever the display says "no flow":
@@ -280,7 +264,7 @@ class EmecLD(Component):
     clock_year = bits(22, 0, 8)
     clock_minute = bits(23, 0, 8)
 
-    temperature_raw = integer(25)  # 40052: °C × 10, or whole °F in USA format
+    temperature_raw = integer(25)  # 40052: °C × 10 (Europe format, the only one read)
     probe_mv_ch1 = integer(27, unit="mV")  # 40056
     probe_mv_ch2 = integer(28, unit="mV")  # 40058
 
@@ -414,39 +398,24 @@ class EmecLD(Component):
 
     @property
     def temperature(self) -> float | None:
-        """Water temperature in °C, None in USA format (see ``temperature_f``)."""
-        if self.temperature_raw is None or self.us_format is not False:
+        """Water temperature in °C (the controller in Europe format)."""
+        if self.temperature_raw is None:
             return None
         return self.temperature_raw / 10
 
     @property
-    def temperature_f(self) -> int | None:
-        """Water temperature in whole °F, as the controller reports it in USA format."""
-        if self.temperature_raw is None or self.us_format is not True:
-            return None
-        return self.temperature_raw
-
-    @property
     def clock(self) -> datetime | None:
-        """The controller's clock, without time zone; None if unread or invalid.
-        In USA format the date word holds the day in its high byte, the month low, and
-        the hour runs 1-12 with the PM flag (coil 46) telling the half of the day."""
+        """The controller's clock in Europe format, without time zone; None if unread
+        or invalid."""
         parts = (self.clock_year, self.clock_month, self.clock_day, self.clock_hour)
-        if None in parts or self.clock_minute is None or self.us_format is None:
+        if None in parts or self.clock_minute is None:
             return None
-        month, day, hour = self.clock_month, self.clock_day, self.clock_hour
-        if self.us_format:
-            if self.clock_pm is None:
-                return None
-            month, day = day, month
-            if hour <= 12:  # a 24-hour hour (set in Europe format or by Sync RTC) stays
-                hour = hour % 12 + (12 if self.clock_pm else 0)
         try:
             return datetime(
                 2000 + self.clock_year,
-                month,
-                day,
-                hour,
+                self.clock_month,
+                self.clock_day,
+                self.clock_hour,
                 self.clock_minute,
             )
         except ValueError:
@@ -529,46 +498,6 @@ async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: in
 
 
 PRIORITY_OPTIONS = ("No priority", "pH priority")
-UNITS_OPTIONS = ("Europe", "USA")
-
-
-def _units(device: EmecLD) -> str | None:
-    if device.us_format is None:
-        return None
-    return UNITS_OPTIONS[1] if device.us_format else UNITS_OPTIONS[0]
-
-
-async def set_units(device: EmecLD, label: str) -> None:
-    """The controller's units format, coil 47 as documented.
-
-    Firmware 5.1.4 switches only the flag over Modbus (temperature and date stay in
-    Europe form, the keypad converts them) and re-applies the clock setpoint.
-    """
-    if label not in UNITS_OPTIONS:
-        raise ValueError(f"{label!r} is not one of {', '.join(UNITS_OPTIONS)}")
-    await write_if_changed(device, "us_format", label == UNITS_OPTIONS[1])
-
-
-async def sync_clock(device: EmecLD, now: datetime) -> None:
-    """Write ``now`` (local time) into the clock setpoint; the controller applies it
-    10-60 s later. Seconds have no register. In USA format the date goes in with day
-    and month swapped, the order the keypad stores, so the clock reads right in both.
-
-    Each word is confirmed by reading it back (the controller drops a write now and
-    then); the clock itself is not waited for, because firmware 5.1.4 never takes the
-    year and would never match.
-    """
-    await update_or_keep(device)
-    day, month = (now.month, now.day) if device.us_format else (now.day, now.month)
-    for field, word in (
-        ("clock_set_day", day << 8),
-        ("clock_set_hour_month", (now.hour << 8) | month),
-        ("clock_set_year_minute", ((now.year - 2000) << 8) | now.minute),
-    ):
-        try:
-            await write_if_changed(device, field, word)
-        except TimeoutError:
-            await write_if_changed(device, field, word)  # one more try for a dropped write
 
 
 def _priority(device: EmecLD) -> str | None:
@@ -825,22 +754,8 @@ VALUES = (
         "Temperature",
         lambda d: d.temperature,
         "°C",
-        available=lambda d: d.us_format is not True,
         category="measurement",
         device_class="temperature",
-        fields=("us_format",),
-        icon="mdi:thermometer",
-    ),
-    # In USA format the controller reports whole °F; shown as such, without HA's
-    # temperature device class, which would convert it back to the system's unit.
-    Value(
-        "temperature_f",
-        "Temperature °F",
-        lambda d: d.temperature_f,
-        "°F",
-        available=lambda d: d.us_format is True,
-        category="measurement",
-        fields=("us_format",),
         icon="mdi:thermometer",
     ),
     Value(
@@ -888,7 +803,6 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
-        fields=("us_format", "clock_pm"),
         icon="mdi:clock-outline",
     ),
     *_output_values(1, 1),
@@ -1014,28 +928,6 @@ VALUES = (
         icon="mdi:sort-variant",
         icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
     ),
-    Value(
-        "units",
-        "Units",
-        _units,
-        category="setting",
-        write=set_units,
-        options=UNITS_OPTIONS,
-        icon="mdi:earth",
-    ),
-)
-
-ACTIONS = (
-    Action(
-        "sync_rtc",
-        "Sync RTC",
-        sync_clock,
-        category="diagnostic",
-        scan_group="slow",
-        fields=("us_format", "clock_set_day", "clock_set_hour_month", "clock_set_year_minute"),
-        feature="clock",
-        icon="mdi:timer-sync-outline",
-    ),
 )
 
 _DIVISORS = frozenset({1, 10, 100, 1000})
@@ -1055,7 +947,6 @@ DEVICE_TYPE = DeviceType(
     models=("LDPHCL",),
     create=_create,
     values=VALUES,
-    actions=ACTIONS,
     features=(
         Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs, timing)"),
         Feature("alarms", "Alarms and standby (coils 1-16)"),

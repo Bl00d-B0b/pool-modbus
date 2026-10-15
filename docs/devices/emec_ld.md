@@ -124,7 +124,7 @@ read before and after:
   00:00), but the next write resets the year again, so it cannot be used to
   count the year up.
   41612–41622 also take writes (undocumented, read 0) and do not set the year;
-  41630–41642 take none. **Sync RTC** writes the clock (see below).
+  41630–41642 take none. The library does not write the clock.
   **Function 16** (tested 2026-10-14 21:00, 3 registers from 41624; the gateway
   answered 0x0B as for every write) is stored, but byte by byte: the 6 bytes go
   to consecutive byte addresses in the order sent (high byte first), while a
@@ -188,21 +188,13 @@ read before and after:
   four as written, the year 2000). It does not set the
   seconds: there is no register for them and the clock keeps its old seconds (the
   next minute came 43 s after an apply).
-  The library reads the coil: **Temperature** (°C) exists in Europe format,
-  **Temperature °F** (whole °F, without HA's temperature conversion) in USA
-  format, and RTC decodes the date in both. **Units** switches the format the
-  documented way, a write of coil 47 alone. With firmware 5.1.4 that is only half
-  a switch (above) and re-applies the clock setpoint, so on that firmware switch
-  the format on the keypad, which converts the readings and leaves the clock alone.
-- **Sync RTC** writes the local time into the clock setpoint in the layout the
-  controller applies (measured above, not the protocol's): 41624 = day | 0,
-  41626 = hour | month, 41628 = year − 2000 | minute, in USA format with day and
-  month swapped (the order the keypad stores, tested 2026-10-14). Each word is
-  read back and written once more if the controller dropped it; the clock takes
-  the setpoint 10–60 s later. Seconds have no register. With firmware 5.1.4 the
-  year does not reach the clock (it becomes 2000, 2001 in USA format); the button
-  is meant for a firmware that takes it. In USA format a 24-hour hour (13–23)
-  decodes as it is, a 1–12 hour with the PM flag.
+  **The library reads the controller in Europe format only** (since
+  2026-10-15, the user's choice after these tests): Temperature in °C, RTC with
+  the month in the date word's high byte and a 24-hour hour. It reads none of the
+  units coils and writes neither them nor the clock. In USA format (switched on
+  the keypad) the temperature would read in whole °F and RTC would be wrong or
+  unknown. A clock write applied while the controller was in USA format also put its temperature back to °C (60 → 157 at 13:59:48 on
+  2026-10-15) while coil 47 still read USA.
 - **Fixed PWM on and off times** of the switching relays: not documented and not
   found yet.
 
@@ -373,7 +365,6 @@ not been tried live.
 | pH Pulse 1/2 Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40028, 40030 | Medium |
 | pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
-| Sync RTC | Diagnostic button | | `timer-sync-outline` | 41624–41628 | Slow |
 | pH Pulse 1/2 Dosing Mode, Cl Pulse Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
 | pH Pulse 1/2 Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
 | Cl Pulse Max Value, Min Value | Numbers (input box), mg/L, 0–10, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
@@ -390,8 +381,6 @@ not been tried live.
 | Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 | Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
-| Units | Select: Europe, USA | | `earth` | coil 47 | Slow |
-| Temperature °F | Sensor, °F (USA format only; no device class) | | `thermometer` | 40052 | Medium |
 
 Entity ids follow the names: `select.dosing_pump_ph_pulse_1_dosing_mode`,
 `number.dosing_pump_ph_pulse_2_max_value`, `sensor.dosing_pump_cl_pulse_rate`,

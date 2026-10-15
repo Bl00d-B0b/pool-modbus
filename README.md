@@ -253,7 +253,6 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Flow Time                5 min
   Flow Mode                Direct
   Priority                 No priority
-  Units                    Europe
 ```
 
 ## Python
