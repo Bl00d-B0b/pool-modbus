@@ -50,8 +50,11 @@ async def test_alarm_coils(make_pump, ldphcl_snapshot) -> None:
     device = await read(make_pump(ldphcl_snapshot, coils={10: True}))
     assert device.standby is True
     assert device.no_flow is False
-    assert device.cl_tank_empty is False
+    assert device.ph_tank_empty is False
     assert device.active_alarm_coils == "11"
+    device = await read(make_pump(ldphcl_snapshot, coils={6: True}))  # seen live 2026-10-15
+    assert device.ph_tank_empty is True
+    assert device.cl_tank_empty is False
     device = await read(make_pump(ldphcl_snapshot, coils={5: True, 6: True, 7: True}))
     assert device.no_flow is True
     assert device.cl_tank_empty is True

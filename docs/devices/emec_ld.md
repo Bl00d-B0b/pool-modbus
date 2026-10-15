@@ -246,8 +246,8 @@ and takes the slice it needs (`EmecUnit.read_coils`).
 |---|---|---|
 | 11 | **Standby** (binary): on while the controller is held in standby, outputs off | seen live 2026-10-14: set within a minute of the filtration pump stopping, both relay outputs went Off; cleared within 15 s of flow returning |
 | 6 | **No Flow** (binary, `problem`): on while the controller sees no flow and holds dosing, outputs off | seen live 2026-10-14 while the display said "no flow": for the flow time after flow returned (from flow return until dosing resumed 5 min 14 s later), and once with the filtration running |
-| 7 | **Cl Tank Empty** (binary, `problem`) | the user's notes, read as counting from 0 (their "5 = no flow" is coil 6); not seen yet |
-| 8 | **pH Tank Empty** (binary, `problem`) | the user's notes, read the same way; not seen yet |
+| 7 | **pH Tank Empty** (binary, `problem`) | seen live 2026-10-15: on when the pH tank's level sensor was disconnected |
+| 8 | **Cl Tank Empty** (binary, `problem`) | the remaining tank coil; not seen yet |
 | all | **Alarm Coils** (diagnostic text): the set coils, e.g. "6, 11", or "None" | for naming the rest when they occur |
 
 The protocol description lists the coils as 1 Ch1 level 1, 2 Ch1 level 2,
@@ -374,7 +374,7 @@ not been tried live.
 | pH Relay / Cl Relay Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` (pH) | `gauge-full`, `gauge-empty` | 40082, 40084 / 40212, 40214 | Slow |
 | pH Relay / Cl Relay Max Duty Cycle, Min Duty Cycle | Numbers (input box), % | | `speedometer`, `speedometer-slow` | 40086, 40088 / 40216, 40218 | Slow |
 | Standby | Binary sensor | | `pause-circle` / `play-circle` | coil 11 | Fast |
-| No Flow, Cl Tank Empty, pH Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 6, 7, 8 | Fast |
+| No Flow, pH Tank Empty, Cl Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 6, 7, 8 | Fast |
 | Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
 | Feeding Delay | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
 | Tau | Number (input box), 0–30 | | `chart-bell-curve-cumulative` | 40520 | Slow |

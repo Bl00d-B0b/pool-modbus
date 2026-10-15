@@ -218,16 +218,16 @@ class EmecLD(Component):
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
     # filtration pump was off (standby); coil 6 whenever the display says "no flow":
     # for the flow time after flow came back, and once while the filtration ran.
-    # The tank coils follow the user's notes, read as counting from 0 (their
-    # "5 = no flow" is coil 6): 7 = Cl tank empty, 8 = pH tank empty.
+    # Coil 7 = pH tank empty, seen live 2026-10-15 (the pH tank's level sensor
+    # disconnected). Coil 8 = Cl tank empty, the remaining tank coil, not seen yet.
     alarm_coil_01 = coil(0)
     alarm_coil_02 = coil(1)
     alarm_coil_03 = coil(2)
     alarm_coil_04 = coil(3)
     alarm_coil_05 = coil(4)
     alarm_coil_06 = coil(5)  # no flow
-    alarm_coil_07 = coil(6)  # Cl tank empty (user's note)
-    alarm_coil_08 = coil(7)  # pH tank empty (user's note)
+    alarm_coil_07 = coil(6)  # pH tank empty (seen live)
+    alarm_coil_08 = coil(7)  # Cl tank empty (not seen yet)
     alarm_coil_09 = coil(8)
     alarm_coil_10 = coil(9)
     alarm_coil_11 = coil(10)  # standby (no flow)
@@ -376,11 +376,11 @@ class EmecLD(Component):
 
     @property
     def cl_tank_empty(self) -> bool | None:
-        return self.alarm_coil_07
+        return self.alarm_coil_08
 
     @property
     def ph_tank_empty(self) -> bool | None:
-        return self.alarm_coil_08
+        return self.alarm_coil_07
 
     @property
     def standby(self) -> bool | None:
