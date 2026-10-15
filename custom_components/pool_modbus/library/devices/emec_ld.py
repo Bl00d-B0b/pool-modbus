@@ -15,7 +15,7 @@ from typing import Any
 from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, coil, enum, gauge, integer
 
-from .base import DeviceType, Feature, ImplausibleReadError, Value
+from .base import Action, DeviceType, Feature, ImplausibleReadError, Value
 from .reading import update_or_keep
 from .writing import write_if_changed
 
@@ -45,8 +45,8 @@ COIL_BLOCK = 16
 """Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
 
 CONFIG_COILS = {45: 43, 46: 42, 47: 41, 58: 62}
-WRITABLE_COILS = frozenset({58})
-"""Coils whose writes were tested; 45/46 (AM/PM) are only read."""
+WRITABLE_COILS = frozenset({47, 58})
+"""Coils whose writes were tested and are used; 45/46 (AM/PM) are only read."""
 """Configuration coils by write address, with the position the tested controller
 shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
 the keypad: coil 58, the dosing priority, reads at 62). Only these are read or
@@ -216,11 +216,19 @@ class EmecLD(Component):
     no_ph_priority = coil(58, writable=True)
     # Units format (coil 47, the menu's Europe / USA): in USA format the controller
     # reports the temperature in whole °F and swaps day and month in the date word.
-    # Read-only: a write flips only the flag (the readings stay in Europe form) and
-    # costs the clock's year, so the format is switched on the keypad.
-    us_format = coil(47)
+    # Firmware 5.1.4: a write flips only the flag (the readings stay in Europe form) and
+    # makes the controller re-apply its clock setpoint; the keypad converts both.
+    us_format = coil(47, writable=True)
     # PM flag (coil 46): in USA format the clock's hour is 1-12 and this tells the half.
     clock_pm = coil(46)
+
+    # Clock setpoint (41624-41628), written by Sync RTC in the layout the controller
+    # applies (measured 2026-10-14; the protocol's MONTH|DAY, HOUR|YEAR, 00|MINUTES is
+    # not it): day | -, hour | month, year | minute. Applied 10-60 s after the write.
+    # Firmware 5.1.4 never takes the year (the clock gets 2000, 2001 in USA format).
+    clock_set_day = integer(811, signed=False, writable=True)
+    clock_set_hour_month = integer(812, signed=False, writable=True)
+    clock_set_year_minute = integer(813, signed=False, writable=True)
 
     # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
     # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
@@ -431,7 +439,8 @@ class EmecLD(Component):
             if self.clock_pm is None:
                 return None
             month, day = day, month
-            hour = hour % 12 + (12 if self.clock_pm else 0)
+            if hour <= 12:  # a 24-hour hour (set in Europe format or by Sync RTC) stays
+                hour = hour % 12 + (12 if self.clock_pm else 0)
         try:
             return datetime(
                 2000 + self.clock_year,
@@ -527,6 +536,39 @@ def _units(device: EmecLD) -> str | None:
     if device.us_format is None:
         return None
     return UNITS_OPTIONS[1] if device.us_format else UNITS_OPTIONS[0]
+
+
+async def set_units(device: EmecLD, label: str) -> None:
+    """The controller's units format, coil 47 as documented.
+
+    Firmware 5.1.4 switches only the flag over Modbus (temperature and date stay in
+    Europe form, the keypad converts them) and re-applies the clock setpoint.
+    """
+    if label not in UNITS_OPTIONS:
+        raise ValueError(f"{label!r} is not one of {', '.join(UNITS_OPTIONS)}")
+    await write_if_changed(device, "us_format", label == UNITS_OPTIONS[1])
+
+
+async def sync_clock(device: EmecLD, now: datetime) -> None:
+    """Write ``now`` (local time) into the clock setpoint; the controller applies it
+    10-60 s later. Seconds have no register. In USA format the date goes in with day
+    and month swapped, the order the keypad stores, so the clock reads right in both.
+
+    Each word is confirmed by reading it back (the controller drops a write now and
+    then); the clock itself is not waited for, because firmware 5.1.4 never takes the
+    year and would never match.
+    """
+    await update_or_keep(device)
+    day, month = (now.month, now.day) if device.us_format else (now.day, now.month)
+    for field, word in (
+        ("clock_set_day", day << 8),
+        ("clock_set_hour_month", (now.hour << 8) | month),
+        ("clock_set_year_minute", ((now.year - 2000) << 8) | now.minute),
+    ):
+        try:
+            await write_if_changed(device, field, word)
+        except TimeoutError:
+            await write_if_changed(device, field, word)  # one more try for a dropped write
 
 
 def _priority(device: EmecLD) -> str | None:
@@ -972,16 +1014,27 @@ VALUES = (
         icon="mdi:sort-variant",
         icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
     ),
-    # Read-only since 2026-10-14 (a select before, hence the new key: the select's
-    # registry entry is removed as an unused key).
     Value(
-        "units_format",
+        "units",
         "Units",
         _units,
         category="setting",
-        device_class="enum",
+        write=set_units,
         options=UNITS_OPTIONS,
         icon="mdi:earth",
+    ),
+)
+
+ACTIONS = (
+    Action(
+        "sync_rtc",
+        "Sync RTC",
+        sync_clock,
+        category="diagnostic",
+        scan_group="slow",
+        fields=("us_format", "clock_set_day", "clock_set_hour_month", "clock_set_year_minute"),
+        feature="clock",
+        icon="mdi:timer-sync-outline",
     ),
 )
 
@@ -1002,6 +1055,7 @@ DEVICE_TYPE = DeviceType(
     models=("LDPHCL",),
     create=_create,
     values=VALUES,
+    actions=ACTIONS,
     features=(
         Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs, timing)"),
         Feature("alarms", "Alarms and standby (coils 1-16)"),

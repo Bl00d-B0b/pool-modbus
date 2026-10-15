@@ -41,6 +41,7 @@ async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_sn
         ("coils", 0, 128),
         ("holding", 1, 110),
         ("holding", 519, 4),
+        ("holding", 1623, 3),  # the clock setpoint, for Sync RTC
     ]
     assert pump.message_spacing == pytest.approx(0.1)
 
@@ -87,10 +88,13 @@ async def test_usa_units_format(make_pump, ldphcl_snapshot) -> None:
     assert device.temperature is None
     assert device.temperature_f == 60
     assert device.clock == datetime(2026, 10, 14, 19, 13)
-    assert value_text(values["units_format"], device) == "USA"
-    assert values["units_format"].write is None  # switched on the keypad only
+    assert value_text(values["units"], device) == "USA"
+
     assert value_text(values["temperature_f"], device) == "60 °F"
     assert value_text(values["temperature"], device) == "unavailable"
+
+    await values["units"].write(device, "Europe")
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 47, False)]
 
 
 async def test_europe_units_format(make_pump, ldphcl_snapshot) -> None:
@@ -105,14 +109,14 @@ async def test_europe_units_format(make_pump, ldphcl_snapshot) -> None:
         device = await read(make_pump(registers, coils={47: False, 46: pm}))
         values = {v.key: v for v in get_device_type("emec_ld").values}
         assert device.clock == datetime(2026, 10, 14, 9, 5)
-        assert value_text(values["units_format"], device) == "Europe"
+        assert value_text(values["units"], device) == "Europe"
         assert value_text(values["temperature"], device) == "15.7 °C"
         assert value_text(values["temperature_f"], device) == "unavailable"
 
 
 @pytest.mark.parametrize(
     ("hour", "pm", "expected"),
-    [(9, False, 9), (12, False, 0), (12, True, 12), (7, True, 19), (11, True, 23)],
+    [(9, False, 9), (12, False, 0), (12, True, 12), (7, True, 19), (11, True, 23), (19, False, 19)],
 )
 async def test_usa_clock_hours(make_pump, ldphcl_snapshot, hour, pm, expected) -> None:
     registers = dict(ldphcl_snapshot)
@@ -120,6 +124,23 @@ async def test_usa_clock_hours(make_pump, ldphcl_snapshot, hour, pm, expected) -
     coils = {47: True, 46: pm, 45: not pm}
     device = await read(make_pump(registers, coils=coils))
     assert device.clock == datetime(2026, 10, 14, expected, 0)
+
+
+@pytest.mark.parametrize(
+    ("usa", "words"),
+    [
+        # measured layout: day | -, hour | month, year | minute
+        (False, [(1623, 15 << 8), (1625, (9 << 8) | 10), (1627, (26 << 8) | 41)]),
+        # USA format: day and month swapped, as the keypad stores them
+        (True, [(1623, 10 << 8), (1625, (9 << 8) | 15), (1627, (26 << 8) | 41)]),
+    ],
+)
+async def test_sync_rtc_writes_the_clock_setpoint(make_pump, ldphcl_snapshot, usa, words) -> None:
+    pump = make_pump(dict(ldphcl_snapshot), coils={47: usa})
+    device = await read(pump)
+    sync = next(a for a in get_device_type("emec_ld").actions if a.key == "sync_rtc")
+    await sync.press(device, datetime(2026, 10, 15, 9, 41, 30))
+    assert pump.writes == words
 
 
 async def test_priority_is_coil_58(make_pump, ldphcl_snapshot) -> None:
