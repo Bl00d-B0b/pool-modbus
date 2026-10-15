@@ -138,6 +138,32 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert state(hass, "select.dosing_pump_priority") == "pH priority"  # coil 58 off
     assert state(hass, "select.dosing_pump_flow_mode") == "Direct"
     assert state(hass, "number.dosing_pump_flow_time") == "5"
+    # All 14 alarm coils as problem sensors, off in the snapshot.
+    for alarm in (
+        "no_flow",
+        "cl_tank_empty",
+        "ph_tank_1_empty",
+        "ph_tank_2_empty",
+        "ph_out_of_range",
+        "cl_out_of_range",
+        "ph_probe_fail",
+        "cl_probe_fail",
+        "ph_pulse_1_dosing_alarm",
+        "ph_pulse_2_dosing_alarm",
+        "ph_relay_dosing_alarm",
+        "cl_pulse_dosing_alarm",
+        "cl_relay_dosing_alarm",
+    ):
+        entity = hass.states.get(f"binary_sensor.dosing_pump_{alarm}")
+        assert entity.state == "off"
+        assert entity.attributes["device_class"] == "problem"
+    # The alarm settings: times 0 (off), so no Dose/Stop; the out of range switches off.
+    for setting in ("ph_dosing_alarm", "cl_dosing_alarm", "ph_probe_failure", "cl_probe_failure"):
+        assert state(hass, f"number.dosing_pump_{setting}_time") == "0"
+        assert hass.states.get(f"select.dosing_pump_{setting}_action") is None
+    for side in ("ph_range_high", "ph_range_low", "cl_range_high", "cl_range_low"):
+        assert state(hass, f"switch.dosing_pump_{side}") == "off"
+    assert hass.states.get("number.dosing_pump_ph_range_time") is None  # neither side on
 
 
 async def test_entity_ids_take_the_prefix_not_the_name(hass: HomeAssistant) -> None:
@@ -198,6 +224,35 @@ async def test_renamed_keys_keep_their_entities(hass: HomeAssistant) -> None:
     assert moved.unique_id == f"{entry.unique_id}_sync_rtc"
     assert hass.states.get(old.entity_id) is not None
     assert registry.async_get("button.pool_controller_sync_rtc") is None  # no duplicate
+
+
+async def test_renames_of_2026_10_15_move_their_entities(hass: HomeAssistant) -> None:
+    """pH Tank Empty -> pH Tank 1 Empty, the relays' Max/Min Value -> On/Off Value (new keys)
+    and the pulse rates' Max/Min Rate -> On/Off Rate (same keys): entities still on the old
+    names' ids move to the new ones, with their history."""
+    entry = make_entry(hass, "emec_ld")
+    registry = er.async_get(hass)
+    old = {
+        (domain, key): registry.async_get_or_create(
+            domain, DOMAIN, f"{entry.unique_id}_{key}", config_entry=entry, suggested_object_id=obj
+        ).entity_id
+        for domain, key, obj in (
+            ("binary_sensor", "ph_tank_empty", "dosing_pump_ph_tank_empty"),
+            ("number", "ph_relay_max", "dosing_pump_ph_relay_max_value"),
+            ("number", "ph1_max_rate", "dosing_pump_ph_pulse_1_max_rate"),
+        )
+    }
+    await setup(hass, entry, fake_unit("emec_ld"))
+
+    for old_id in old.values():
+        assert registry.async_get(old_id) is None
+    tank = registry.async_get("binary_sensor.dosing_pump_ph_tank_1_empty")
+    assert tank.unique_id == f"{entry.unique_id}_ph_tank_1_empty"
+    relay = registry.async_get("number.dosing_pump_ph_relay_on_value")
+    assert relay.unique_id == f"{entry.unique_id}_ph_relay_on"
+    rate = registry.async_get("number.dosing_pump_ph_pulse_1_on_rate")
+    assert rate.unique_id == f"{entry.unique_id}_ph1_max_rate"
+    assert state(hass, "number.dosing_pump_ph_relay_on_value") == "6.55"
 
 
 async def test_renamed_ph_output_moves_to_the_relay_1_ids(hass: HomeAssistant) -> None:

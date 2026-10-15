@@ -367,3 +367,11 @@ async def test_sync_clock(controller_snapshot) -> None:
     assert unit.writes == [(32, [15 << 8 | 1, 14 << 8 | 30, 10 << 8 | 5, 20 << 8 | 26])]
     assert device.clock == now
     assert device.clock_weekday == 1
+
+
+def test_the_flooding_alarm_is_a_problem() -> None:
+    """Shown as OK / Problem like the other alarms (since 2026-10-15; it was moisture)."""
+    value = next(
+        v for v in get_device_type("pool_controller").values if v.key == "room_flooding_alarm"
+    )
+    assert value.device_class == "problem"

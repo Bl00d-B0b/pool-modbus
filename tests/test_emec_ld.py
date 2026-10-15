@@ -214,6 +214,15 @@ async def test_cl_range_coils_are_one_off_from_the_protocol(make_pump, ldphcl_sn
     assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 63, False)]
 
 
+async def test_probe_failure_action_only_while_a_time_is_set(make_pump, ldphcl_snapshot) -> None:
+    """As on the keypad: Dose/Stop shows only while the time is set; Off keeps the choice."""
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    device = await read(make_pump(dict(ldphcl_snapshot), coils={75: True}))  # times 0, pH Stop
+    assert value_text(values["ph_probe_alarm_time"], device) == "0 min"
+    assert value_text(values["ph_probe_alarm_action"], device) == "unavailable"
+    assert device.probe_alarm_ph_stop is True  # still stored
+
+
 async def test_timing_values(make_pump, ldphcl_snapshot) -> None:
     device = await read(make_pump(ldphcl_snapshot))
     assert device.tau == 5
@@ -374,6 +383,20 @@ async def test_ph_relay_mode_switch_sets_the_keypad_defaults(
     values = {v.name: v for v in get_device_type("emec_ld").values}
     await values["pH Relay Dosing Mode"].write(device, mode)
     assert pump.writes == [(85, 100), (87, 0), (91, {"ON/OFF": 1, "Disabled": 3}[mode])]
+
+
+@pytest.mark.parametrize("mode", ["ON/OFF", "Disabled"])
+async def test_cl_relay_mode_switch_sets_the_keypad_defaults(
+    make_pump, ldphcl_snapshot, mode
+) -> None:
+    """The Cl relay follows the pH relay's rules, its mode at 40222."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({211: 245, 213: 250, 215: 0, 217: 30, 221: 0})
+    pump = make_pump(registers)
+    device = await read(pump)
+    values = {v.name: v for v in get_device_type("emec_ld").values}
+    await values["Cl Relay Dosing Mode"].write(device, mode)
+    assert pump.writes == [(215, 100), (217, 0), (221, {"ON/OFF": 1, "Disabled": 3}[mode])]
 
 
 @pytest.mark.parametrize(
