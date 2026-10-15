@@ -53,7 +53,7 @@ async def test_a_group_reads_only_its_registers(make_pump, ldphcl_snapshot) -> N
     await fast.async_update()
 
     # 40004-40032: channel 1's divisor (for the check) to the two relay states, and the coils
-    assert sorted(pump.requests) == [("coils", 0, 16), ("holding", 3, 15)]
+    assert sorted(pump.requests) == [("coils", 0, 8), ("coils", 8, 8), ("holding", 3, 15)]
     assert fast.relay_ch1 is not None and fast.ch1_value is None
 
 

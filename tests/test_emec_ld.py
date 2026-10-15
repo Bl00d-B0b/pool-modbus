@@ -34,44 +34,66 @@ def test_wire_address(index: int, wire: int) -> None:
 async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    # values 0-109 (up to the Cl relay) and 259-262 (timing) in two reads; the alarm coils in a
-    # read of 16, the priority coil from a read of 128
+    # values 0-110 (up to the Cl relay's mode) and 213-262 (dosing alarm, timing); the alarm
+    # coils in two reads of 8, the settings coils in reads of 8, each block once
     assert sorted(pump.requests) == [
-        ("coils", 0, 16),
-        ("coils", 0, 128),
-        ("holding", 1, 110),
-        ("holding", 519, 4),
+        ("coils", 0, 8),
+        ("coils", 8, 8),
+        ("coils", 40, 8),
+        ("coils", 48, 8),
+        ("coils", 56, 8),
+        ("coils", 72, 8),
+        ("coils", 88, 8),
+        ("holding", 1, 111),
+        ("holding", 427, 50),  # the dosing alarm times 40428/40430 through the timing
     ]
     assert pump.message_spacing == pytest.approx(0.1)
 
 
 async def test_alarm_coils(make_pump, ldphcl_snapshot) -> None:
-    """Coil 11 = standby, coil 6 = no flow (both seen live), numbered from 1."""
-    device = await read(make_pump(ldphcl_snapshot, coils={10: True}))
-    assert device.standby is True
-    assert device.no_flow is False
-    assert device.ph_tank_empty is False
-    assert device.active_alarm_coils == "11"
-    device = await read(make_pump(ldphcl_snapshot, coils={6: True}))  # seen live 2026-10-15
-    assert device.ph_tank_empty is True
-    assert device.cl_tank_empty is False
-    device = await read(make_pump(ldphcl_snapshot, coils={5: True, 6: True, 7: True}))
-    assert device.no_flow is True
-    assert device.cl_tank_empty is True
-    assert device.ph_tank_empty is True
-    assert device.active_alarm_coils == "6, 7, 8"
+    """Alarm coils at address = protocol number - 1; tested at the pump 2026-10-15:
+    01 pH tank 1, 03 Cl tank, 04 no flow, 14 standby."""
+    device = await read(make_pump(ldphcl_snapshot, coils={0: True}))
+    assert (device.ph_tank_empty, device.cl_tank_empty, device.no_flow) == (True, False, False)
+    device = await read(make_pump(ldphcl_snapshot, coils={2: True}))
+    assert (device.ph_tank_empty, device.cl_tank_empty) == (False, True)
+    device = await read(make_pump(ldphcl_snapshot, coils={3: True, 13: True}))
+    assert (device.no_flow, device.standby) == (True, True)
+
+
+@pytest.mark.parametrize(
+    ("key", "address"),
+    [
+        ("ph_tank_2_empty", 1),
+        ("ph_out_of_range", 4),
+        ("cl_out_of_range", 5),
+        ("cl_pulse_dosing_alarm", 6),
+        ("cl_relay_dosing_alarm", 7),
+        ("ph_pulse_1_dosing_alarm", 8),
+        ("ph_relay_dosing_alarm", 9),
+        ("ph_pulse_2_dosing_alarm", 10),
+        ("ph_probe_fail", 11),
+        ("cl_probe_fail", 12),
+    ],
+)
+async def test_documented_alarms(make_pump, ldphcl_snapshot, key, address) -> None:
+    """The protocol's other alarms, at their protocol address."""
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    device = await read(make_pump(ldphcl_snapshot, coils={address: True}))
+    assert values[key].get(device) is True
     device = await read(make_pump(ldphcl_snapshot))
-    assert device.active_alarm_coils == "None"
+    assert values[key].get(device) is False
 
 
-async def test_coils_are_always_read_as_the_whole_block(make_pump, ldphcl_snapshot) -> None:
-    pump = make_pump(ldphcl_snapshot, coils={10: True})
+async def test_coils_come_from_reads_of_8(make_pump, ldphcl_snapshot) -> None:
+    """Seen live 2026-10-15: a read of 8 from 0 with the pH tank empty (address 0) set bit
+    7, with the Cl tank empty (address 2) bit 5; from 56 the priority (58) is bit 5."""
+    pump = make_pump(ldphcl_snapshot, coils={0: True, 13: True, 58: True})
     unit = EmecUnit(pump)
-    assert await unit.read_coils(10, 1) == [True]
-    assert await unit.read_coils(4, 3) == [False, False, False]
-    assert pump.requests == [("coils", 0, 16), ("coils", 0, 16)]
-    with pytest.raises(ValueError):
-        await unit.read_coils(16, 1)
+    assert await unit.read_coils(13, 1) == [True]
+    assert await unit.read_coils(0, 3) == [True, False, False]
+    assert await unit.read_coils(58, 1) == [True]
+    assert pump.requests == [("coils", 8, 8), ("coils", 0, 8), ("coils", 56, 8)]
     with pytest.raises(NotImplementedError):
         await unit.write_coil(10, True)  # only the tested configuration coil
 
@@ -89,6 +111,107 @@ async def test_priority_is_coil_58(make_pump, ldphcl_snapshot) -> None:
     assert value_text(values["priority"], device) == "pH priority"
     with pytest.raises(ValueError):
         await values["priority"].write(device, "Cl priority")
+
+
+async def test_dosing_alarm(make_pump, ldphcl_snapshot) -> None:
+    """As set on the keypad 2026-10-15: pH 49 min, Cl 177 min (40428, 40430; 0 = off) and
+    Dose / Stop in coils 44 (pH) and 59 (Cl)."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({427: 49, 429: 177})
+    pump = make_pump(registers, coils={44: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert value_text(values["ph_dosing_alarm_time"], device) == "49 min"
+    assert value_text(values["cl_dosing_alarm_time"], device) == "177 min"
+    assert value_text(values["ph_dosing_alarm_action"], device) == "Stop"
+    assert value_text(values["cl_dosing_alarm_action"], device) == "Dose"
+
+    pump.slow_write_reply = True  # the gateway answers with 0x0B, as for coil 58
+    await values["cl_dosing_alarm_action"].write(device, "Stop")
+    await values["ph_dosing_alarm_time"].write(device, 0)
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 59, True)]
+    assert pump.writes == [(427, 0)]
+    assert value_text(values["ph_dosing_alarm_action"], device) == "unavailable"  # off
+    with pytest.raises(ValueError):
+        await values["cl_dosing_alarm_time"].write(device, 1000)
+
+
+async def test_probe_failure(make_pump, ldphcl_snapshot) -> None:
+    """As set on the keypad 2026-10-15: pH 117 min Stop, Cl 104 min Dose (40444, 40446;
+    coils 75, 90); the keypad offers 0 (off) or 100-999 min."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({443: 117, 445: 104})
+    pump = make_pump(registers, coils={75: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert value_text(values["ph_probe_alarm_time"], device) == "117 min"
+    assert value_text(values["cl_probe_alarm_time"], device) == "104 min"
+    assert value_text(values["ph_probe_alarm_action"], device) == "Stop"
+    assert value_text(values["cl_probe_alarm_action"], device) == "Dose"
+    with pytest.raises(ValueError):
+        await values["cl_probe_alarm_time"].write(device, 50)  # below the keypad's 100
+    await values["cl_probe_alarm_time"].write(device, 0)
+    assert pump.writes == [(445, 0)]
+
+
+async def test_flow_time_only_with_a_flow_mode(make_pump, ldphcl_snapshot) -> None:
+    """As on the keypad 2026-10-15: the time shows for Reverse and Direct only, and
+    Disabled sets it to 0."""
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    pump = make_pump(ldphcl_snapshot)  # Direct, 5 min
+    device = await read(pump)
+    assert value_text(values["flow_time"], device) == "5 min"
+    await values["flow_mode"].write(device, "Disabled")
+    assert pump.writes == [(523, 0), (525, 0)]  # 40524 time, then 40526 mode
+    assert value_text(values["flow_time"], device) == "unavailable"
+
+
+async def test_out_of_range_alarm(make_pump, ldphcl_snapshot) -> None:
+    """As set on the keypad 2026-10-15: pH High 8.76 and Low 6.34 on, 11 min, Stop; Cl High
+    3.21 on, Low off, 22 min, Dose (40438-40442, 40454-40458; coils 51-53 for pH, 61-63
+    for Cl: High, Low, Stop)."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({437: 876, 439: 11, 441: 634, 453: 321, 455: 22, 457: 0})
+    pump = make_pump(registers, coils={51: True, 52: True, 53: True, 61: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    texts = {k: value_text(v, device) for k, v in values.items() if "_range_" in k}
+    assert texts == {
+        "ph_range_high": "on",
+        "ph_range_high_value": "8.76 pH",
+        "ph_range_low": "on",
+        "ph_range_low_value": "6.34 pH",
+        "ph_range_time": "11 min",
+        "ph_range_action": "Stop",
+        "cl_range_high": "on",
+        "cl_range_high_value": "3.21 mg/L",
+        "cl_range_low": "off",
+        "cl_range_low_value": "unavailable",
+        "cl_range_time": "22 min",
+        "cl_range_action": "Dose",
+    }
+    await values["ph_range_action"].write(device, "Dose")  # tested live: coil 53 follows
+    await values["ph_range_time"].write(device, 12)  # tested live: 40440 follows
+    await values["cl_range_high"].write(device, False)  # tested live: coil 61 follows
+    writes = [r for r in pump.requests if r[0] == "write_coil"]
+    assert writes == [("write_coil", 53, False), ("write_coil", 61, False)]
+    assert pump.writes == [(439, 12)]
+    device = await read(make_pump(registers))  # no side on: no time or action
+    assert value_text(values["cl_range_time"], device) == "unavailable"
+    with pytest.raises(ValueError):
+        await values["ph_range_low_value"].write(device, 14.0)  # the keypad stops at 13.9
+
+
+async def test_cl_range_coils_are_one_off_from_the_protocol(make_pump, ldphcl_snapshot) -> None:
+    """Seen on the keypad 2026-10-15: Cl High off, Low on, Stop = coils 61 off, 62 on, 63 on."""
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    pump = make_pump(ldphcl_snapshot, coils={62: True, 63: True})
+    device = await read(pump)
+    assert value_text(values["cl_range_high"], device) == "off"
+    assert value_text(values["cl_range_low"], device) == "on"
+    assert value_text(values["cl_range_action"], device) == "Stop"
+    await values["cl_range_action"].write(device, "Dose")  # tested live: coil 63 follows
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 63, False)]
 
 
 async def test_timing_values(make_pump, ldphcl_snapshot) -> None:
@@ -171,46 +294,86 @@ async def test_relay_2_has_the_same_values_as_relay_1(make_pump, ldphcl_snapshot
     texts = {name: value_text(values[name], device) for name in values}
     assert texts["pH Pulse 2 Rate"] == "3 p/min"
     assert texts["pH Pulse 2 Dosing Mode"] == "Disabled"
-    for name in ("Max Value", "Min Value", "Max Rate", "Min Rate", "Pulse Speed"):
+    for name in ("On Value", "Off Value", "On Rate", "Off Rate", "Pulse Speed"):
         assert texts[f"pH Pulse 2 {name}"] == "unavailable"
         assert values[f"pH Pulse 2 {name}"].writable
     assert {v.key for v in values.values() if v.name.startswith("pH Pulse 2")} == {
         f"ph2_{k}" for k in ("mode", "max", "min", "max_rate", "min_rate", "pulse_speed")
-    } | {"pulse_rate_ph_2"}
+    } | {"pulse_rate_ph_2", "ph_pulse_2_dosing_alarm"}
 
     registers[wire_address(74)] = PulseMode.PROPORTIONAL  # 40150
     device = await read(make_pump(registers))
     texts = {name: value_text(values[name], device) for name in values}
-    assert texts["pH Pulse 2 Max Value"] == "7.8 pH"
-    assert texts["pH Pulse 2 Min Value"] == "7.3 pH"
-    assert texts["pH Pulse 2 Max Rate"] == "180 p/min"
-    assert texts["pH Pulse 2 Min Rate"] == "0 p/min"
+    assert texts["pH Pulse 2 On Value"] == "7.8 pH"
+    assert texts["pH Pulse 2 Off Value"] == "7.3 pH"
+    assert texts["pH Pulse 2 On Rate"] == "180 p/min"
+    assert texts["pH Pulse 2 Off Rate"] == "0 p/min"
     assert texts["pH Pulse 2 Pulse Speed"] == "unavailable"
 
 
 async def test_switching_relays(make_pump, ldphcl_snapshot) -> None:
-    """CH1 PH RELAY 40082-40090 and CH2 CL2 RELAY 40212-40220, as read on 2026-10-14:
-    Proportional PWM between 6.55 (100 %) and 6.50 (0 %) pH, 2.45 and 2.50 mg/l."""
+    """CH1 PH RELAY 40082-40088 with its mode at 40092 (tested on the keypad 2026-10-15)
+    and CH2 CL2 RELAY 40212-40220: Proportional PWM between 6.55 (100 %) and 6.50 (0 %)
+    pH, 2.45 and 2.50 mg/l."""
     registers = dict(ldphcl_snapshot)
-    registers.update({81: 655, 83: 650, 85: 100, 87: 0, 89: 0})
-    registers.update({211: 245, 213: 250, 215: 100, 217: 0, 219: 0})
+    registers.update({81: 655, 83: 650, 85: 100, 87: 0, 89: 0, 91: 0})
+    registers.update({211: 245, 213: 250, 215: 100, 217: 0, 219: 0, 221: 0})
     device = await read(make_pump(registers))
     values = {v.name: v for v in get_device_type("emec_ld").values}
     texts = {name: value_text(values[name], device) for name in values}
     assert texts["pH Relay Dosing Mode"] == "Proportional PWM"
-    assert texts["pH Relay Max Value"] == "6.55 pH"
-    assert texts["pH Relay Min Value"] == "6.5 pH"
+    assert texts["pH Relay On Value"] == "6.55 pH"
+    assert texts["pH Relay Off Value"] == "6.5 pH"
     assert texts["pH Relay Max Duty Cycle"] == "100 %"
-    assert texts["Cl Relay Min Value"] == "2.5 mg/L"
+    assert texts["pH Relay On Period"] == "unavailable"
+    assert texts["Cl Relay Off Value"] == "2.5 mg/L"
+    assert texts["Cl Relay Dosing Mode"] == "Proportional PWM"
     assert texts["pH Relay State"] == "On"
 
-    registers[89] = 1  # ON/OFF: no duty cycles
+    registers[91] = 1  # ON/OFF: no duty cycles
     device = await read(make_pump(registers))
     assert value_text(values["pH Relay Max Duty Cycle"], device) == "unavailable"
-    assert value_text(values["pH Relay Max Value"], device) == "6.55 pH"
-    registers[89] = 3  # Disabled: no values either
+    assert value_text(values["pH Relay On Value"], device) == "6.55 pH"
+    registers.update({91: 2, 85: 231, 87: 123})  # Fixed PWM, as set on the keypad
     device = await read(make_pump(registers))
-    assert value_text(values["pH Relay Max Value"], device) == "unavailable"
+    assert value_text(values["pH Relay On Period"], device) == "231 s"
+    assert value_text(values["pH Relay Off Period"], device) == "123 s"
+    assert value_text(values["pH Relay Max Duty Cycle"], device) == "unavailable"
+    registers[91] = 3  # Disabled: no values either
+    device = await read(make_pump(registers))
+    assert value_text(values["pH Relay On Value"], device) == "unavailable"
+    registers[221] = 1  # Cl relay ON/OFF (its mode at 40222, as found 2026-10-15)
+    device = await read(make_pump(registers))
+    assert value_text(values["Cl Relay Dosing Mode"], device) == "ON/OFF"
+    assert value_text(values["Cl Relay Max Duty Cycle"], device) == "unavailable"
+    assert value_text(values["Cl Relay On Value"], device) == "2.45 mg/L"
+
+
+async def test_ph_relay_duty_cycles_one_at_a_time(make_pump, ldphcl_snapshot) -> None:
+    """As on the keypad: setting one duty cycle sets the other to 0."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({81: 655, 83: 650, 85: 3, 87: 0, 91: 0})
+    pump = make_pump(registers)
+    device = await read(pump)
+    values = {v.name: v for v in get_device_type("emec_ld").values}
+    await values["pH Relay Min Duty Cycle"].write(device, 5)
+    assert pump.writes == [(87, 5), (85, 0)]
+    with pytest.raises(ValueError):
+        await values["pH Relay Max Duty Cycle"].write(device, 101)
+
+
+@pytest.mark.parametrize("mode", ["ON/OFF", "Disabled"])
+async def test_ph_relay_mode_switch_sets_the_keypad_defaults(
+    make_pump, ldphcl_snapshot, mode
+) -> None:
+    """Seen on the keypad 2026-10-15: ON/OFF and Disabled set perc1 100 and perc2 0."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({81: 655, 83: 650, 85: 0, 87: 17, 91: 0})
+    pump = make_pump(registers)
+    device = await read(pump)
+    values = {v.name: v for v in get_device_type("emec_ld").values}
+    await values["pH Relay Dosing Mode"].write(device, mode)
+    assert pump.writes == [(85, 100), (87, 0), (91, {"ON/OFF": 1, "Disabled": 3}[mode])]
 
 
 @pytest.mark.parametrize(
@@ -325,26 +488,26 @@ async def test_a_write_goes_to_the_odd_wire_address(make_pump, ldphcl_snapshot) 
         (
             PulseMode.PROPORTIONAL,
             {
-                "pH Pulse 1 Max Value",
-                "pH Pulse 1 Min Value",
-                "pH Pulse 1 Max Rate",
-                "pH Pulse 1 Min Rate",
+                "pH Pulse 1 On Value",
+                "pH Pulse 1 Off Value",
+                "pH Pulse 1 On Rate",
+                "pH Pulse 1 Off Rate",
             },
             {"pH Pulse 1 Pulse Speed"},
         ),
         (
             PulseMode.ON_OFF,
-            {"pH Pulse 1 Max Value", "pH Pulse 1 Min Value", "pH Pulse 1 Pulse Speed"},
-            {"pH Pulse 1 Max Rate", "pH Pulse 1 Min Rate"},
+            {"pH Pulse 1 On Value", "pH Pulse 1 Off Value", "pH Pulse 1 Pulse Speed"},
+            {"pH Pulse 1 On Rate", "pH Pulse 1 Off Rate"},
         ),
         (
             PulseMode.DISABLED,
             set(),
             {
-                "pH Pulse 1 Max Value",
-                "pH Pulse 1 Min Value",
-                "pH Pulse 1 Max Rate",
-                "pH Pulse 1 Min Rate",
+                "pH Pulse 1 On Value",
+                "pH Pulse 1 Off Value",
+                "pH Pulse 1 On Rate",
+                "pH Pulse 1 Off Rate",
                 "pH Pulse 1 Pulse Speed",
             },
         ),
@@ -397,9 +560,9 @@ def quick_confirm(monkeypatch):
         ("cl1_min_rate", 4, [(159, 4), (157, 0)]),
         ("cl1_mode", "Disabled", [(163, 2)]),
         ("feeding_delay", 4, [(521, 4)]),  # 40522
-        ("ph_relay_max", 6.6, [(81, 660)]),  # 40082
-        ("cl_relay_min_duty", 10, [(217, 10)]),  # 40218
-        ("cl_relay_mode", "ON/OFF", [(219, 1)]),  # 40220
+        ("ph_relay_on", 6.6, [(81, 660)]),  # 40082
+        ("cl_relay_min_duty", 10, [(217, 10), (215, 0)]),  # 40218, the other one to 0
+        ("cl_relay_mode", "ON/OFF", [(221, 1)]),  # 40222 (perc1 100 / perc2 0 already)
         ("tau", 10, [(519, 10)]),  # 40520
         ("flow_time", 10, [(523, 10)]),  # 40524
         ("flow_mode", "Reverse", [(525, 1)]),  # 40526

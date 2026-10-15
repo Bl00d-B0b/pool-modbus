@@ -434,7 +434,7 @@ VALUES = (
         "Flooding Alarm",
         lambda d: d.room_flooding_alarm,
         binary=True,
-        device_class="moisture",
+        device_class="problem",
         icon="mdi:home-flood",
         icon_off="mdi:home",
     ),

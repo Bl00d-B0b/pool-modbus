@@ -37,21 +37,14 @@ class FakeEmecPump:
         self._failing_reads = 0
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
-        """Function 01, as the real controller answers it: the alarm coils in a read of
-        16 from 0, configuration coil 58 at position 62 of a read of 128 from 0."""
+        """Function 01, as the real controller answers a read of 8 from a multiple of 8:
+        the block's bits in reverse order (coil address + n is bit 7 - n)."""
         self.requests.append(("coils", address, count))
-        assert (address, count) in ((0, 16), (0, 128)), f"coil read {address}+{count} shifts"
+        assert count == 8 and address % 8 == 0, f"coil read {address}+{count} is scrambled"
         if self._failing_reads:
             self._failing_reads -= 1
             raise GatewayTargetError
-        if count == 16:
-            return [bool(self.coils.get(i, False)) for i in range(16)]
-        bits = [False] * 128
-        bits[62] = bool(self.coils.get(58, False))
-        bits[41] = bool(self.coils.get(47, False))
-        bits[42] = bool(self.coils.get(46, False))  # PM
-        bits[43] = bool(self.coils.get(45, False))  # AM
-        return bits
+        return [bool(self.coils.get(address + 7 - i, False)) for i in range(8)]
 
     async def write_coil(self, address: int, value: bool) -> None:
         """Function 05; like a register write, the reply comes too late for the gateway."""

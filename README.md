@@ -216,38 +216,47 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Probe Voltage         34 mV
   RTC                      2026-10-01 20:32:00
   pH Pulse 1 Dosing Mode   Proportional
-  pH Pulse 1 Max Value     10.0 pH
-  pH Pulse 1 Min Value     7.5 pH
-  pH Pulse 1 Max Rate      30 p/min
-  pH Pulse 1 Min Rate      0 p/min
+  pH Pulse 1 On Value      10.0 pH
+  pH Pulse 1 Off Value     7.5 pH
+  pH Pulse 1 On Rate       30 p/min
+  pH Pulse 1 Off Rate      0 p/min
   pH Pulse 1 Pulse Speed   unavailable
   pH Pulse 2 Dosing Mode   Disabled
-  pH Pulse 2 Max Value     unavailable
-  pH Pulse 2 Min Value     unavailable
-  pH Pulse 2 Max Rate      unavailable
-  pH Pulse 2 Min Rate      unavailable
+  pH Pulse 2 On Value      unavailable
+  pH Pulse 2 Off Value     unavailable
+  pH Pulse 2 On Rate       unavailable
+  pH Pulse 2 Off Rate      unavailable
   pH Pulse 2 Pulse Speed   unavailable
   Cl Pulse Dosing Mode     Proportional
-  Cl Pulse Max Value       0.0 mg/L
-  Cl Pulse Min Value       0.45 mg/L
-  Cl Pulse Max Rate        13 p/min
-  Cl Pulse Min Rate        0 p/min
+  Cl Pulse On Value        0.0 mg/L
+  Cl Pulse Off Value       0.45 mg/L
+  Cl Pulse On Rate         13 p/min
+  Cl Pulse Off Rate        0 p/min
   Cl Pulse Pulse Speed     unavailable
   pH Relay Dosing Mode     Proportional PWM
-  pH Relay Max Value       6.55 pH
-  pH Relay Min Value       6.5 pH
+  pH Relay On Value        6.55 pH
+  pH Relay Off Value       6.5 pH
   pH Relay Max Duty Cycle  100 %
   pH Relay Min Duty Cycle  0 %
   Cl Relay Dosing Mode     Proportional PWM
-  Cl Relay Max Value       2.45 mg/L
-  Cl Relay Min Value       2.5 mg/L
+  Cl Relay On Value        2.45 mg/L
+  Cl Relay Off Value       2.5 mg/L
   Cl Relay Max Duty Cycle  100 %
   Cl Relay Min Duty Cycle  0 %
   Standby                  off
   No Flow                  off
   Cl Tank Empty            off
-  pH Tank Empty            off
-  Alarm Coils              None
+  pH Tank 1 Empty          off
+  pH Tank 2 Empty          off
+  pH Out of Range          off
+  Cl Out of Range          off
+  Cl Pulse Dosing Alarm    off
+  Cl Relay Dosing Alarm    off
+  pH Pulse 1 Dosing Alarm  off
+  pH Relay Dosing Alarm    off
+  pH Pulse 2 Dosing Alarm  off
+  pH Probe Fail            off
+  Cl Probe Fail            off
   Feeding Delay            5 min
   Tau                      5
   Flow Time                5 min

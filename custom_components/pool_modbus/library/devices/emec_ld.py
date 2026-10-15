@@ -8,6 +8,7 @@ and maps them to the wire. Register map and formats: docs/devices/emec_ld.md.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime
 from enum import IntEnum
 from typing import Any
@@ -41,22 +42,14 @@ def wire_address(index: int) -> int:
     return 2 * index + 1
 
 
-COIL_BLOCK = 16
-"""Alarm coils are read as one block of 16 from address 0 (see EmecUnit.read_coils)."""
-
-CONFIG_COILS = {58: 62}
-"""Configuration coils by write address, with the position the tested controller
-shows them at in a read of 128 coils from 0 (found 2026-10-14 by switching each on
-the keypad: coil 58, the dosing priority, reads at 62). Only these are read or
-written above the alarm block. The units-format coils (45 AM at 43, 46 PM at 42, 47 USA
-at 41) are documented in docs/devices/emec_ld.md but not used: the library reads the
-controller in Europe format only."""
-WRITABLE_COILS = frozenset({58})
+COIL_READ = 8
+"""Coils are read 8 at a time from a multiple of 8: the tested controller answers each
+such block with its bits in reverse order (coil start + n is bit 7 - n), and a longer
+read also shifts each byte's bits up by one and drops the top bit. Found 2026-10-15 with
+the alarms and configuration coils switched at the pump; with that rule every coil sits
+at the address the protocol gives (alarm coils: its number - 1)."""
+WRITABLE_COILS = frozenset({44, 51, 52, 53, 58, 59, 61, 62, 63, 75, 90})
 """Coils whose writes were tested and are used."""
-
-CONFIG_BLOCK = 128
-CONFIG_SPAN = (min(CONFIG_COILS), max(CONFIG_COILS) + 1)
-"""The configuration coils are read as one span, so in one read of 128."""
 
 
 class EmecUnit:
@@ -80,21 +73,12 @@ class EmecUnit:
         return await self._unit.read_input_registers(wire_address(address), count)
 
     async def read_coils(self, address: int, count: int) -> list[bool]:
-        """The tested controller answers a coil read with bits that shift with the
-        start address and the count. The alarm coils 0-15 are taken from a read of
-        16 from 0, the configuration coils from a read of 128 from 0 at the position
-        found for each (``CONFIG_COILS``); any other coil is refused."""
+        """Coils by their protocol address, from reads of 8 (see ``COIL_READ``)."""
         wanted = range(address, address + count)
-        outside = [a for a in wanted if COIL_BLOCK <= a < CONFIG_SPAN[0] or a >= CONFIG_SPAN[1]]
-        if outside:
-            raise ValueError(f"coils {outside}: only 0-{COIL_BLOCK - 1} and {CONFIG_SPAN}")
-        alarms = await self._unit.read_coils(0, COIL_BLOCK) if wanted[0] < COIL_BLOCK else None
-        config = await self._unit.read_coils(0, CONFIG_BLOCK) if wanted[-1] >= COIL_BLOCK else None
-        # Configuration coils with no known read position read as off; no value uses them.
-        return [
-            alarms[a] if a < COIL_BLOCK else bool(a in CONFIG_COILS and config[CONFIG_COILS[a]])
-            for a in wanted
-        ]
+        blocks: dict[int, list[bool]] = {}
+        for start in sorted({a - a % COIL_READ for a in wanted}):
+            blocks[start] = await self._unit.read_coils(start, COIL_READ)
+        return [blocks[a - a % COIL_READ][COIL_READ - 1 - a % COIL_READ] for a in wanted]
 
     async def write_register(self, address: int, value: int) -> None:
         await self._unit.write_register(wire_address(address), value)
@@ -140,7 +124,7 @@ class PulseMode(IntEnum):
 
 
 class RelayMode(IntEnum):
-    """Working mode of a switching relay output (40090, 40220)."""
+    """Working mode of a switching relay output (pH relay 40092, Cl relay 40222)."""
 
     PROPORTIONAL_PWM = 0
     ON_OFF = 1
@@ -153,6 +137,8 @@ class RelayMode(IntEnum):
 
 
 DUTY_RANGE = (0, 100)
+PWM_TIME_RANGE = (0, 250)
+"""Fixed PWM's Ton and Toff on the keypad (pH relay, 2026-10-15)."""
 """Percent of the 100 s PWM cycle the relay is on (the instruction manual: 100 % = 100 s)."""
 
 
@@ -210,38 +196,65 @@ class EmecLD(Component):
     max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
     # the alarm block, always read whole, and the configuration coils
-    coil_ranges = ((0, COIL_BLOCK - 1), (CONFIG_SPAN[0], CONFIG_SPAN[1] - 1))
+    # alarms; dosing alarm actions; out of range; priority; probe failure actions
+    # (51-63 as one range, so each block of 8 is read once)
+    coil_ranges = ((0, 13), (44, 44), (51, 63), (75, 75), (90, 90))
 
     # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
     no_ph_priority = coil(58, writable=True)
-    # Alarm and state coils (function 01), coils 0-15 in one read, numbered from 1
-    # as in the protocol description. Seen live on 2026-10-14: coil 11 while the
-    # filtration pump was off (standby); coil 6 whenever the display says "no flow":
-    # for the flow time after flow came back, and once while the filtration ran.
-    # Coil 7 = pH tank empty, seen live 2026-10-15 (the pH tank's level sensor
-    # disconnected). Coil 8 = Cl tank empty, the remaining tank coil, not seen yet.
-    alarm_coil_01 = coil(0)
-    alarm_coil_02 = coil(1)
-    alarm_coil_03 = coil(2)
-    alarm_coil_04 = coil(3)
-    alarm_coil_05 = coil(4)
-    alarm_coil_06 = coil(5)  # no flow
-    alarm_coil_07 = coil(6)  # pH tank empty (seen live)
-    alarm_coil_08 = coil(7)  # Cl tank empty (not seen yet)
-    alarm_coil_09 = coil(8)
-    alarm_coil_10 = coil(9)
-    alarm_coil_11 = coil(10)  # standby (no flow)
-    alarm_coil_12 = coil(11)
-    alarm_coil_13 = coil(12)
-    alarm_coil_14 = coil(13)
-    alarm_coil_15 = coil(14)
-    alarm_coil_16 = coil(15)
+    # Dosing alarm (the menu's "Dosing alarm", tested on the keypad 2026-10-15): a time per
+    # channel, 0 = off, 1-999 min, and what to do when it runs out, 0 Dose / 1 Stop.
+    dosing_alarm_ph_stop = coil(44, writable=True)
+    dosing_alarm_cl_stop = coil(59, writable=True)
+    # Probe failure (the menu's "Probe failure", keypad 2026-10-15): the same, with a time
+    # of 0 = off or 100-999 min.
+    probe_alarm_ph_stop = coil(75, writable=True)
+    probe_alarm_cl_stop = coil(90, writable=True)
+    # Out of range alarm (the menu's "Min/Max", keypad 2026-10-15): per channel a High and
+    # a Low limit, each switched on by its coil, and a time and Dose/Stop shared by both.
+    # As the protocol gives them for pH; for Cl it is one off: Low is coil 62 and Dose/Stop
+    # coil 63 (it lists 63 and 64), and it lists no Cl time (found at 40456).
+    # All take writes (tested 2026-10-15 with the menu closed; with the Min/Max menu open
+    # on the keypad the controller ignored them).
+    range_ph_high_on = coil(51, writable=True)
+    range_ph_low_on = coil(52, writable=True)
+    range_ph_stop = coil(53, writable=True)
+    range_cl_high_on = coil(61, writable=True)
+    range_cl_low_on = coil(62, writable=True)
+    range_cl_stop = coil(63, writable=True)
+    # Alarm coils (function 01), numbered 01-14 as in the protocol, at address n - 1
+    # (see COIL_READ). Tested at the pump 2026-10-15: 01 pH tank (level 1) empty, 03 Cl
+    # tank empty, 04 no flow, 14 standby; the others as the protocol names them.
+    alarm_coil_01 = coil(0)  # Ch1 level1: pH tank 1 empty
+    alarm_coil_02 = coil(1)  # Ch1 level2: pH tank 2 empty
+    alarm_coil_03 = coil(2)  # Ch2 level: Cl tank empty
+    alarm_coil_04 = coil(3)  # Flow
+    alarm_coil_05 = coil(4)  # out of range alarm 1 (pH)
+    alarm_coil_06 = coil(5)  # out of range alarm 2 (Cl)
+    alarm_coil_07 = coil(6)  # dosing alarm ch2 (out IS)
+    alarm_coil_08 = coil(7)  # dosing alarm ch2 (out relay)
+    alarm_coil_09 = coil(8)  # dosing alarm ch1 (out IS1)
+    alarm_coil_10 = coil(9)  # dosing alarm ch1 (out relay)
+    alarm_coil_11 = coil(10)  # dosing alarm ch1 (out IS2)
+    alarm_coil_12 = coil(11)  # probe fail ch1
+    alarm_coil_13 = coil(12)  # probe fail ch2
+    alarm_coil_14 = coil(13)  # standby
 
     # Timing (40520-40526): the measurement filter (tau), the feeding delay before
     # dosing resumes after flow or power returns, the flow sensor's time and mode.
     tau = integer(259, writable=_whole(0, 30))
     feeding_delay = integer(260, unit="min", writable=_whole(0, 60))
     flow_time = integer(261, unit="min", writable=_whole(0, 99))
+    dosing_alarm_ph_time = integer(213, unit="min", writable=_whole(0, 999))  # 40428
+    dosing_alarm_cl_time = integer(214, unit="min", writable=_whole(0, 999))  # 40430
+    probe_alarm_ph_time = integer(221, unit="min", writable=_whole(0, 999))  # 40444
+    probe_alarm_cl_time = integer(222, unit="min", writable=_whole(0, 999))  # 40446
+    range_ph_high = gauge(218, 0.01, writable=_hundredths(0.1, 14.0))  # 40438
+    range_ph_time = integer(219, unit="min", writable=_whole(0, 99))  # 40440
+    range_ph_low = gauge(220, 0.01, writable=_hundredths(0.0, 13.9))  # 40442
+    range_cl_high = gauge(226, 0.01, writable=_hundredths(0.1, 10.0))  # 40454
+    range_cl_time = integer(227, unit="min", writable=_whole(0, 99))  # 40456
+    range_cl_low = gauge(228, 0.01, writable=_hundredths(0.0, 9.9))  # 40458
     flow_mode = enum(262, FlowMode, writable=FlowMode)
 
     # Measurements (40002-40008); the value is reading / divisor.
@@ -296,14 +309,18 @@ class EmecLD(Component):
     # val1, val2, the duty cycle (%) at each, mode. Ton/Toff of Fixed PWM are not mapped.
     ch1_relay_val1 = gauge(40, 0.01, writable=_hundredths(*PH_RANGE))
     ch1_relay_val2 = gauge(41, 0.01, writable=_hundredths(*PH_RANGE))
-    ch1_relay_perc1 = integer(42, unit="%", writable=_whole(*DUTY_RANGE))
-    ch1_relay_perc2 = integer(43, unit="%", writable=_whole(*DUTY_RANGE))
-    ch1_relay_mode = enum(44, RelayMode, writable=RelayMode)
+    # perc1/perc2: the duty cycles in Proportional PWM, Ton/Toff (0-250) in Fixed PWM.
+    # The mode is at 40092, not the documented 40090 (which read 0 in every mode):
+    # tested on the keypad 2026-10-15, 0 Proportional PWM, 1 ON/OFF, 2 Fixed PWM, 3 Off.
+    ch1_relay_perc1 = integer(42, writable=_whole(*PWM_TIME_RANGE))
+    ch1_relay_perc2 = integer(43, writable=_whole(*PWM_TIME_RANGE))
+    ch1_relay_mode = enum(45, RelayMode, writable=RelayMode)
     ch2_relay_val1 = gauge(105, 0.01, writable=_hundredths(*CL_RANGE))
     ch2_relay_val2 = gauge(106, 0.01, writable=_hundredths(*CL_RANGE))
-    ch2_relay_perc1 = integer(107, unit="%", writable=_whole(*DUTY_RANGE))
-    ch2_relay_perc2 = integer(108, unit="%", writable=_whole(*DUTY_RANGE))
-    ch2_relay_mode = enum(109, RelayMode, writable=RelayMode)
+    # The Cl relay follows the same rules (user, 2026-10-15): mode at 40222, not 40220.
+    ch2_relay_perc1 = integer(107, writable=_whole(*PWM_TIME_RANGE))
+    ch2_relay_perc2 = integer(108, writable=_whole(*PWM_TIME_RANGE))
+    ch2_relay_mode = enum(110, RelayMode, writable=RelayMode)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -372,29 +389,20 @@ class EmecLD(Component):
     def no_flow(self) -> bool | None:
         """On while the controller sees no flow and holds dosing: the outputs stay off,
         also for the flow time (40524) after the flow contact closes again."""
-        return self.alarm_coil_06
+        return self.alarm_coil_04
 
     @property
     def cl_tank_empty(self) -> bool | None:
-        return self.alarm_coil_08
+        return self.alarm_coil_03
 
     @property
     def ph_tank_empty(self) -> bool | None:
-        return self.alarm_coil_07
+        return self.alarm_coil_01
 
     @property
     def standby(self) -> bool | None:
         """On while the controller is held in standby, e.g. no flow: outputs off."""
-        return self.alarm_coil_11
-
-    @property
-    def active_alarm_coils(self) -> str | None:
-        """The set coils as "6, 11", or "None"; for coils not named yet."""
-        states = [getattr(self, f"alarm_coil_{n:02d}") for n in range(1, COIL_BLOCK + 1)]
-        if any(state is None for state in states):
-            return None
-        active = [str(n) for n, state in enumerate(states, start=1) if state]
-        return ", ".join(active) if active else "None"
+        return self.alarm_coil_14
 
     @property
     def temperature(self) -> float | None:
@@ -498,6 +506,148 @@ async def set_min_rate(device: EmecLD, rate: float, channel: int = 1, output: in
 
 
 PRIORITY_OPTIONS = ("No priority", "pH priority")
+ALARM_ACTIONS = ("Dose", "Stop")
+
+
+def _alarm_values(
+    alarm: str, name: str, symbol: str, key: str, shortest: int, icon: str
+) -> tuple[Value, ...]:
+    """A channel's dosing alarm or probe failure: its time (0 = off, else ``shortest``-999
+    min) and, while on, Dose or Stop. The keypad offers Dose/Stop only while a time is set,
+    and Off keeps the choice."""
+    time_field, stop_field = f"{alarm}_alarm_{key}_time", f"{alarm}_alarm_{key}_stop"
+
+    async def set_time(device: EmecLD, minutes: float) -> None:
+        if minutes and not shortest <= minutes <= 999:
+            raise ValueError(f"{minutes:g} min: 0 (off) or {shortest}-999")
+        await write_if_changed(device, time_field, minutes)
+
+    def action(device: EmecLD) -> str | None:
+        stop = getattr(device, stop_field)
+        return None if stop is None else ALARM_ACTIONS[int(stop)]
+
+    async def set_action(device: EmecLD, label: str) -> None:
+        if label not in ALARM_ACTIONS:
+            raise ValueError(f"{label!r} is not one of {', '.join(ALARM_ACTIONS)}")
+        await write_if_changed(device, stop_field, label == "Stop")
+
+    return (
+        Value(
+            f"{key}_{alarm}_alarm_time",
+            f"{symbol} {name} Time",
+            lambda d: getattr(d, time_field),
+            "min",
+            category="setting",
+            device_class="duration",
+            feature="dosing_settings",
+            write=set_time,
+            minimum=0,
+            maximum=999,
+            step=1,
+            number_mode="box",
+            icon=icon,
+        ),
+        Value(
+            f"{key}_{alarm}_alarm_action",
+            f"{symbol} {name} Action",
+            action,
+            available=lambda d: bool(getattr(d, time_field)),
+            category="setting",
+            feature="dosing_settings",
+            write=set_action,
+            options=ALARM_ACTIONS,
+            icon="mdi:alert-octagon-outline",
+            icons={"Dose": "mdi:play-circle-outline", "Stop": "mdi:stop-circle-outline"},
+        ),
+    )
+
+
+def _range_values(channel: int) -> tuple[Value, ...]:
+    """A channel's out of range alarm: High and Low switches with their limits, and while
+    either is on the time and Dose/Stop, as the keypad shows them."""
+    symbol, key, unit, device_class, _ = _channel(channel)
+    high_range, low_range = (
+        ((0.1, 14.0), (0.0, 13.9)) if channel == 1 else ((0.1, 10.0), (0.0, 9.9))
+    )
+    f = lambda name: f"range_{key}_{name}"  # noqa: E731
+    high_on = lambda d: getattr(d, f("high_on")) is True  # noqa: E731
+    low_on = lambda d: getattr(d, f("low_on")) is True  # noqa: E731
+    either = lambda d: high_on(d) or low_on(d)  # noqa: E731
+    writer = lambda name: lambda d, v: write_if_changed(d, f(name), v)  # noqa: E731
+
+    def action(device: EmecLD) -> str | None:
+        stop = getattr(device, f("stop"))
+        return None if stop is None else ALARM_ACTIONS[int(stop)]
+
+    async def set_action(device: EmecLD, label: str) -> None:
+        if label not in ALARM_ACTIONS:
+            raise ValueError(f"{label!r} is not one of {', '.join(ALARM_ACTIONS)}")
+        await write_if_changed(device, f("stop"), label == "Stop")
+
+    def switch(side: str, icon: str) -> Value:
+        return Value(
+            f"{key}_range_{side}",
+            f"{symbol} Range {side.capitalize()}",
+            lambda d: getattr(d, f(f"{side}_on")),
+            binary=True,
+            category="setting",
+            feature="dosing_settings",
+            write=writer(f"{side}_on"),
+            icon=icon,
+        )
+
+    def limit(side: str, bounds: tuple[float, float], available, icon: str) -> Value:
+        return Value(
+            f"{key}_range_{side}_value",
+            f"{symbol} Range {side.capitalize()} Value",
+            lambda d: getattr(d, f(side)),
+            unit,
+            available=available,
+            category="setting",
+            device_class=device_class,
+            feature="dosing_settings",
+            write=writer(side),
+            minimum=bounds[0],
+            maximum=bounds[1],
+            step=0.01,
+            number_mode="box",
+            icon=icon,
+        )
+
+    return (
+        switch("high", "mdi:arrow-collapse-up"),
+        limit("high", high_range, high_on, "mdi:arrow-collapse-up"),
+        switch("low", "mdi:arrow-collapse-down"),
+        limit("low", low_range, low_on, "mdi:arrow-collapse-down"),
+        Value(
+            f"{key}_range_time",
+            f"{symbol} Range Time",
+            lambda d: getattr(d, f("time")),
+            "min",
+            available=either,
+            category="setting",
+            device_class="duration",
+            feature="dosing_settings",
+            write=writer("time"),
+            minimum=0,
+            maximum=99,
+            step=1,
+            number_mode="box",
+            icon="mdi:timer-outline",
+        ),
+        Value(
+            f"{key}_range_action",
+            f"{symbol} Range Action",
+            action,
+            available=either,
+            category="setting",
+            feature="dosing_settings",
+            write=set_action,
+            options=ALARM_ACTIONS,
+            icon="mdi:alert-octagon-outline",
+            icons={"Dose": "mdi:play-circle-outline", "Stop": "mdi:stop-circle-outline"},
+        ),
+    )
 
 
 def _priority(device: EmecLD) -> str | None:
@@ -518,6 +668,9 @@ async def set_flow_mode(device: EmecLD, label: str) -> None:
     mode = next((m for m in FlowMode if m.label == label), None)
     if mode is None:
         raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in FlowMode)}")
+    if mode is FlowMode.DISABLED:
+        # as the keypad does: Disabled sets the flow time to 0 (seen 2026-10-15)
+        await write_if_changed(device, "flow_time", 0)
     await write_if_changed(device, "flow_mode", mode)
 
 
@@ -567,7 +720,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_max",
-            f"{prefix} Max Value",
+            f"{prefix} On Value",
             lambda d: getattr(d, f("val1")),
             unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
@@ -583,7 +736,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_min",
-            f"{prefix} Min Value",
+            f"{prefix} Off Value",
             lambda d: getattr(d, f("val2")),
             unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
@@ -599,7 +752,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_max_rate",
-            f"{prefix} Max Rate",
+            f"{prefix} On Rate",
             lambda d: getattr(d, f("perc1")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
@@ -615,7 +768,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
         ),
         Value(
             f"{key}{output}_min_rate",
-            f"{prefix} Min Rate",
+            f"{prefix} Off Rate",
             lambda d: getattr(d, f("perc2")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
@@ -648,10 +801,15 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
     )
 
 
-def _relay_values(channel: int) -> tuple[Value, ...]:
+def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
     """The settings of a switching relay, "pH Relay" ("CH1 PH RELAY") or "Cl Relay"
     ("CH2 CL2 RELAY"): the two values, the duty cycle at each (Proportional PWM) and the
-    mode. Its on/off state is the "... Relay State" sensor (40032, 40024)."""
+    mode. Its on/off state is the "... Relay State" sensor (40032, 40024).
+
+    ``tested`` (the pH relay, on the keypad 2026-10-15): Fixed PWM's Ton and Toff, in
+    the same registers as the duty cycles, a duty cycle written as the keypad keeps
+    them (one of the two at a time, the other set to 0), and a switch to ON/OFF or
+    Disabled that sets perc1 to 100 and perc2 to 0 first, as the keypad does."""
     symbol, key, unit, device_class, value_range = _channel(channel)
     prefix = f"{symbol} Relay"
     f = lambda name: f"ch{channel}_relay_{name}"  # noqa: E731
@@ -662,6 +820,10 @@ def _relay_values(channel: int) -> tuple[Value, ...]:
         mode = next((m for m in RelayMode if m.label == label), None)
         if mode is None:
             raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in RelayMode)}")
+        if tested and mode in (RelayMode.ON_OFF, RelayMode.DISABLED):
+            # as the keypad does on a switch to ON/OFF or Disabled (pH relay, 2026-10-15)
+            await write_if_changed(device, f("perc1"), 100)
+            await write_if_changed(device, f("perc2"), 0)
         await write_if_changed(device, f("mode"), mode)
 
     def number(suffix, name, field, unit_, minimum, maximum, step, icon, available, dc=None):
@@ -684,6 +846,46 @@ def _relay_values(channel: int) -> tuple[Value, ...]:
 
     in_use = lambda d: mode_of(d) is not RelayMode.DISABLED  # noqa: E731
     pwm = lambda d: mode_of(d) is RelayMode.PROPORTIONAL_PWM  # noqa: E731
+    fixed = lambda d: mode_of(d) is RelayMode.FIXED_PWM  # noqa: E731
+
+    def duty(own: str, other: str):
+        async def write(device: EmecLD, value: float) -> None:
+            if not 0 <= value <= DUTY_RANGE[1]:
+                raise ValueError(f"{value} is not within {DUTY_RANGE[0]}-{DUTY_RANGE[1]} %")
+            await write_if_changed(device, f(own), value)
+            if tested and value:
+                await write_if_changed(device, f(other), 0)
+
+        return write
+
+    times = ()
+    if tested:
+        # The instruction manual's Ton ("ON period, during output activity") and Toff
+        # ("OFF period"), in seconds.
+        times = (
+            number(
+                "ton",
+                "On Period",
+                "perc1",
+                "s",
+                *PWM_TIME_RANGE,
+                1,
+                "mdi:timer-play-outline",
+                fixed,
+                "duration",
+            ),
+            number(
+                "toff",
+                "Off Period",
+                "perc2",
+                "s",
+                *PWM_TIME_RANGE,
+                1,
+                "mdi:timer-pause-outline",
+                fixed,
+                "duration",
+            ),
+        )
     return (
         Value(
             f"{key}_relay_mode",
@@ -701,32 +903,50 @@ def _relay_values(channel: int) -> tuple[Value, ...]:
                 "Disabled": "mdi:cancel",
             },
         ),
+        # val1 is where the relay switches on, val2 where it switches off (the keypad's
+        # ON/OFF rows, user 2026-10-15: pH 6.55 on / 6.50 off, Cl 2.45 on / 2.50 off).
         number(
-            "max",
-            "Max Value",
+            "on",
+            "On Value",
             "val1",
             unit,
             *value_range,
             0.01,
-            "mdi:gauge-full",
+            "mdi:toggle-switch-outline",
             in_use,
             device_class,
         ),
         number(
-            "min",
-            "Min Value",
+            "off",
+            "Off Value",
             "val2",
             unit,
             *value_range,
             0.01,
-            "mdi:gauge-empty",
+            "mdi:toggle-switch-off-outline",
             in_use,
             device_class,
         ),
-        number("max_duty", "Max Duty Cycle", "perc1", "%", *DUTY_RANGE, 1, "mdi:speedometer", pwm),
-        number(
-            "min_duty", "Min Duty Cycle", "perc2", "%", *DUTY_RANGE, 1, "mdi:speedometer-slow", pwm
+        replace(
+            number(
+                "max_duty", "Max Duty Cycle", "perc1", "%", *DUTY_RANGE, 1, "mdi:speedometer", pwm
+            ),
+            write=duty("perc1", "perc2"),
         ),
+        replace(
+            number(
+                "min_duty",
+                "Min Duty Cycle",
+                "perc2",
+                "%",
+                *DUTY_RANGE,
+                1,
+                "mdi:speedometer-slow",
+                pwm,
+            ),
+            write=duty("perc2", "perc1"),
+        ),
+        *times,
     )
 
 
@@ -808,8 +1028,8 @@ VALUES = (
     *_output_values(1, 1),
     *_output_values(1, 2),
     *_output_values(2, 1),
-    *_relay_values(1),
-    *_relay_values(2),
+    *_relay_values(1, tested=True),
+    *_relay_values(2, tested=True),
     # Alarm and state coils; the live-confirmed ones first, then the user's notes.
     Value(
         "standby",
@@ -841,8 +1061,8 @@ VALUES = (
         icon_off="mdi:cup-outline",
     ),
     Value(
-        "ph_tank_empty",
-        "pH Tank Empty",
+        "ph_tank_1_empty",
+        "pH Tank 1 Empty",
         lambda d: d.ph_tank_empty,
         binary=True,
         device_class="problem",
@@ -850,14 +1070,106 @@ VALUES = (
         icon="mdi:cup-off-outline",
         icon_off="mdi:cup-outline",
     ),
-    Value(
-        "alarm_coils",
-        "Alarm Coils",
-        lambda d: d.active_alarm_coils,
-        category="diagnostic",
-        scan_group="fast",
+    # The protocol's other alarm coils (see the alarm coil fields), untested.
+    Value(  # protocol coil 02 Ch1 level2; not seen yet
+        "ph_tank_2_empty",
+        "pH Tank 2 Empty",
+        lambda d: d.alarm_coil_02,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:cup-off-outline",
+        icon_off="mdi:cup-outline",
+    ),
+    Value(  # protocol coil 05 OUT OF RANGE ALARM1; not seen yet
+        "ph_out_of_range",
+        "pH Out of Range",
+        lambda d: d.alarm_coil_05,
+        binary=True,
+        device_class="problem",
         feature="alarms",
         icon="mdi:alert-circle-outline",
+        icon_off="mdi:check-circle-outline",
+    ),
+    Value(  # protocol coil 06 OUT OF RANGE ALARM2; not seen yet
+        "cl_out_of_range",
+        "Cl Out of Range",
+        lambda d: d.alarm_coil_06,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:alert-circle-outline",
+        icon_off="mdi:check-circle-outline",
+    ),
+    Value(  # protocol coil 07 Dosing Alarm ch2 (out IS); not seen yet
+        "cl_pulse_dosing_alarm",
+        "Cl Pulse Dosing Alarm",
+        lambda d: d.alarm_coil_07,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:timer-alert-outline",
+        icon_off="mdi:timer-check-outline",
+    ),
+    Value(  # protocol coil 08 Dosing Alarm ch2 (out relè); not seen yet
+        "cl_relay_dosing_alarm",
+        "Cl Relay Dosing Alarm",
+        lambda d: d.alarm_coil_08,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:timer-alert-outline",
+        icon_off="mdi:timer-check-outline",
+    ),
+    Value(  # protocol coil 09 Dosing Alarm ch1 (out IS1); not seen yet
+        "ph_pulse_1_dosing_alarm",
+        "pH Pulse 1 Dosing Alarm",
+        lambda d: d.alarm_coil_09,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:timer-alert-outline",
+        icon_off="mdi:timer-check-outline",
+    ),
+    Value(  # protocol coil 10 Dosing Alarm ch1 (out relè); not seen yet
+        "ph_relay_dosing_alarm",
+        "pH Relay Dosing Alarm",
+        lambda d: d.alarm_coil_10,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:timer-alert-outline",
+        icon_off="mdi:timer-check-outline",
+    ),
+    Value(  # protocol coil 11 Dosing Alarm ch1 (out IS2); not seen yet
+        "ph_pulse_2_dosing_alarm",
+        "pH Pulse 2 Dosing Alarm",
+        lambda d: d.alarm_coil_11,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:timer-alert-outline",
+        icon_off="mdi:timer-check-outline",
+    ),
+    Value(  # protocol coil 12 Probe fail ch1; not seen yet
+        "ph_probe_fail",
+        "pH Probe Fail",
+        lambda d: d.alarm_coil_12,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:flask-off-outline",
+        icon_off="mdi:flask-outline",
+    ),
+    Value(  # protocol coil 13 Probe Fail ch2; not seen yet
+        "cl_probe_fail",
+        "Cl Probe Fail",
+        lambda d: d.alarm_coil_13,
+        binary=True,
+        device_class="problem",
+        feature="alarms",
+        icon="mdi:flask-off-outline",
+        icon_off="mdi:flask-outline",
     ),
     Value(
         "feeding_delay",
@@ -892,6 +1204,8 @@ VALUES = (
         "Flow Time",
         lambda d: d.flow_time,
         "min",
+        # the keypad shows the time only for Reverse and Direct (2026-10-15)
+        available=lambda d: d.flow_mode not in (None, FlowMode.DISABLED),
         category="setting",
         device_class="duration",
         feature="dosing_settings",
@@ -928,6 +1242,12 @@ VALUES = (
         icon="mdi:sort-variant",
         icons={"No priority": "mdi:equal", "pH priority": "mdi:sort-variant"},
     ),
+    *_alarm_values("dosing", "Dosing Alarm", "pH", "ph", 1, "mdi:timer-alert-outline"),
+    *_alarm_values("dosing", "Dosing Alarm", "Cl", "cl", 1, "mdi:timer-alert-outline"),
+    *_alarm_values("probe", "Probe Failure", "pH", "ph", 100, "mdi:flask-off-outline"),
+    *_range_values(1),
+    *_range_values(2),
+    *_alarm_values("probe", "Probe Failure", "Cl", "cl", 100, "mdi:flask-off-outline"),
 )
 
 _DIVISORS = frozenset({1, 10, 100, 1000})

@@ -90,13 +90,9 @@ class FakeUnit:
         """Coils by address; a read of 128 from 0 shows coil 58 at 62, like the EMEC LD."""
         if self.fail is not None:
             raise self.fail
-        bits = [self.coils.get(address + i, False) for i in range(count)]
-        if (address, count) == (0, 128):
-            bits[58], bits[62] = False, self.coils.get(58, False)
-            bits[47], bits[41] = False, self.coils.get(47, False)
-            bits[46], bits[42] = False, self.coils.get(46, False)
-            bits[45], bits[43] = False, self.coils.get(45, False)
-        return bits
+        if count == 8 and address % 8 == 0:  # the EMEC LD: a block's bits in reverse order
+            return [self.coils.get(address + 7 - i, False) for i in range(8)]
+        return [self.coils.get(address + i, False) for i in range(count)]
 
     async def write_coil(self, address: int, value: bool) -> None:
         if self.fail is not None:

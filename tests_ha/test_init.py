@@ -118,22 +118,21 @@ async def test_dosing_pump_entities(hass: HomeAssistant) -> None:
     assert hass.states.get("number.dosing_pump_ph_pulse_1_pulse_speed") is None
     # The second pH output has the same entities; disabled, so its settings are unavailable.
     assert state(hass, "select.dosing_pump_ph_pulse_2_dosing_mode") == "Disabled"
-    assert hass.states.get("number.dosing_pump_ph_pulse_2_max_value") is None
-    assert hass.states.get("number.dosing_pump_ph_pulse_2_max_rate") is None
+    assert hass.states.get("number.dosing_pump_ph_pulse_2_on_value") is None
+    assert hass.states.get("number.dosing_pump_ph_pulse_2_on_rate") is None
     assert state(hass, "sensor.dosing_pump_ph_pulse_2_rate") == "0"
     # Chlorine has one pulse output, named the same way.
     assert state(hass, "select.dosing_pump_cl_pulse_dosing_mode") == "Proportional"
-    assert state(hass, "number.dosing_pump_cl_pulse_min_value") == "0.45"
+    assert state(hass, "number.dosing_pump_cl_pulse_off_value") == "0.45"
     assert state(hass, "sensor.dosing_pump_cl_pulse_rate") == "0"
     # The switching relays, with their state sensors renamed to "... Relay State".
     assert state(hass, "select.dosing_pump_ph_relay_dosing_mode") == "Proportional PWM"
-    assert state(hass, "number.dosing_pump_ph_relay_max_value") == "6.55"
+    assert state(hass, "number.dosing_pump_ph_relay_on_value") == "6.55"
     assert state(hass, "number.dosing_pump_cl_relay_min_duty_cycle") == "0"
     assert state(hass, "sensor.dosing_pump_cl_relay_state") == "On"
     # Alarm coils (none set in the snapshot) and the timing settings.
     assert state(hass, "binary_sensor.dosing_pump_standby") == "off"
     assert state(hass, "binary_sensor.dosing_pump_no_flow") == "off"
-    assert state(hass, "sensor.dosing_pump_alarm_coils") == "None"
     assert state(hass, "number.dosing_pump_feeding_delay") == "5"
     assert state(hass, "number.dosing_pump_tau") == "5"
     assert state(hass, "select.dosing_pump_priority") == "pH priority"  # coil 58 off
@@ -224,9 +223,9 @@ async def test_renamed_ph_output_moves_to_the_relay_1_ids(hass: HomeAssistant) -
 
     assert old_id == "number.dosing_pump_ph_max_value"  # the name before "pH Relay 1"
     assert registry.async_get(old_id) is None
-    moved = registry.async_get("number.dosing_pump_ph_pulse_1_max_value")
+    moved = registry.async_get("number.dosing_pump_ph_pulse_1_on_value")
     assert moved.unique_id == f"{entry.unique_id}_ph1_max"
-    assert state(hass, "number.dosing_pump_ph_pulse_1_max_value") == "10.0"
+    assert state(hass, "number.dosing_pump_ph_pulse_1_on_value") == "10.0"
     assert registry.async_get(custom).unique_id == f"{entry.unique_id}_ph1_mode"
     assert state(hass, custom) == "Proportional"
 

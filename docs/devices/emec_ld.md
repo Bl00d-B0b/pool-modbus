@@ -62,7 +62,7 @@ model reports it as 0.
 | 40068–40078 | 67–77 | 33–38 | int16 | Channel 1 pulse output 1: val1, val2 (×100), perc1, perc2 (p/min), wait (min), mode |
 | 40140–40150 | 139–149 | 69–74 | int16 | Channel 1 pulse output 2: same layout |
 | 40154–40164 | 153–163 | 76–81 | int16 | Channel 2 pulse output: same layout |
-| 40082–40090 | 81–89 | 40–44 | int16 | Channel 1 switching relay: val1, val2 (×100), perc1, perc2 (% duty), mode |
+| 40082–40092 | 81–91 | 40–45 | int16 | Channel 1 switching relay: val1, val2 (×100), perc1, perc2 (% duty, or Ton/Toff in Fixed PWM), 40090 unused, mode at **40092** (tested; the protocol says 40090) |
 | 40212–40220 | 211–219 | 105–109 | int16 | Channel 2 switching relay: same layout |
 
 Pulse modes: 0 ON/OFF, 1 proportional, 2 disabled. In proportional mode the
@@ -195,8 +195,14 @@ read before and after:
   the keypad) the temperature would read in whole °F and RTC would be wrong or
   unknown. A clock write applied while the controller was in USA format also put its temperature back to °C (60 → 157 at 13:59:48 on
   2026-10-15) while coil 47 still read USA.
-- **Fixed PWM on and off times** of the switching relays: not documented and not
-  found yet.
+- **Fixed PWM on and off times** of the pH relay: found 2026-10-15 on the keypad,
+  in the duty-cycle registers: Ton = 40086 (perc1, with val1), Toff = 40088 (perc2,
+  with val2), 0–250 each. The pH relay's mode is at **40092**, not 40090: 0
+  Proportional PWM, 1 ON/OFF, 2 Fixed PWM, 3 Disabled; 40090 read 0 in all four.
+  In Proportional PWM the keypad keeps one duty cycle at 0 when the other is set;
+  a switch to ON/OFF or to Disabled set perc1 to 100 and perc2 to 0 (Ton 231 →
+  100, 0/17 % → 100/0), like the pulse outputs; the plugin's mode switch does the same. The Cl relay follows the same rules (user, 2026-10-15): mode at 40222 (read
+  1 = ON/OFF while the keypad showed ON/OFF), values 0.00–10.00 mg/l.
 
 ## Values shown by this library
 
@@ -205,20 +211,25 @@ The outputs are named as on the controller. Channel 1 has two pulse outputs and
 channel 2 one: **pH Pulse 1** ("CH1 PH PULSE 1", 40068–40078, rate 40026),
 **pH Pulse 2** ("CH1 PH PULSE 2", 40140–40150, rate 40028) and **Cl Pulse**
 ("CH2 CL2 PULSE", 40154–40164, rate 40030), each with the same seven values:
-Rate, Dosing Mode, Max Value, Min Value, Max Rate, Min Rate and Pulse Speed (pH
+Rate, Dosing Mode, On Value, Off Value, On Rate, Off Rate and Pulse Speed (pH
 values in pH, Cl values in mg/l, the controller's unit; its display writes Cl₂).
 The dosing settings follow the output's working mode, as on the controller:
 
-- **Max Value / Min Value** (val1, val2): not used when the output is disabled.
-- **Max Rate / Min Rate** (perc1, perc2): proportional mode only.
+- **On Value / Off Value** (val1, val2; "Max/Min Value" until 2026-10-15, ids
+  migrated): where the output switches on and off (the keypad's rows, e.g. pH 10.00
+  on, 7.70 off; Cl 0.00 on, 0.45 off); not used when the output is disabled.
+- **On Rate / Off Rate** (perc1, perc2; "Max/Min Rate" until 2026-10-15, ids
+  migrated): the rate at the On and at the Off Value; proportional mode only.
 - **Pulse Speed** (wait): ON/OFF mode only.
 
 Each channel also has a switching relay: **pH Relay** ("CH1 PH RELAY",
 40082–40090) and **Cl Relay** ("CH2 CL2 RELAY", 40212–40220), with Dosing Mode
-(Proportional PWM, ON/OFF, Fixed PWM, Disabled), Max Value, Min Value and, in
+(Proportional PWM, ON/OFF, Fixed PWM, Disabled), On Value, Off Value and, in
 Proportional PWM only, Max/Min Duty Cycle: the share of a 100 s cycle the relay
-is on at each value (the instruction manual: 100 % = 100 s). Fixed PWM's on and
-off times (Ton, Toff) are not mapped yet. Their on/off state is **pH Relay
+is on at each value (the instruction manual: 100 % = 100 s). Both relays also
+have **On Period** and **Off Period** (Fixed PWM only, 0–250 s, in the same registers;
+the instruction manual's Ton, "ON period, during output activity", and Toff) and its
+duty cycles are written one at a time, the other set to 0, as on the keypad. Their on/off state is **pH Relay
 State** and **Cl Relay State** (40032, 40024).
 
 In Home Assistant a setting the current mode does not use has no entity, like
@@ -235,26 +246,84 @@ Pulse Rate show a value.
 
 ### Alarms and state (coils)
 
-The controller's alarms are coils (function 01), numbered 1–16 here as in the
-protocol description. The tested LDPHCL answers a coil read with bits that
-shift with the start address and the count (the same set coil showed at
-position 11 for a read of 16 from 0, at 12 for a read of 32, at 13 for a read
-of 16 from 1), so the library always reads coils 0–15 from 0 in one request
-and takes the slice it needs (`EmecUnit.read_coils`).
+The protocol's coil addresses are right; only the way the tested LDPHCL answers a
+coil read is unusual (found 2026-10-15 with alarms and settings switched at the
+pump): **read 8 coils from a multiple of 8, and the block comes back with its
+bits in reverse order**, coil start + n in bit 7 − n. A longer read also shifts
+each byte's bits up by one and drops the top bit, which hid the pH tank alarm in
+a read of 16 and put coil 58 at position 62 of a read of 128. The library reads
+coils that way (`COIL_READ`, `EmecUnit.read_coils`). The alarm coils sit at the
+protocol's number − 1 (it counts 01–14; the older edition 00–13); configuration
+coils (45–47, 58, …) at their number.
 
-| Coil | Shown as | Source |
-|---|---|---|
-| 11 | **Standby** (binary): on while the controller is held in standby, outputs off | seen live 2026-10-14: set within a minute of the filtration pump stopping, both relay outputs went Off; cleared within 15 s of flow returning |
-| 6 | **No Flow** (binary, `problem`): on while the controller sees no flow and holds dosing, outputs off | seen live 2026-10-14 while the display said "no flow": for the flow time after flow returned (from flow return until dosing resumed 5 min 14 s later), and once with the filtration running |
-| 7 | **pH Tank Empty** (binary, `problem`) | seen live 2026-10-15: on when the pH tank's level sensor was disconnected |
-| 8 | **Cl Tank Empty** (binary, `problem`) | the remaining tank coil; not seen yet |
-| all | **Alarm Coils** (diagnostic text): the set coils, e.g. "6, 11", or "None" | for naming the rest when they occur |
+| Protocol coil | Address | Shown as | Source |
+|---|---|---|---|
+| 01 Ch1 level1 | 0 | **pH Tank 1 Empty** (binary, `problem`; "pH Tank Empty" until 2026-10-15, id migrated) | tested 2026-10-15: pH tank's level sensor disconnected |
+| 02 Ch1 level2 | 1 | **pH Tank 2 Empty** (binary, `problem`) | not seen yet |
+| 03 Ch2 level | 2 | **Cl Tank Empty** (binary, `problem`) | tested 2026-10-15: the display showed "level Cl2 error" |
+| 04 Flow | 3 | **No Flow** (binary, `problem`): on while the controller sees no flow and holds dosing, outputs off | tested 2026-10-15 |
+| 05 Out of range alarm 1 | 4 | **pH Out of Range** (binary, `problem`) | not seen yet |
+| 06 Out of range alarm 2 | 5 | **Cl Out of Range** (binary, `problem`) | not seen yet |
+| 07 Dosing alarm ch2 (out IS) | 6 | **Cl Pulse Dosing Alarm** (binary, `problem`) | not seen yet |
+| 08 Dosing alarm ch2 (out relè) | 7 | **Cl Relay Dosing Alarm** (binary, `problem`) | not seen yet |
+| 09 Dosing alarm ch1 (out IS1) | 8 | **pH Pulse 1 Dosing Alarm** (binary, `problem`) | not seen yet |
+| 10 Dosing alarm ch1 (out relè) | 9 | **pH Relay Dosing Alarm** (binary, `problem`) | not seen yet |
+| 11 Dosing alarm ch1 (out IS2) | 10 | **pH Pulse 2 Dosing Alarm** (binary, `problem`) | not seen yet |
+| 12 Probe fail ch1 | 11 | **pH Probe Fail** (binary, `problem`) | not seen yet |
+| 13 Probe fail ch2 | 12 | **Cl Probe Fail** (binary, `problem`) | not seen yet |
+| 14 Stby | 13 | **Standby** (binary): on while the controller is held in standby, outputs off | tested 2026-10-15: filtration stopped |
+| Mode (priority) | 58 | **Priority** (select; written with function 05) | tested 2026-10-14 |
 
-The protocol description lists the coils as 1 Ch1 level 1, 2 Ch1 level 2,
-3 Ch2 level, 4 Flow, 5–6 out of range 1–2, 7–11 dosing alarms (ch2 IS, ch2
-relay, ch1 IS1, ch1 relay, ch1 IS2), 12–13 probe fail, 14 standby; on the
-tested controller the observed meanings do not follow it, so only the
-observed and noted ones are named.
+Configuration coils seen on in reads of 8 on 2026-10-15: 46 (PM), 49, 50, 54, 58
+(No priority) and 60; 48 (log enable) was off.
+
+### Dosing alarm
+
+The menu's "Dosing alarm": per channel a time after which the controller raises
+the channel's dosing alarm, and what it then does. Found on the keypad
+2026-10-15 (pH 49 min, Cl 177 min, then each switched to Stop and pH to Off),
+as the protocol gives it:
+
+| | pH (ch1) | Cl (ch2) | Shown as |
+|---|---|---|---|
+| Time | 40428 (index 213) | 40430 (index 214) | **pH / Cl Dosing Alarm Time** (number, 0–999 min; 0 = off) |
+| Action | coil 44 | coil 59 | **pH / Cl Dosing Alarm Action** (select Dose / Stop, only while the time is above 0) |
+
+Off keeps the action: with pH set to Off, coil 44 stayed on (Stop). Writes tested
+2026-10-15 (each written, read back within 2 s, and restored): the dosing alarm and probe failure times with function 06,
+their actions (coils 44, 59, 75, 90) with function 05, also while the time is 0.
+
+### Out of range alarm
+
+The menu's "Min/Max" per channel, set on the keypad 2026-10-15 (pH High 8.76 and
+Low 6.34 on, 11 min, Stop; Cl High 3.21 on, Low off, 22 min, Dose). As the
+protocol gives it for pH; for Cl it is one off (Low is coil 62 and Dose/Stop coil 63, where
+it lists 63 and 64, both labelled ch1) and it lists no Cl time (found at 40456):
+
+| | pH (ch1) | Cl (ch2) | Shown as |
+|---|---|---|---|
+| High on | coil 51 | coil 61 | **pH / Cl Range High** (switch) |
+| High limit | 40438 | 40454 | **… Range High Value** (pH 0.10–14.0, Cl 0.1–10 mg/l; while High is on) |
+| Low on | coil 52 | coil 62 | **pH / Cl Range Low** (switch) |
+| Low limit | 40442 | 40458 | **… Range Low Value** (pH 0.0–13.9, Cl 0–9.9 mg/l; while Low is on) |
+| Time | 40440 | 40456 | **… Range Time** (0–99 min; while High or Low is on) |
+| Dose / Stop | coil 53 | coil 63 | **… Range Action** (select; while High or Low is on) |
+
+The out of range alarm itself shows as **pH / Cl Out of Range** (alarm coils 05, 06).
+Writes tested 2026-10-15: every one of these takes function 05 / 06 writes (each
+written, read back within about 1 s, and restored), as long as the Min/Max menu is
+closed on the keypad; while it was open, writes to coils 52 and 63 were ignored.
+
+### Probe failure
+
+The menu's "Probe failure", the same pattern (keypad 2026-10-15: pH 117 min
+Stop, Cl 104 min Dose); its times are 0 (off) or 100–999 min, and Home Assistant
+refuses 1–99:
+
+| | pH (ch1) | Cl (ch2) | Shown as |
+|---|---|---|---|
+| Time | 40444 (index 221) | 40446 (index 222) | **pH / Cl Probe Failure Time** (number; 0 = off, 100–999 min) |
+| Action | coil 75 | coil 90 | **pH / Cl Probe Failure Action** (select Dose / Stop, only while the time is set) |
 
 ### Timing
 
@@ -262,16 +331,14 @@ observed and noted ones are named.
 |---|---|---|
 | 40520 | 259 | **Tau** (number, 0–30, writable): the controller's measurement filter setting, "Tau" in its menu; unit not documented |
 | 40522 | 260 | **Feeding Delay** (number, 0–60 min, writable): "Feeding delay" in the menu, how long dosing waits after flow or power returns |
-| 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it |
+| 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it; only with Reverse or Direct: switching to Disabled sets it to 0, on the keypad (2026-10-15) and from Home Assistant |
 | 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
 
 **Priority** (select, writable) is the menu's "Mode: No priority / pH priority",
 coil 58 (protocol: 0 = pH priority, 1 = no priority). It is written at address 58
-with function 05 and read from a read of 128 coils from 0, where the tested
-controller shows it at position 62: found on 2026-10-14 by switching it on the
-keypad (only that bit moved), and a write of 58 = on set the keypad back to No
-priority with no other coil changed. Other configuration coils are not read,
-since their positions are unknown. The controller gives no countdown of the wait after
+with function 05 and read from the read of 8 coils from 56 (bit 5, see the coil
+rule above): found on 2026-10-14 by switching it on the keypad, and a write of
+58 = on set the keypad back to No priority with no other coil changed. The controller gives no countdown of the wait after
 flow returns (every readable register was scanned during one on 2026-10-14 and
 none counted down); Home Assistant can compute it from the moment the flow
 contact closed and the Flow Time.
@@ -315,8 +382,8 @@ worked.
 
 | Setting | pH Pulse 1 | pH Pulse 2 | Cl Pulse | Range |
 |---|---|---|---|---|
-| Max Value, Min Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–10.00 mg/l (the working ranges in the instruction manual) |
-| Max Rate, Min Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 40158, 40160 | 0–180 p/min |
+| On Value, Off Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–10.00 mg/l (the working ranges in the instruction manual) |
+| On Rate, Off Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 40158, 40160 | 0–180 p/min |
 | Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
 | Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
 
@@ -326,7 +393,7 @@ Disabled makes the controller dose without flow, which its manual warns against.
 
 In proportional mode the controller doses from 0 p/min at one pH value to the
 set rate at the other, so setting one end's rate sets the other end's to 0:
-Max Rate writes perc1, then perc2 = 0; Min Rate writes perc2, then
+On Rate writes perc1, then perc2 = 0; Off Rate writes perc2, then
 perc1 = 0. A working mode is entered by writing its settings in this order,
 which is what the controller's own keypad does (watched on 2026-10-14: ON/OFF
 forces the top rate to 100 and keeps a set interval, giving a 0 interval 1 minute; Proportional zeroes the
@@ -350,9 +417,10 @@ not been tried live.
 
 | Relay setting | pH Relay | Cl Relay | Range |
 |---|---|---|---|
-| Max Value, Min Value (val1, val2) | 40082, 40084 | 40212, 40214 | 0.00–14.00 pH; 0.00–10.00 mg/l |
+| On Value, Off Value (val1, val2) | 40082, 40084 | 40212, 40214 | 0.00–14.00 pH; 0.00–10.00 mg/l |
 | Max Duty Cycle, Min Duty Cycle (perc1, perc2) | 40086, 40088 | 40216, 40218 | 0–100 % |
-| Dosing Mode | 40090 | 40220 | Proportional PWM, ON/OFF, Fixed PWM, Disabled |
+| On Period, Off Period (Ton, Toff; Fixed PWM) | 40086, 40088 | 40216, 40218 | 0–250 s |
+| Dosing Mode | 40092 | 40222 | Proportional PWM, ON/OFF, Fixed PWM, Disabled |
 
 ## In Home Assistant
 
@@ -366,24 +434,29 @@ not been tried live.
 | pH Probe Voltage, Cl Probe Voltage | Diagnostic sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
 | RTC | Diagnostic sensor | `timestamp` | `clock-outline` | 40044–40048 | Slow |
 | pH Pulse 1/2 Dosing Mode, Cl Pulse Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
-| pH Pulse 1/2 Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
-| Cl Pulse Max Value, Min Value | Numbers (input box), mg/L, 0–10, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
-| pH Pulse 1/2, Cl Pulse Max Rate, Min Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
+| pH Pulse 1/2 On Value, Off Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
+| Cl Pulse On Value, Off Value | Numbers (input box), mg/L, 0–10, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
+| pH Pulse 1/2, Cl Pulse On Rate, Off Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
 | pH Pulse 1/2, Cl Pulse Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
-| pH Relay Dosing Mode, Cl Relay Dosing Mode | Selects: Proportional PWM, ON/OFF, Fixed PWM, Disabled | | `chart-line-variant`, `toggle-switch-outline`, `square-wave`, `cancel` | 40090, 40220 | Slow |
-| pH Relay / Cl Relay Max Value, Min Value | Numbers (input box), 0.01 steps | `ph` (pH) | `gauge-full`, `gauge-empty` | 40082, 40084 / 40212, 40214 | Slow |
+| pH Relay Dosing Mode, Cl Relay Dosing Mode | Selects: Proportional PWM, ON/OFF, Fixed PWM, Disabled | | `chart-line-variant`, `toggle-switch-outline`, `square-wave`, `cancel` | 40092, 40222 | Slow |
+| pH Relay / Cl Relay On Value, Off Value ("Max/Min Value" until 2026-10-15, ids migrated) | Numbers (input box), 0.01 steps | `ph` (pH) | `toggle-switch-outline`, `toggle-switch-off-outline` | 40082, 40084 / 40212, 40214 | Slow |
 | pH Relay / Cl Relay Max Duty Cycle, Min Duty Cycle | Numbers (input box), % | | `speedometer`, `speedometer-slow` | 40086, 40088 / 40216, 40218 | Slow |
-| Standby | Binary sensor | | `pause-circle` / `play-circle` | coil 11 | Fast |
-| No Flow, pH Tank Empty, Cl Tank Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coils 6, 7, 8 | Fast |
-| Alarm Coils | Diagnostic sensor, text | | `alert-circle-outline` | coils 1–16 | Fast |
+| pH Relay / Cl Relay On Period, Off Period | Numbers (input box), 0–250 s, Fixed PWM only | `duration` | `timer-play-outline`, `timer-pause-outline` | 40086, 40088 | Slow |
+| Standby | Binary sensor | | `pause-circle` / `play-circle` | coil address 13 | Fast |
+| pH Tank 2 Empty; pH, Cl Out of Range; Cl Pulse, Cl Relay, pH Pulse 1, pH Relay, pH Pulse 2 Dosing Alarm; pH, Cl Probe Fail | Binary sensors (protocol's alarm list, untested) | `problem` | `cup-off-outline`, `alert-circle-outline`, `timer-alert-outline`, `flask-off-outline` (on) | coil addresses 1; 4, 5; 6, 7, 8, 9, 10; 11, 12 | Fast |
+| No Flow, Cl Tank Empty, pH Tank 1 Empty | Binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coil addresses 3, 2, 0 | Fast |
 | Feeding Delay | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
 | Tau | Number (input box), 0–30 | | `chart-bell-curve-cumulative` | 40520 | Slow |
-| Flow Time | Number (input box), minutes | `duration` | `timer-sand-complete` | 40524 | Slow |
+| Flow Time | Number (input box), minutes (Reverse or Direct only) | `duration` | `timer-sand-complete` | 40524 | Slow |
 | Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
 | Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
+| pH / Cl Dosing Alarm Time | Numbers (input box), 0–999 min, 0 = off | `duration` | `timer-alert-outline` | 40428, 40430 | Slow |
+| pH / Cl Dosing Alarm Action | Selects: Dose, Stop (while the time is above 0) | | `play-circle-outline`, `stop-circle-outline` | coils 44, 59 | Slow |
+| pH / Cl Probe Failure Time | Numbers (input box), 0 or 100–999 min | `duration` | `flask-off-outline` | 40444, 40446 | Slow |
+| pH / Cl Probe Failure Action | Selects: Dose, Stop (while the time is set) | | `play-circle-outline`, `stop-circle-outline` | coils 75, 90 | Slow |
 
 Entity ids follow the names: `select.dosing_pump_ph_pulse_1_dosing_mode`,
-`number.dosing_pump_ph_pulse_2_max_value`, `sensor.dosing_pump_cl_pulse_rate`,
+`number.dosing_pump_ph_pulse_2_on_value`, `sensor.dosing_pump_cl_pulse_rate`,
 `select.dosing_pump_ph_relay_dosing_mode`, `sensor.dosing_pump_cl_relay_state`.
 Earlier versions named the pulse outputs "pH Relay 1/2" and "Cl Relay" (and,
 before that, "pH ...", "pH Output 2 ...", "Cl Relay 1 ...") and the relay states
