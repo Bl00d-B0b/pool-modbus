@@ -39,6 +39,7 @@ from .const import (
     CONF_BAUDRATE,
     CONF_BYTESIZE,
     CONF_DEVICE_TYPE,
+    CONF_LOG_TRAFFIC,
     CONF_PARITY,
     CONF_PREFIX,
     CONF_SERIAL_PORT,
@@ -211,6 +212,9 @@ def settings_schema(device_type: DeviceType, options: Mapping[str, Any]) -> vol.
         fields[vol.Required(FEATURE_PREFIX + feature.key, default=feature.key in on)] = (
             BooleanSelector()
         )
+    fields[vol.Required(CONF_LOG_TRAFFIC, default=options.get(CONF_LOG_TRAFFIC, False))] = (
+        BooleanSelector()
+    )
     return vol.Schema(fields)
 
 

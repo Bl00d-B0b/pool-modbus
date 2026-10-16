@@ -75,7 +75,12 @@ async def test_add_t010_over_tcp(hass: HomeAssistant) -> None:
         CONF_PREFIX: "",
     }
     assert result["result"].unique_id == "t010_tcp_192.168.1.50:502_2"
-    assert result["options"] == {"scan_interval_fast": 5, "scan_interval": 15}
+    # the traffic log is off unless asked for
+    assert result["options"] == {
+        "scan_interval_fast": 5,
+        "scan_interval": 15,
+        "log_traffic": False,
+    }
 
 
 async def add_with_prefix(hass: HomeAssistant, prefix: str):
@@ -242,7 +247,10 @@ async def test_configure_changes_the_connection_and_reading(hass: HomeAssistant)
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.data == {**DATA, CONF_HOST: "192.168.1.60", CONF_PORT: 5020, CONF_UNIT_ID: 7}
-    assert entry.options == {k: v for k, v in SETTINGS.items() if k != CONF_TRANSPORT}
+    assert entry.options == {
+        **{k: v for k, v in SETTINGS.items() if k != CONF_TRANSPORT},
+        "log_traffic": False,
+    }
     # The entry keeps its unique ID, so its entities keep their IDs.
     assert entry.unique_id == "t010_tcp_192.168.1.50:502_2"
 
@@ -307,3 +315,21 @@ async def test_settings_show_only_the_intervals_a_device_uses(hass: HomeAssistan
         )
         fields = [str(key) for key in result["data_schema"].schema]
         assert [f for f in fields if f.startswith("scan_interval")] == expected
+
+
+async def test_configure_switches_the_traffic_log_on(hass: HomeAssistant) -> None:
+    entry = existing(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {**SETTINGS, "log_traffic": True}
+    )
+    with patch(
+        "custom_components.pool_modbus.config_flow.async_get_temporary_unit",
+        temporary_unit(fake_unit("t010")),
+    ):
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_HOST: "192.168.1.50", CONF_PORT: 502, CONF_UNIT_ID: 2}
+        )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["log_traffic"] is True

@@ -26,6 +26,9 @@ SCAN_INTERVAL_KEYS: Final = {
 DEFAULT_SCAN_INTERVALS: Final = {"fast": 5, "medium": 10, "slow": 15}
 """Seconds between reads of each scan group, as in solax-modbus."""
 
+CONF_LOG_TRAFFIC: Final = "log_traffic"
+"""Option: write the bus traffic around a run of failed requests to the log."""
+
 FEATURE_PREFIX: Final = "read_"
 """Options key of a device type's optional part: ``read_<feature key>``."""
 

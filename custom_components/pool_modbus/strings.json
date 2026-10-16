@@ -50,12 +50,14 @@
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
           "read_clock": "Read the clock",
-          "read_backwash_schedule": "Read the backwash schedule"
+          "read_backwash_schedule": "Read the backwash schedule",
+          "log_traffic": "Log the bus traffic around failures"
         },
         "data_description": {
           "scan_interval_fast": "States and alarms.",
           "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
-          "scan_interval": "Settings, clocks and firmware."
+          "scan_interval": "Settings, clocks and firmware.",
+          "log_traffic": "When 5 requests in a row fail on this connection, writes the last 300 requests (all devices on the connection, with their frames) to the log as a warning, and the first answer after the failure with the 10 requests that follow."
         }
       }
     },
@@ -83,12 +85,14 @@
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
           "read_clock": "Read the clock",
-          "read_backwash_schedule": "Read the backwash schedule"
+          "read_backwash_schedule": "Read the backwash schedule",
+          "log_traffic": "Log the bus traffic around failures"
         },
         "data_description": {
           "scan_interval_fast": "States and alarms.",
           "scan_interval_medium": "Measurements: temperatures, pH, chlorine.",
-          "scan_interval": "Settings, clocks and firmware."
+          "scan_interval": "Settings, clocks and firmware.",
+          "log_traffic": "When 5 requests in a row fail on this connection, writes the last 300 requests (all devices on the connection, with their frames) to the log as a warning, and the first answer after the failure with the 10 requests that follow."
         }
       },
       "network": {

@@ -16,7 +16,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.loader import async_get_integration
 from modbus_connection import ModbusError
 
-from .const import CONF_DEVICE_TYPE, CONF_UNIT_ID, DOMAIN
+from .const import CONF_DEVICE_TYPE, CONF_LOG_TRAFFIC, CONF_UNIT_ID, DOMAIN
 from .coordinator import (
     PoolModbusConfigEntry,
     PoolModbusCoordinator,
@@ -27,6 +27,8 @@ from .coordinator import (
 )
 from .entity import entity_id
 from .library import get_device_type, group_model, read_plan
+from .library.reader import describe_connection
+from .traffic import BusTraffic, RecordingUnit
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -137,12 +139,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
     entities use, read on that group's interval.
     """
     device_type = get_device_type(entry.data[CONF_DEVICE_TYPE])
+    config = connection_config(entry.data)
+    unit_id = int(entry.data[CONF_UNIT_ID])
     try:
-        unit = async_get_unit(
-            hass, entry, connection_config(entry.data).params(), int(entry.data[CONF_UNIT_ID])
-        )
+        unit = async_get_unit(hass, entry, config.params(), unit_id)
     except HomeAssistantError as err:
         raise ConfigEntryError(str(err)) from err
+    traffic = _traffic(hass, describe_connection(config))
+    if entry.options.get(CONF_LOG_TRAFFIC, False):
+        traffic.reporters.add(entry.entry_id)
+        entry.async_on_unload(lambda: traffic.reporters.discard(entry.entry_id))
+    unit = RecordingUnit(unit, traffic, unit_id)
 
     # One full read: it identifies the firmware for the device info.
     full = device_type.model(unit)
@@ -254,6 +261,14 @@ def _renamed_unique_id(hass: HomeAssistant, entry: PoolModbusConfigEntry):
         return updates or None
 
     return migrate
+
+
+def _traffic(hass: HomeAssistant, name: str) -> BusTraffic:
+    """The traffic of one connection, shared by every device on it."""
+    connections: dict[str, BusTraffic] = hass.data.setdefault(DOMAIN, {}).setdefault("traffic", {})
+    if name not in connections:
+        connections[name] = BusTraffic(name)
+    return connections[name]
 
 
 async def _async_reload(hass: HomeAssistant, entry: PoolModbusConfigEntry) -> None:

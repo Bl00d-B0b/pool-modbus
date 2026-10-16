@@ -142,6 +142,23 @@ may answer one of them with an error or a timeout. The integration tries a
 failed read once more before it marks entities unavailable. Move a device to
 this integration and out of the YAML at the same time.
 
+### Debugging the bus
+
+Every request is logged at debug level, with its time, Modbus ID, function,
+address and the request and reply frames in RTU form (built from the request and
+the values of the answer, the bytes a TCP gateway puts on the bus), or the error.
+Turn it on with **Enable debug logging** on the integration's page.
+
+To catch a failure that comes rarely, switch on **Log the bus traffic around
+failures** in a device's Configure. The integration keeps the last 300 requests
+of each connection in memory, those of every device on it in the order they went
+out. When 5 requests in a row fail, it writes them to the log as one warning;
+when a device answers again, a second warning has the last failures, the first
+answer and the 10 requests after it. A single failure (a late answer, a write the
+gateway gave up on) writes nothing. Home Assistant's system log keeps only the
+last few messages of a kind, so download the full log (**Settings → System →
+Logs**) to keep them.
+
 ## Command line
 
 Read a device and print its values (read-only):
