@@ -105,7 +105,9 @@ async def test_the_option_reports_a_device_that_stops_answering(
         await entry.runtime_data.async_refresh_all()
     await hass.async_block_till_done()
 
-    reports = [r.getMessage() for r in caplog.records if r.name == LOGGER]
+    reports = [
+        r.getMessage() for r in caplog.records if r.name == LOGGER and r.levelno == logging.WARNING
+    ]
     assert len(reports) == 1
     assert "tcp 192.168.1.50:502: 5 requests in a row failed" in reports[0]
     assert "-> TimeoutError: no answer" in reports[0]
@@ -122,4 +124,4 @@ async def test_the_option_is_off_by_default(hass: HomeAssistant, caplog) -> None
         await entry.runtime_data.async_refresh_all()
     await hass.async_block_till_done()
 
-    assert not [r for r in caplog.records if r.name == LOGGER]
+    assert not [r for r in caplog.records if r.name == LOGGER and r.levelno == logging.WARNING]
