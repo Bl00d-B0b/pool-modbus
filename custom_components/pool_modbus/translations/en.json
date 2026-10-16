@@ -140,13 +140,6 @@
         "udp": "Modbus UDP",
         "serial": "Serial (RS-485 / RS-232)"
       }
-    },
-    "parity": {
-      "options": {
-        "N": "None",
-        "E": "Even",
-        "O": "Odd"
-      }
     }
   }
 }

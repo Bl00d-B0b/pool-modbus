@@ -190,7 +190,17 @@ def connection_schema(
         fields[required(CONF_SERIAL_PORT)] = TextSelector()
         fields[required(CONF_BAUDRATE, "9600")] = _select(BAUDRATES)
         fields[required(CONF_BYTESIZE, "8")] = _select(["7", "8"])
-        fields[required(CONF_PARITY, "N")] = _select(["N", "E", "O"], "parity")
+        # Labelled here: translation keys must be lower case, the stored values are N/E/O.
+        fields[required(CONF_PARITY, "N")] = SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value="N", label="None"),
+                    SelectOptionDict(value="E", label="Even"),
+                    SelectOptionDict(value="O", label="Odd"),
+                ],
+                mode=SelectSelectorMode.DROPDOWN,
+            )
+        )
         fields[required(CONF_STOPBITS, "1")] = _select(["1", "2"])
     else:
         fields[required(CONF_HOST)] = TextSelector()
