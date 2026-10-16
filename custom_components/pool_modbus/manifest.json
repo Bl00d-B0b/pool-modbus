@@ -1,10 +1,17 @@
 {
   "domain": "pool_modbus",
   "name": "Pool equipment",
-  "codeowners": ["@Bl00d-B0b"],
+  "after_dependencies": [
+    "http",
+    "frontend"
+  ],
+  "codeowners": [
+    "@Bl00d-B0b"
+  ],
   "config_flow": true,
-  "dependencies": ["modbus"],
-  "after_dependencies": ["http", "frontend"],
+  "dependencies": [
+    "modbus"
+  ],
   "documentation": "https://github.com/Bl00d-B0b/pool-modbus",
   "integration_type": "device",
   "iot_class": "local_polling",

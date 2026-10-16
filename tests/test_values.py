@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from pool_modbus import DEVICE_TYPES
@@ -71,3 +74,18 @@ def test_fields_name_fields_of_the_model(key: str, make_unit) -> None:
     for item in items:
         assert isinstance(item.fields, tuple), item.name
         assert set(item.fields) <= known, (item.name, set(item.fields) - known)
+
+
+@pytest.mark.parametrize("key", sorted(DEVICE_TYPES))
+def test_every_optional_part_has_its_label(key: str) -> None:
+    """Setup and Configure show a checkbox per feature, labelled by ``read_<feature>``."""
+    root = Path(__file__).parent.parent / "custom_components" / "pool_modbus"
+    for name in ("strings.json", "translations/en.json"):
+        strings = json.loads((root / name).read_text(encoding="utf-8"))
+        forms = (
+            strings["config"]["step"]["settings"]["data"],
+            strings["options"]["step"]["init"]["data"],
+        )
+        for feature in DEVICE_TYPES[key].features:
+            for form in forms:
+                assert f"read_{feature.key}" in form, (name, feature.key)

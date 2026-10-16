@@ -16,8 +16,7 @@ from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.model import Component, bit, bits, integer
 
 from .base import Action, Cover, DeviceType, Feature, Value
-from .reading import update_or_keep
-from .writing import pulse_bits, wait_until, write_bits
+from .writing import pulse_bits, read_with_retry, wait_until, write_bits
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 EVERY_DAY = 0x7F
@@ -213,7 +212,7 @@ async def set_light(device: PoolController, on: bool) -> None:
     not carry out is no error: the light keeps showing its real state (40025 bit
     11), and a switch in Home Assistant goes back to it.
     """
-    await update_or_keep(device)
+    await read_with_retry(device)
     if device.light_on == bool(on):
         return
     await pulse_bits(device, "command_word", LIGHT_BIT, SHORT_PULSE)
@@ -229,7 +228,7 @@ async def set_light(device: PoolController, on: bool) -> None:
 async def _move_cover(device: PoolController, command: int, want_open: bool) -> None:
     """Pulse the open or close command unless the cover already is there. The cover
     takes a while to move, so the status is not waited for."""
-    await update_or_keep(device)
+    await read_with_retry(device)
     if device.pool_open == want_open:
         return
     await pulse_bits(device, "command_word", command, LONG_PULSE)
@@ -254,7 +253,7 @@ async def _save_schedule(device: PoolController, done: Any, what: str) -> None:
 async def set_backwash_days(device: PoolController, bitmap: int) -> None:
     """Write the backwash days (bit 0 Monday ... bit 6 Sunday, 0 for off), then save."""
     bitmap = _within(0, EVERY_DAY)(bitmap)
-    await update_or_keep(device)
+    await read_with_retry(device)
     if device.backwash_days_written == bitmap and device.backwash_days == bitmap:
         return
     await device.write("backwash_days_written", bitmap)
@@ -263,7 +262,7 @@ async def set_backwash_days(device: PoolController, bitmap: int) -> None:
 
 async def set_backwash_weekday(device: PoolController, index: int, on: bool) -> None:
     """Add weekday ``index`` (0 Monday) to the backwash days, or take it out."""
-    await update_or_keep(device)
+    await read_with_retry(device)
     current = device.backwash_days_written
     if current is None:
         raise ModbusError("the backwash days could not be read")
@@ -298,7 +297,7 @@ async def set_backwash_time(device: PoolController, value: time | str) -> None:
     if not isinstance(at, time):
         raise ValueError(f"{value!r} is not a time of day like 06:00")
     hour, minute = at.hour, at.minute
-    await update_or_keep(device)
+    await read_with_retry(device)
     written = (device.backwash_hour_written, device.backwash_minute_written)
     saved = (device.backwash_hour, device.backwash_minute)
     if written == saved == (hour, minute):

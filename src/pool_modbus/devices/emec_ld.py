@@ -18,8 +18,7 @@ from modbus_connection import ModbusUnit
 from modbus_connection.model import Component, PackedBitsField, bits, coil, enum, gauge, integer
 
 from .base import DeviceType, Feature, ImplausibleReadError, Value
-from .reading import update_or_keep
-from .writing import write_if_changed
+from .writing import read_with_retry, write_if_changed
 
 # Values the controller sometimes reads as 0 for a single poll although they are
 # not (see EmecLD._verify_read). Pulse rates are left out: they drop to 0 whenever
@@ -57,7 +56,8 @@ class EmecUnit:
     """A ``ModbusUnit`` view that maps EMEC value indices to odd wire addresses.
 
     Coils pass straight through. Values are written one per request (function
-    06); multi-register and coil writes are refused as untested.
+    06); coils with function 05, only those in ``WRITABLE_COILS``. Multi-register
+    and multi-coil writes are refused as untested.
     """
 
     def __init__(self, unit: ModbusUnit) -> None:
@@ -138,9 +138,9 @@ class RelayMode(IntEnum):
 
 
 DUTY_RANGE = (0, 100)
+"""Percent of the 100 s PWM cycle the relay is on (the instruction manual: 100 % = 100 s)."""
 PWM_TIME_RANGE = (0, 250)
 """Fixed PWM's Ton and Toff on the keypad (pH relay, 2026-10-15)."""
-"""Percent of the 100 s PWM cycle the relay is on (the instruction manual: 100 % = 100 s)."""
 
 
 class FlowMode(IntEnum):
@@ -538,9 +538,7 @@ def _mode_steps(
     if mode is PulseMode.ON_OFF:
         interval = ((f("wait"), 1),) if not wait else ()
         return ((f("perc1"), 100), (f("perc2"), 0), *interval, (f("mode"), mode))
-    if mode is PulseMode.PROPORTIONAL:
-        return ((f("wait"), 0), (f("mode"), mode))
-    return ((f("wait"), 0), (f("mode"), mode))
+    return ((f("wait"), 0), (f("mode"), mode))  # Proportional and Off
 
 
 async def set_dosing_mode(device: EmecLD, label: str, channel: int = 1, output: int = 1) -> None:
@@ -548,7 +546,7 @@ async def set_dosing_mode(device: EmecLD, label: str, channel: int = 1, output: 
     mode = next((m for m in PulseMode if m.label == label), None)
     if mode is None:
         raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in PulseMode)}")
-    await update_or_keep(device)
+    await read_with_retry(device)
     if getattr(device, _field(channel, output, "mode")) is mode:
         return
     wait = getattr(device, _field(channel, output, "wait"))
@@ -853,6 +851,7 @@ _LABEL_VALUES = (
         minimum=PIN_LENGTH,
         maximum=PIN_LENGTH,
         enabled_by_default=False,
+        secret=True,
         icon="mdi:form-textbox-password",
     ),
 )
@@ -1509,7 +1508,7 @@ DEVICE_TYPE = DeviceType(
     values=VALUES,
     features=(
         Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs, timing)"),
-        Feature("alarms", "Alarms and standby (coils 1-16)"),
+        Feature("alarms", "Alarms and standby"),
         Feature("ma_outputs", "mA outputs"),
         Feature("data_logging", "Data logging"),
         Feature("label", "Label and PIN"),
@@ -1520,4 +1519,6 @@ DEVICE_TYPE = DeviceType(
     default_unit_id=1,
     message_spacing=0.1,  # the protocol notes ask for at least 100 ms between requests
     check_fields=("ch1_divisor", "ch2_divisor"),
+    private_addresses=(wire_address(270),),  # the keypad PIN (40542)
+    address_step=2,
 )

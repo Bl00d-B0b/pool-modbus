@@ -95,6 +95,9 @@ class Value:
     enabled_by_default: bool = True
     """False for a value Home Assistant creates disabled, to be switched on by hand."""
 
+    secret: bool = False
+    """A value Home Assistant masks where it is entered (a PIN)."""
+
     text_pattern: str | None = None
     """A writable text: the regular expression its characters must match, and
     ``maximum`` its length; Home Assistant shows a text entity."""
@@ -247,6 +250,12 @@ class DeviceType:
     """The start of every entity id of this type, before a device's prefix
     (``pool_thermostat`` gives ``number.pool_thermostat_temperature_offset``);
     the key if empty."""
+
+    private_addresses: tuple[int, ...] = ()
+    """Wire addresses whose values must never be logged (a keypad PIN)."""
+
+    address_step: int = 1
+    """Wire addresses between two values of a read (2 on a byte-addressed controller)."""
 
     check_fields: tuple[str, ...] = ()
     """Fields every scan group reads, for the model's check of each read

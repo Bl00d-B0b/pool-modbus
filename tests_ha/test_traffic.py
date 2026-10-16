@@ -125,3 +125,23 @@ async def test_the_option_is_off_by_default(hass: HomeAssistant, caplog) -> None
     await hass.async_block_till_done()
 
     assert not [r for r in caplog.records if r.name == LOGGER and r.levelno == logging.WARNING]
+
+
+async def test_the_pin_never_reaches_the_log() -> None:
+    """The EMEC LD's PIN (wire address 541) is logged as 0, in reads and in writes."""
+    from custom_components.pool_modbus.traffic import RecordingUnit
+
+    class Unit:
+        async def read_holding_registers(self, address: int, count: int) -> list[int]:
+            return [1234] * count
+
+        async def write_register(self, address: int, value: int) -> None:
+            return None
+
+    traffic = BusTraffic("tcp 192.168.1.50:502")
+    unit = RecordingUnit(Unit(), traffic, 3, (541,), 2)
+    assert await unit.read_holding_registers(537, 4) == [1234] * 4  # the model gets the PIN
+    await unit.write_register(541, 4321)
+    read, write = traffic.requests
+    assert read.values == (1234, 1234, 0, 1234)  # 537, 539, 541, 543
+    assert write.values == (0,) and "4321" not in str(write) and "10E1" not in str(write)

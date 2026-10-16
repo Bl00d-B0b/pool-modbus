@@ -150,7 +150,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: PoolModbusConfigEntry) -
     if entry.options.get(CONF_LOG_TRAFFIC, False):
         traffic.reporters.add(entry.entry_id)
         entry.async_on_unload(lambda: traffic.reporters.discard(entry.entry_id))
-    unit = RecordingUnit(unit, traffic, unit_id)
+    unit = RecordingUnit(
+        unit, traffic, unit_id, device_type.private_addresses, device_type.address_step
+    )
 
     # One full read: it identifies the firmware for the device info.
     full = device_type.model(unit)
@@ -225,6 +227,7 @@ def _reload_when_used_settings_change(
         if now == data.shown:
             pending.clear()
         elif pending and pending[-1] == now:
+            pending.clear()
             hass.config_entries.async_schedule_reload(entry.entry_id)
         else:
             pending[:] = [now]
@@ -251,6 +254,9 @@ def _renamed_unique_id(hass: HomeAssistant, entry: PoolModbusConfigEntry):
         new_key = RENAMED_KEYS.get(key, key)
         updates: dict[str, str] = {}
         if new_key != key:
+            if registry.async_get_entity_id(registered.domain, DOMAIN, prefix + new_key):
+                # the new key has its entity already: this one is removed as unused
+                return None
             updates["new_unique_id"] = prefix + new_key
         if new_key in names:
             domain = registered.domain

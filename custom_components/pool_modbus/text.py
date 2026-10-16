@@ -34,6 +34,8 @@ class PoolModbusText(PoolModbusEntity, TextEntity):
 
     def __init__(self, data: PoolModbusData, value: Value) -> None:
         super().__init__(data, value)
+        if value.secret:
+            self._attr_mode = TextMode.PASSWORD
         self._attr_pattern = value.text_pattern
         if value.minimum is not None:
             self._attr_native_min = int(value.minimum)

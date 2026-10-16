@@ -50,7 +50,7 @@ async def async_write(
             await write()
     except ValueError as err:
         raise ServiceValidationError(f"{what}: {err}") from err
-    except (ModbusError, OSError, TimeoutError) as err:
+    except (ModbusError, OSError, TimeoutError, NotImplementedError) as err:
         raise HomeAssistantError(
             f"{coordinator.config_entry.title} did not accept {what}: {err}"
         ) from err

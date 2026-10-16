@@ -182,10 +182,27 @@ class BusTraffic:
 class RecordingUnit:
     """A Modbus unit that notes each of its requests in its connection's traffic."""
 
-    def __init__(self, unit: Any, traffic: BusTraffic, unit_id: int) -> None:
+    def __init__(
+        self,
+        unit: Any,
+        traffic: BusTraffic,
+        unit_id: int,
+        private: tuple[int, ...] = (),
+        step: int = 1,
+    ) -> None:
         self._unit = unit
         self._traffic = traffic
         self._unit_id = unit_id
+        self._private = frozenset(private)
+        self._step = step
+
+    def _masked(self, address: int, values: tuple[int, ...] | None) -> tuple[int, ...] | None:
+        """The values with those at private addresses (a PIN) replaced by 0."""
+        if values is None or not self._private:
+            return values
+        return tuple(
+            0 if address + self._step * i in self._private else v for i, v in enumerate(values)
+        )
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._unit, name)
@@ -209,13 +226,14 @@ class RecordingUnit:
                     function,
                     address,
                     count,
-                    written,
+                    self._masked(address, written),
                     f"{type(err).__name__}: {err}" if str(err) else type(err).__name__,
                     time.monotonic() - began,
                 )
             )
             raise
         values = written if result is None else tuple(int(v) for v in result)
+        values = self._masked(address, values)
         self._traffic.record(
             Request(
                 start,

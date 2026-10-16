@@ -9,8 +9,12 @@ TCP-to-RS-485 gateway. Registers are numbered as in EMEC's register list
 - Modbus RTU, 38400 8N1 on the tested unit.
 - At least 100 ms between requests; the library spaces them.
 - Function 03 reads up to 125 values per request, as EMEC's protocol
-  description allows; tested on the LDPHCL. The library reads every value it
-  uses, 40002 to 40164, in one request.
+  description allows; tested on the LDPHCL. Every value up to 41840 answers a
+  read. The library reads only the values it uses, in as few requests as that
+  allows: with every optional part on, three requests of holding registers,
+  40002–40222 (111 values), 40428–40542 (58) and 40844–40870 (14, the label),
+  and seven reads of 8 coils, from 0, 8, 40, 48, 56, 72 and 88 (see the coil
+  rule below). In Home Assistant each read group reads only its own values.
 - The firmware version is shown on the controller's display only; it cannot be
   read over Modbus.
 
@@ -63,7 +67,7 @@ model reports it as 0.
 | 40140–40150 | 139–149 | 69–74 | int16 | Channel 1 pulse output 2: same layout |
 | 40154–40164 | 153–163 | 76–81 | int16 | Channel 2 pulse output: same layout |
 | 40082–40092 | 81–91 | 40–45 | int16 | Channel 1 switching relay: val1, val2 (×100), perc1, perc2 (% duty, or Ton/Toff in Fixed PWM), 40090 unused, mode at **40092** (tested; the protocol says 40090) |
-| 40212–40220 | 211–219 | 105–109 | int16 | Channel 2 switching relay: same layout |
+| 40212–40222 | 211–221 | 105–110 | int16 | Channel 2 switching relay: same layout, mode at **40222** (tested; the protocol says 40220) |
 | 40124, 40126 | 123, 125 | 61, 62 | int16 | mA output ch1 (pH): Max, Min (×100) |
 | 40128, 40130 | 127, 129 | 63, 64 | int16 | mA output ch3 (temperature): Max, Min (×10 °C; the protocol says ch2) |
 | 40196, 40198 | 195, 197 | 97, 98 | int16 | mA output ch2 (Cl): Max, Min (×100) |
@@ -81,10 +85,10 @@ channel 2 (3, 7 and 11 p/min at 0.46 mg/l for 0.60–0.00, 1.00–0.00 and
 so a new rate shows up to about 20 s after a change of the reading or the
 settings.
 
-The library reads the keypad PIN (40542) only with the "Label and
-password" part switched on (see below).
+The library reads the keypad PIN (40542) only with the "Label and PIN" part
+switched on (see below).
 
-### Not readable, and not yet usable
+### Not readable
 
 Found on the tested LDPHCL (firmware 5.1.4) on 2026-10-14 by changing a setting
 on the keypad while every readable register (wire 1–1839) and the coils were
@@ -97,12 +101,6 @@ read before and after:
 - **Countdown after flow returns, temperature probe millivolts, calibration
   dates and calibration-fail flags** (all on the status screens): no register
   holds them.
-- **Label** (the protocol's "chr0-chr1" … "chr26-chr27", R/W): the instrument's
-  28-character NAME, two characters per value, at 40844–40870 (14 values two
-  addresses apart; the protocol numbers them 40844–40857). The instruction
-  manual sets the instrument ID and NAME in the "RS485 Setup" menu; the NAME goes
-  into SMS messages, the USB log and ERMES. It reads 28 dashes here, an unset
-  name.
 - **41664–41840**: undocumented, random-looking values that did not change in any
   of 17 scans between 2026-10-01 and 2026-10-14 (clock writes, format switches,
   mode changes and dosing in between). A live watch of every value (43 full scans
@@ -113,101 +111,38 @@ read before and after:
   starts lower runs on past 41840, though: 125 values from 41836 reach 42084.
   The 122 values 41842–42084 are random-looking like the block before them and
   did not change in 35 reads over 75 s.
+
+### Clock and units format: not used
+
+The library reads the controller in Europe format only (temperature in °C × 10,
+the clock's month in the date word's high byte, a 24-hour hour). It never writes
+the clock setpoint or the format coils 45, 46 and 47; with USA format switched on
+at the keypad, its temperature and RTC are wrong or unknown. Found on the tested
+LDPHCL on 2026-10-14 and 2026-10-15:
+
 - **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
-  later, but not in the layout the controller reports or the protocol
-  description gives. The controller copies the written bytes into a buffer at
-  the even addresses 1624 (month, day), 1626 (minute, hour) and 1628 (year), and
-  from there into the clock. Source bytes: day = 41624 high, month = 41626 low,
-  hour = 41626 high, minute = 41628 low, year = 41628 high (the byte the protocol
-  calls "00"). Day, month and hour are taken without a range check (day 32,
-  month 13 and 14, hour 25 all showed on the clock); a minute of 61 was refused.
-  **The year is copied into the buffer (6, 26, 99, 255 all showed at 1628) but
-  never into the clock: every clock write sets the clock's year to 2000**,
-  whatever the year byte holds (1 to 4 tried as well). So a write can set the
-  time and date only at the cost of the year, which only the keypad corrects.
-  The clock's own New Year rollover works (31/12/2000 23:59 became 01/01/2001
-  00:00), but the next write resets the year again, so it cannot be used to
-  count the year up.
-  41612–41622 also take writes (undocumented, read 0) and do not set the year;
-  41630–41642 take none. The library does not write the clock.
-  **Function 16** (tested 2026-10-14 21:00, 3 registers from 41624; the gateway
-  answered 0x0B as for every write) is stored, but byte by byte: the 6 bytes go
-  to consecutive byte addresses in the order sent (high byte first), while a
-  function 06 write and every read put a register's low byte at its own address
-  and the high byte at the next. In byte terms the setpoint is one record:
-  day, month, hour, minute, year at byte addresses 1624–1628. A function 16
-  write did not make the controller apply the setpoint (the clock kept running
-  for 80 s), so it cannot set the clock on its own.
-- **Coil 47** (the protocol's date format, Europe or USA): a function 05 write
-  changes one coil (128-coil read position 41). How the clock reads in USA
-  format: see "Units format" below.
-- **Where 2001 comes from** (reproduced 2026-10-14 20:00): a clock write is
-  applied with the year 2000 in Europe format and **2001 in USA format**. A
-  Modbus switch to USA re-applies the setpoint, and the year went 0 → 1 with that
-  apply (14 s after the switch, together with the minute), not with the switch
-  itself; back in Europe format the next apply set it to 0 again. The first coil
-  47 test had shown the same, and its second try showed nothing because the coil
-  was switched back after 4 s, before the apply. The other way to 2001 is the
-  clock's own New Year rollover, the only one that counts the year.
-- **Units format** (coil 47, the menu's Europe / USA; found 2026-10-14 by the
-  keypad switch, which sets the same read position 41 as a write of 47): in USA
-  format the temperature (40052) reads whole °F (60 for the display's 60.2 °F)
-  instead of °C × 10, and the date word 40044 holds the day in its high byte and
-  the month in its low byte. A time set on the keypad in USA format is stored as
-  a 12-hour hour (7 for 7 PM) with the AM/PM flags in coils 45 (AM, read
-  position 43) and 46 (PM, read position 42), found by setting 9:00 AM and 7 PM
-  on the keypad; a time set in Europe format keeps its 24-hour hour after a
-  switch to USA. The RTC combines the hour with the PM flag (12 AM is 0).
-  Coil 46 takes function 05 writes, but only the flag changes: written off and
-  on in both formats (2026-10-14), the hour stayed 19 and the AM coil stayed off.
-  Coil 45 (AM) behaves the same (written on and off in Europe format at 20:05,
-  read position 43 followed, the hour stayed 20). The two flags are independent:
-  with 45 written on, AM and PM read on together.
-  **A write of coil 46 also makes the controller re-apply its clock setpoint**,
-  like a units switch: the first try, with a stale setpoint, put its old day,
-  month and minute on the clock and the year 2000. The library does not write
-  coils 45 and 46.
-  **A switch over Modbus does not switch the readings either**: after a keypad
-  switch to USA the temperature read 60 (whole °F), after each of three Modbus
-  switches (2026-10-14 19:56, 20:13, 20:25) it kept reading 157 (°C × 10), so
-  Temperature °F showed 157. In USA format the year byte of a write is ignored
-  as well (26 tried in 41628 high and 41624 low, and in 41612–41622; the year
-  stayed 2001).
-  **A switch over Modbus does not convert the clock** the way the keypad does:
-  after a Modbus switch to USA the date word stayed in Europe order (0x0A0E for
-  14 October) and the hour in 24-hour form, and the year became 2001 (above).
-  RTC decodes the USA date word as day and month swapped, so after a switch to
-  USA from Home Assistant it shows unknown (month 14) until the date is set on
-  the keypad.
-  **A clock write with day and month swapped** (41624 high byte = the month,
-  41626 low byte = the day), sent while the format is USA, gives the date word
-  the keypad's USA order (0x0E0A for 14 October; tested 2026-10-14 20:14), and RTC
-  then showed the right date and time again, with the year 2001. The hour is
-  stored as written: 20 or, written in 12-hour form, 8; the PM flag does not
-  change with it. Three times that evening the clock took the minute (or day) of
-  the write before: once the controller had answered the word's write with 0x0B
-  and not stored it (the read-back showed the old word), and the apply copied the
-  rest; the apply also copies field by field (a half-applied date word 0x0A0A
-  showed for a few seconds), so a write must be read back word by word.
-  A clock write sets day, month, hour and minute (tested in Europe format: all
-  four as written, the year 2000). It does not set the
-  seconds: there is no register for them and the clock keeps its old seconds (the
-  next minute came 43 s after an apply).
-  **The library reads the controller in Europe format only** (since
-  2026-10-15, the user's choice after these tests): Temperature in °C, RTC with
-  the month in the date word's high byte and a 24-hour hour. It reads none of the
-  units coils and writes neither them nor the clock. In USA format (switched on
-  the keypad) the temperature would read in whole °F and RTC would be wrong or
-  unknown. A clock write applied while the controller was in USA format also put its temperature back to °C (60 → 157 at 13:59:48 on
-  2026-10-15) while coil 47 still read USA.
-- **Fixed PWM on and off times** of the pH relay: found 2026-10-15 on the keypad,
-  in the duty-cycle registers: Ton = 40086 (perc1, with val1), Toff = 40088 (perc2,
-  with val2), 0–250 each. The pH relay's mode is at **40092**, not 40090: 0
-  Proportional PWM, 1 ON/OFF, 2 Fixed PWM, 3 Disabled; 40090 read 0 in all four.
-  In Proportional PWM the keypad keeps one duty cycle at 0 when the other is set;
-  a switch to ON/OFF or to Disabled set perc1 to 100 and perc2 to 0 (Ton 231 →
-  100, 0/17 % → 100/0), like the pulse outputs; the plugin's mode switch does the same. The Cl relay follows the same rules (user, 2026-10-15): mode at 40222 (read
-  1 = ON/OFF while the keypad showed ON/OFF), values 0.00–10.00 mg/l.
+  later, field by field, and not in the layout the controller reports or the
+  protocol gives: day = 41624 high byte, month = 41626 low, hour = 41626 high,
+  minute = 41628 low. Day, month and hour are taken without a range check; a
+  minute of 61 was refused. There is no register for the seconds.
+- **The year cannot be set over Modbus**: every clock write sets the clock's year
+  to 2000 (2001 in USA format), whatever the year byte (41628 high) holds. Only
+  the keypad sets the year. The clock's own New Year rollover counts it up, but
+  the next write resets it. 41612–41622 also take writes (undocumented, read 0)
+  and do not set the year; 41630–41642 take none.
+- **Function 16** (3 registers from 41624) is stored byte by byte in the order
+  sent (high byte first, at consecutive byte addresses), while a function 06
+  write and every read put a register's low byte at its own address and the
+  high byte at the next. It does not make the controller apply the setpoint.
+- **Units format** (coil 47, the menu's Europe / USA): in USA format, switched on
+  the keypad, the temperature (40052) reads whole °F and the date word 40044
+  holds the day in its high byte and the month in its low byte; a time set on the
+  keypad is stored as a 12-hour hour, with the AM and PM flags in coils 45 and 46.
+- **A Modbus units switch is only half a switch**: a write of coil 47 changes the
+  flag, but neither the temperature (it kept reading °C × 10) nor the clock (the
+  date word stayed in Europe order). Like a write of coil 45 or 46, which changes
+  only its flag, it makes the controller apply its clock setpoint again, which
+  resets the year.
 
 ## Values shown by this library
 
@@ -228,14 +163,14 @@ The dosing settings follow the output's working mode, as on the controller:
 - **Pulse Speed** (wait): ON/OFF mode only.
 
 Each channel also has a switching relay: **pH Relay** ("CH1 PH RELAY",
-40082–40090) and **Cl Relay** ("CH2 CL2 RELAY", 40212–40220), with Dosing Mode
+40082–40092) and **Cl Relay** ("CH2 CL2 RELAY", 40212–40222), with Dosing Mode
 (Proportional PWM, ON/OFF, Fixed PWM, Disabled), On Value, Off Value and, in
 Proportional PWM only, Max/Min Duty Cycle: the share of a 100 s cycle the relay
 is on at each value (the instruction manual: 100 % = 100 s). Both relays also
-have **On Period** and **Off Period** (Fixed PWM only, 0–250 s, in the same registers;
-the instruction manual's Ton, "ON period, during output activity", and Toff) and its
-duty cycles are written one at a time, the other set to 0, as on the keypad. Their on/off state is **pH Relay
-State** and **Cl Relay State** (40032, 40024).
+have **On Period** and **Off Period** (Fixed PWM only, 0–250 s, in the same
+registers as the duty cycles; the instruction manual's Ton, "ON period, during
+output activity", and Toff). Their on/off state is **pH Relay State** and
+**Cl Relay State** (40032, 40024).
 
 In Home Assistant a setting the current mode does not use has no entity, like
 in the controller's own menu. The entry creates the settings the modes use at
@@ -295,8 +230,9 @@ as the protocol gives it:
 | Action | coil 44 | coil 59 | **pH / Cl Dosing Alarm Action** (select Dose / Stop, only while the time is above 0) |
 
 Off keeps the action: with pH set to Off, coil 44 stayed on (Stop). Writes tested
-2026-10-15 (each written, read back within 2 s, and restored): the dosing alarm and probe failure times with function 06,
-their actions (coils 44, 59, 75, 90) with function 05, also while the time is 0.
+2026-10-15 (each written, read back within 2 s, and restored): the dosing alarm
+and probe failure times with function 06, their actions (coils 44, 59, 75, 90)
+with function 05, also while the time is 0.
 
 ### Out of range alarm
 
@@ -384,6 +320,7 @@ by the editor).
 | Label | 40844–40870 (index 421–434) | **Label** (diagnostic sensor, shown without the trailing `-`) |
 | PIN | 40542 (index 270), the number | **PIN** (diagnostic text, 4 digits "0000"–"9999", 0042 is stored as 42; disabled by default; writes not tested) |
 
+### Timing, flow and priority
 
 | Register | Index | Shown as |
 |---|---|---|
@@ -396,41 +333,55 @@ by the editor).
 coil 58 (protocol: 0 = pH priority, 1 = no priority). It is written at address 58
 with function 05 and read from the read of 8 coils from 56 (bit 5, see the coil
 rule above): found on 2026-10-14 by switching it on the keypad, and a write of
-58 = on set the keypad back to No priority with no other coil changed. The controller gives no countdown of the wait after
-flow returns (every readable register was scanned during one on 2026-10-14 and
-none counted down); Home Assistant can compute it from the moment the flow
-contact closed and the Flow Time.
+58 = on set the keypad back to No priority with no other coil changed. The
+controller gives no countdown of the wait after flow returns (every readable
+register was scanned during one on 2026-10-14 and none counted down); Home
+Assistant can compute it from the moment the flow contact closed and the Flow
+Time.
 
-Read groups in Home Assistant: the relay states and the alarm coils fast
-(40024, 40032; coils 0–15); readings, temperature, pulse rates and probe
-voltages medium (40002–40058, one request); the clock, the dosing settings and
-the timing slow (40044–40150 and 40522–40526, two requests). Every group also
-reads both divisors (40004, 40008), so the fast group reads 40004–40032 in one
-request plus the coils.
+### Read groups
+
+In Home Assistant each value is read in one of three groups, and only while its
+optional part is on:
+
+- **Fast**: the relay states (40024, 40032), Standby and the other alarm coils
+  (addresses 0–13, read as two reads of 8 coils from 0 and 8).
+- **Medium**: the pH and Cl readings, the temperature, the pulse rates and the
+  probe voltages (40002–40058).
+- **Slow**: everything else: the RTC, the settings of the pulse outputs and
+  relays, the timing and flow values, Priority, the dosing alarm, out of range
+  and probe failure settings, the mA outputs, data logging, the label and the PIN.
+
+Every group also reads both divisors (40004, 40008), so the fast group reads
+40004–40032 in one request plus the coils.
 
 The tested LDPHCL now and then answers a read with zeros for a few seconds:
 divisors 0 (so no pH or Cl value), temperature 0.0 °C, probe voltages 0 mV and
 both relays "Disabled", while the next poll reads normally again. Seen four
 times in 12 hours on 2026-10-06, and under the YAML setup before. Sometimes only
 some values read 0: both probe voltages, or both relays, for one poll (twice in
-the 2 hours after the first fix). A measurement's divisor is never 0, so a read with a
-divisor at 0 is refused. A value that was not 0 and reads 0
-(pH and Cl readings, temperature, probe voltages, relay states) is refused once
+the 2 hours after the first fix). A measurement's divisor is never 0, so a read
+with a divisor at 0 is refused. A value that was not 0 and reads 0 (pH and Cl
+readings, temperature, probe voltages, relay states) is refused once
 and shown when the next poll reads 0 as well; a real 0, such as a probe voltage
 near 0 mV at pH 7.00, shows one poll later. Pulse rates are not checked, as they
 drop to 0 whenever dosing stops. A refused read keeps the values from the last
 good one.
 
-Optional parts, all on by default: **dosing settings** (the Dosing Mode and
-the five settings of the three pulse outputs, the timing values), **alarms**
-(the coils), **probe voltages** and **clock**. A part that is off is not read.
+Optional parts, all on by default: **dosing settings** (the settings of the
+three pulse outputs and the two relays, the timing and flow values, Priority,
+the dosing alarm, out of range and probe failure settings), **alarms and
+standby** (the 14 alarm coils), **mA outputs**, **data logging**, **label and
+PIN**, **probe voltages** and **clock** (RTC). A part that is off is not read.
 
 ## Writing
 
 The dosing settings of the three pulse outputs (40068–40078, 40140–40150 and
-40154–40164) and the two switching relays (40082–40090, 40212–40220) are written one value per request with function 06, at the
-value's odd wire address. Each value is checked against its range first, not
-written when the controller already holds it, and confirmed by reading it back.
+40154–40164) and the two switching relays (40082–40092, 40212–40222), like
+every other writable value, are written one value per request with function
+06, at the value's odd wire address; coils are written with function 05. Each
+value is checked against its range first, not written when the controller
+already holds it, and confirmed by reading it back.
 
 The tested LDPHCL stores a written value but answers function 06 later than its
 Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
@@ -445,8 +396,8 @@ worked.
 | Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
 | Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
 
-The timing values are written the same way: Tau (40520, 0–30), Feeding Delay (40522, 0–60 min),
-Flow Time (40524, 0–99 min) and Flow Mode (40526). Setting Flow Mode to
+The timing values are written the same way: Tau (40520, 0–30), Feeding Delay
+(40522, 0–60 min), Flow Time (40524, 0–99 min) and Flow Mode (40526). Setting Flow Mode to
 Disabled makes the controller dose without flow, which its manual warns against.
 
 In proportional mode the controller doses from 0 p/min at one pH value to the
@@ -454,10 +405,11 @@ set rate at the other, so setting one end's rate sets the other end's to 0:
 On Rate writes perc1, then perc2 = 0; Off Rate writes perc2, then
 perc1 = 0. A working mode is entered by writing its settings in this order,
 which is what the controller's own keypad does (watched on 2026-10-14: ON/OFF
-forces the top rate to 100 and keeps a set interval, giving a 0 interval 1 minute; Proportional zeroes the
-interval and keeps the rates, Off also zeroes the interval (seen on the Cl output,
-ON/OFF with 3 min to Off) and changes nothing else; the same on all three outputs; the stored values show
-up to a minute after the keypad confirms them):
+forces the top rate to 100 and keeps a set interval, giving a 0 interval
+1 minute; Proportional zeroes the interval and keeps the rates; Off also zeroes
+the interval (seen on the Cl output, ON/OFF with 3 min to Off) and changes
+nothing else; the same on all three outputs; the stored values show up to a
+minute after the keypad confirms them):
 
 | Mode | Writes, in order |
 |---|---|
@@ -468,10 +420,19 @@ up to a minute after the keypad confirms them):
 Values the controller already holds are skipped. Writes to pH Pulse 1 were
 tested live (2026-10-05, and a mode round trip on 2026-10-14); pH Pulse 2 and Cl
 Pulse use the same code on registers of the same layout, but their writes have
-not been tried on a controller yet. A switching relay's settings are written one
-by one, its mode on its own: how the keypad changes the other settings on a
-relay mode switch has not been watched yet, so none are forced. Relay writes have
-not been tried live.
+not been tried on a controller yet.
+
+A switching relay's settings are written one value at a time, as the keypad
+changes them (watched on the pH relay on 2026-10-15; the Cl relay follows the
+same rules). A switch to ON/OFF or Disabled first writes perc1 = 100 and
+perc2 = 0 (the keypad changed Ton 231 to 100, and duty cycles 0/17 % to 100/0),
+then the mode; a switch to Proportional PWM or Fixed PWM writes only the mode.
+A duty cycle above 0 is written with the other then set to 0, as the keypad
+keeps one of the two at 0. On Period and Off Period (Fixed PWM's Ton and Toff,
+in the same registers) are written alone. The mode is at 40092 and 40222, not
+40090 and 40220 as the protocol says: 0 Proportional PWM, 1 ON/OFF, 2 Fixed
+PWM, 3 Disabled; 40090 read 0 in all four. Relay writes have not been tried
+live.
 
 | Relay setting | pH Relay | Cl Relay | Range |
 |---|---|---|---|
@@ -505,7 +466,7 @@ disabled. The probe voltages are sensors.
 | pH Relay Dosing Mode, Cl Relay Dosing Mode | Selects: Proportional PWM, ON/OFF, Fixed PWM, Disabled | | `chart-line-variant`, `toggle-switch-outline`, `square-wave`, `cancel` | 40092, 40222 | Slow |
 | pH Relay / Cl Relay On Value, Off Value ("Max/Min Value" until 2026-10-15, ids migrated) | Numbers (input box), 0.01 steps | `ph` (pH) | `toggle-switch-outline`, `toggle-switch-off-outline` | 40082, 40084 / 40212, 40214 | Slow |
 | pH Relay / Cl Relay Max Duty Cycle, Min Duty Cycle | Numbers (input box), % | | `speedometer`, `speedometer-slow` | 40086, 40088 / 40216, 40218 | Slow |
-| pH Relay / Cl Relay On Period, Off Period | Numbers (input box), 0–250 s, Fixed PWM only | `duration` | `timer-play-outline`, `timer-pause-outline` | 40086, 40088 | Slow |
+| pH Relay / Cl Relay On Period, Off Period | Numbers (input box), 0–250 s, Fixed PWM only | `duration` | `timer-play-outline`, `timer-pause-outline` | 40086, 40088 / 40216, 40218 | Slow |
 | Standby | Binary sensor | | `pause-circle` / `play-circle` | coil address 13 | Fast |
 | pH Tank 2 Empty; pH, Cl Out of Range; Cl Pulse, Cl Relay, pH Pulse 1, pH Relay, pH Pulse 2 Dosing Alarm; pH, Cl Probe Fail | Diagnostic binary sensors (protocol's alarm list, untested) | `problem` | `cup-off-outline`, `alert-circle-outline`, `timer-alert-outline`, `flask-off-outline` (on) | coil addresses 1; 4, 5; 6, 7, 8, 9, 10; 11, 12 | Fast |
 | No Flow, Cl Tank Empty, pH Tank 1 Empty | Diagnostic binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coil addresses 3, 2, 0 | Fast |
@@ -516,6 +477,10 @@ disabled. The probe voltages are sensors.
 | Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
 | pH / Cl Dosing Alarm Time | Numbers (input box), 0–999 min, 0 = off | `duration` | `timer-alert-outline` | 40428, 40430 | Slow |
 | pH / Cl Dosing Alarm Action | Selects: Dose, Stop (while the time is above 0) | | `play-circle-outline`, `stop-circle-outline` | coils 44, 59 | Slow |
+| pH / Cl Range High, Range Low | Switches | | `arrow-collapse-up`, `arrow-collapse-down` | coils 51, 52 / 61, 62 | Slow |
+| pH / Cl Range High Value, Range Low Value | Numbers (input box), 0.01 steps; pH, mg/L (while High or Low is on) | `ph` (pH) | `arrow-collapse-up`, `arrow-collapse-down` | 40438, 40442 / 40454, 40458 | Slow |
+| pH / Cl Range Time | Numbers (input box), 0–99 min (while High or Low is on) | `duration` | `timer-outline` | 40440, 40456 | Slow |
+| pH / Cl Range Action | Selects: Dose, Stop (while High or Low is on) | | `play-circle-outline`, `stop-circle-outline` | coils 53, 63 | Slow |
 | pH / Cl Probe Failure Time | Numbers (input box), 0 or 100–999 min | `duration` | `flask-off-outline` | 40444, 40446 | Slow |
 | pH / Cl Probe Failure Action | Selects: Dose, Stop (while the time is set) | | `play-circle-outline`, `stop-circle-outline` | coils 75, 90 | Slow |
 | pH / Cl / Temperature mA Output Mode | Selects: 0/20 mA, 4/20 mA | | `current-dc` | coils 49, 60, 50 | Slow |

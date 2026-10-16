@@ -8,8 +8,10 @@ typed Python (registers, scaling, byte layout) and tests it against data
 recorded from real hardware, so the decoding is right once and stays right.
 
 > **Status: early development.** The Python library and the Home Assistant
-> integration read all three device types below and control the T010 and the
-> pool controller and the EMEC LD's dosing settings. See the [roadmap](#roadmap).
+> integration read all three device types below. They control the T010, the
+> pool controller and most of the EMEC LD's settings: its dosing outputs and
+> relays, flow, alarm, mA output and data logging settings and its PIN. See the
+> [roadmap](#roadmap).
 
 ## Supported devices
 
@@ -17,7 +19,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 |---|---|---|---|
 | Pool controller (filtration, cover, light, water level) | `pool_controller` | Read and write | [register map](docs/devices/pool_controller.md) |
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
-| EMEC LD series pH/Cl controller | `emec_ld` | Read and write (pulse output dosing settings) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
+| EMEC LD series pH/Cl controller | `emec_ld` | Read and write (dosing outputs and relays, flow, alarm, mA output and logging settings, PIN) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 
 Each device type also defines the values a user sees, with generic names, and
 the rules that go with them (for example, which dosing settings apply in which
@@ -67,6 +69,22 @@ between integrations. Tested with Home Assistant 2026.10.1 (and 2026.9.4 before 
 5. Repeat for each device. Devices behind the same gateway share one
    connection.
 
+A new device is offered Modbus ID 1. The integration depends on Home
+Assistant's built-in Modbus integration for its connections, but needs no
+`modbus:` YAML configuration.
+
+### Updating
+
+HACS shows a new version when one is released on the repository's GitHub
+releases page. Update it in HACS and restart Home Assistant.
+
+### Removing
+
+Delete each device under **Settings → Devices & services → Pool equipment**,
+then remove *Pool equipment* in HACS and restart Home Assistant.
+
+### Configuring
+
 **Configure** on a device changes all of it later: the connection, the
 address and Modbus ID, the intervals and the optional parts. A new address is
 read before it is saved, and the device keeps its entities.
@@ -95,19 +113,23 @@ Optional parts, each a checkbox:
 | Device | Optional part | Default |
 |---|---|---|
 | Pool controller | Backwash schedule, clock | On |
-| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing), alarms and standby (coils), mA outputs, data logging, label and PIN, probe voltages, clock | On |
+| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing), alarms and standby, mA outputs, data logging, label and PIN, probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
-a device lets you change become switches, numbers, selects, times or lights; the T010
-also gets a thermostat (climate) entity, and the pool controller a cover and
-buttons for its commands. Settings you can change are configuration entities;
-read-only settings, clocks, firmware versions, probe voltages and the buttons
-that set the clock or reset alarms are diagnostic. The integration brings its own
+a device lets you change become switches, numbers, selects, times, texts or
+lights; the T010 also gets a thermostat (climate) entity, and the pool
+controller a cover and buttons for its commands. Settings you can change are
+configuration entities, except the dosing settings of the EMEC LD's five
+outputs (pH Pulse 1 and 2, Cl Pulse, pH and Cl Relay), which are shown among
+the controls. Read-only settings, clocks, firmware versions, the EMEC LD's
+label and PIN, its alarms other than Standby, and the buttons that set the
+clock or reset alarms are diagnostic. Probe voltages are plain sensors. The
+EMEC LD's RTC and PIN are created disabled. The integration brings its own
 icon set, `pool:`, for what Material Design Icons lack: the pool cover, a terrace
 that slides over a pool sunk into the ground (`pool:cover-open`,
-`pool:cover-closed`, drawn by `script/make_pool_icons.py`). The pool light is switched as the controller
-allows: a toggle the controller does not carry out leaves the light as it is,
-without an error.
+`pool:cover-closed`, drawn by `script/make_pool_icons.py`). The pool light is
+switched as the controller allows: a toggle the controller does not carry out
+leaves the light as it is, without an error.
 
 Entity ids start with the device type (`pool_controller`, `pool_thermostat`,
 `dosing_pump`), then the device's entity id prefix if it has one, then the
@@ -115,7 +137,8 @@ entity's name: `number.pool_thermostat_temperature_offset`, or with prefix `2`,
 `number.pool_thermostat_2_temperature_offset`. The thermostat, the T010's main
 entity, has no name of its own (`climate.pool_thermostat`,
 `climate.pool_thermostat_2`). The prefix is asked for when a device is added:
-optional, letters, digits and `_`, and different for each device of a type
+optional, letters, digits, spaces, `-` and `_` (stored in lower case, with
+spaces and `-` as `_`), and different for each device of a type
 (only one of them can have none). It is part of the device's identity, so it
 cannot be changed later, and the same device can be added a second time with a
 prefix of its own. The device's name is only what is shown: entities are named
@@ -183,29 +206,19 @@ python -m pool_modbus read-config devices.toml
 
 Devices with identical connection settings share one connection. A device that
 does not answer is reported as unavailable, and the others are still read.
-Output from a test installation, three devices behind one gateway:
+An excerpt of the output from a test installation, three devices behind one
+gateway, with most lines left out (the full output lists every value of each
+device):
 
 ```text
 Pool controller (unit 1, tcp 192.168.1.50:502)
   Filtration               on
-  Block Filling            off
   Filtration Mode          Filtering
-  Filter Pump              on
   Water Level              Normal
-  Water Level Monitoring   on
-  Filling                  off
   Light                    off
-  Flooding Alarm           off
-  Backwash Monday          off
-  Backwash Tuesday         off
-  Backwash Wednesday       off
-  Backwash Thursday        off
   Backwash Friday          on
-  Backwash Saturday        off
-  Backwash Sunday          off
   Backwash Time            06:00
   Saved Backwash Schedule  Friday 06:00
-  RTC                      2026-10-05 12:16:03
   Cover                    closed
 
 T010 pool thermostat (unit 2, tcp 192.168.1.50:502)
@@ -225,60 +238,17 @@ EMEC LD series pH/Cl controller (unit 3, tcp 192.168.1.50:502)
   Cl Level                 0.46 mg/L
   Temperature              17.6 °C
   pH Relay State           On
-  Cl Relay State           On
   pH Pulse 1 Rate          0 p/min
   Cl Pulse Rate            0 p/min
-  pH Pulse 2 Rate          0 p/min
-  pH Probe Voltage         -27 mV
-  Cl Probe Voltage         34 mV
-  RTC                      2026-10-01 20:32:00
   pH Pulse 1 Dosing Mode   Proportional
   pH Pulse 1 On Value      10.0 pH
   pH Pulse 1 Off Value     7.5 pH
   pH Pulse 1 On Rate       30 p/min
-  pH Pulse 1 Off Rate      0 p/min
   pH Pulse 1 Pulse Speed   unavailable
-  pH Pulse 2 Dosing Mode   Disabled
-  pH Pulse 2 On Value      unavailable
-  pH Pulse 2 Off Value     unavailable
-  pH Pulse 2 On Rate       unavailable
-  pH Pulse 2 Off Rate      unavailable
-  pH Pulse 2 Pulse Speed   unavailable
-  Cl Pulse Dosing Mode     Proportional
-  Cl Pulse On Value        0.0 mg/L
-  Cl Pulse Off Value       0.45 mg/L
-  Cl Pulse On Rate         13 p/min
-  Cl Pulse Off Rate        0 p/min
-  Cl Pulse Pulse Speed     unavailable
   pH Relay Dosing Mode     Proportional PWM
-  pH Relay On Value        6.55 pH
-  pH Relay Off Value       6.5 pH
-  pH Relay Max Duty Cycle  100 %
-  pH Relay Min Duty Cycle  0 %
-  Cl Relay Dosing Mode     Proportional PWM
-  Cl Relay On Value        2.45 mg/L
-  Cl Relay Off Value       2.5 mg/L
-  Cl Relay Max Duty Cycle  100 %
-  Cl Relay Min Duty Cycle  0 %
   Standby                  off
   No Flow                  off
-  Cl Tank Empty            off
-  pH Tank 1 Empty          off
-  pH Tank 2 Empty          off
-  pH Out of Range          off
-  Cl Out of Range          off
-  Cl Pulse Dosing Alarm    off
-  Cl Relay Dosing Alarm    off
-  pH Pulse 1 Dosing Alarm  off
-  pH Relay Dosing Alarm    off
-  pH Pulse 2 Dosing Alarm  off
-  pH Probe Fail            off
-  Cl Probe Fail            off
-  Feeding Delay            5 min
-  Tau                      5
-  Flow Time                5 min
   Flow Mode                Direct
-  Priority                 No priority
 ```
 
 ## Python
@@ -303,8 +273,12 @@ await connection.close()
    device, each with its own connection settings (done).
 3. Writes, one device at a time, each with tests: thermostat settings on the
    T010 (done), switches, commands and the backwash schedule on the pool
-   controller (done), channel 1 dosing settings on the EMEC LD (done).
-4. EMEC LD alarm coils.
+   controller (done), and on the EMEC LD the pulse outputs and relays of both
+   channels, flow, alarm, mA output and data logging settings and the PIN
+   (done).
+4. EMEC LD alarm coils (done).
+5. Live tests of the EMEC LD writes not yet tried on a controller: pH Pulse 2,
+   Cl Pulse, the relays, the mA outputs and the PIN.
 
 ## Development
 
@@ -325,7 +299,7 @@ The integration's icon, in `custom_components/pool_modbus/brand/`, is drawn by
 show it from there.
 
 The integration's own tests need Home Assistant, which runs on Linux and macOS
-but not Windows (CI runs them on every push):
+but not Windows (CI runs them on pull requests and every push to `main`):
 
 ```bash
 pip install "pytest-homeassistant-custom-component==0.13.372" "modbus-connection[tmodbus]==4.12.4"
@@ -337,7 +311,10 @@ pytest tests_ha
 This software talks to equipment that doses chemicals, heats water and moves a
 pool cover. It writes the T010's thermostat settings, the pool controller's
 switches and commands, which run the filter pump, the backwash, the cover and
-the light, and the EMEC LD's pH dosing settings. Test changes carefully and
+the light, and the EMEC LD's settings: the dosing settings of its pH and Cl
+pulse outputs and both relays, the flow mode (Disabled makes the controller
+dose without flow), the alarm settings, the mA outputs, data logging and the
+keypad PIN. Test changes carefully and
 keep each device's own safety settings in place. You are responsible for your
 installation.
 
