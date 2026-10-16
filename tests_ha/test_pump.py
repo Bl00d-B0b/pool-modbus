@@ -59,7 +59,10 @@ async def test_dosing_settings_are_controls(hass: HomeAssistant) -> None:
     assert hass.states.get(SPEED) is None  # only used in ON/OFF mode: no entity
     assert mode.attributes["icon"] == "mdi:chart-line-variant"
     registry = er.async_get(hass)
-    assert registry.async_get("sensor.dosing_pump_ph_probe_voltage").entity_category == "diagnostic"
+    assert registry.async_get("sensor.dosing_pump_ph_probe_voltage").entity_category is None
+    assert registry.async_get("binary_sensor.dosing_pump_no_flow").entity_category == "diagnostic"
+    assert registry.async_get("binary_sensor.dosing_pump_standby").entity_category is None
+    assert registry.async_get("sensor.dosing_pump_rtc").disabled_by is not None  # off by default
     assert registry.async_get("sensor.dosing_pump_ph_level").entity_category is None
 
 

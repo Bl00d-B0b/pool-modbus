@@ -49,6 +49,9 @@
           "scan_interval": "Slow polling interval (s)",
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
+          "read_ma_outputs": "Read the mA outputs",
+          "read_data_logging": "Read the data logging settings",
+          "read_label": "Read the label and PIN",
           "read_clock": "Read the clock",
           "read_backwash_schedule": "Read the backwash schedule",
           "log_traffic": "Log the bus traffic around failures"
@@ -84,6 +87,9 @@
           "scan_interval": "Slow polling interval (s)",
           "read_dosing_settings": "Read dosing settings (pH channel)",
           "read_probe_voltages": "Read probe voltages",
+          "read_ma_outputs": "Read the mA outputs",
+          "read_data_logging": "Read the data logging settings",
+          "read_label": "Read the label and PIN",
           "read_clock": "Read the clock",
           "read_backwash_schedule": "Read the backwash schedule",
           "log_traffic": "Log the bus traffic around failures"

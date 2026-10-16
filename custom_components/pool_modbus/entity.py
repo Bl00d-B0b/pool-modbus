@@ -89,6 +89,7 @@ class PoolModbusEntity(CoordinatorEntity[PoolModbusCoordinator]):
         self._attr_name = value.name
         self.entity_id = entity_id(self.entity_domain, entry, value.name)
         self._attr_device_info = data.device_info
+        self._attr_entity_registry_enabled_default = value.enabled_by_default
         if value.category == "setting":
             self._attr_entity_category = (
                 EntityCategory.CONFIG if value.writable else EntityCategory.DIAGNOSTIC

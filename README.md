@@ -95,7 +95,7 @@ Optional parts, each a checkbox:
 | Device | Optional part | Default |
 |---|---|---|
 | Pool controller | Backwash schedule, clock | On |
-| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing), alarms and standby (coils), probe voltages, clock | On |
+| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing), alarms and standby (coils), mA outputs, data logging, label and PIN, probe voltages, clock | On |
 
 Every value becomes an entity named as in the device's register map. Values
 a device lets you change become switches, numbers, selects, times or lights; the T010

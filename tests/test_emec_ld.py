@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 
 import pytest
 from modbus_connection import ModbusError
@@ -34,7 +34,8 @@ def test_wire_address(index: int, wire: int) -> None:
 async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_snapshot) -> None:
     pump = make_pump(ldphcl_snapshot)
     await read(pump)
-    # values 0-110 (up to the Cl relay's mode) and 213-262 (dosing alarm, timing); the alarm
+    # values 0-110 (up to the Cl relay's mode, with the mA outputs), 213-270 (dosing
+    # alarm, timing, data logging, password) and 421-434 (label); the alarm
     # coils in two reads of 8, the settings coils in reads of 8, each block once
     assert sorted(pump.requests) == [
         ("coils", 0, 8),
@@ -45,7 +46,8 @@ async def test_reads_are_register_blocks_and_one_coil_block(make_pump, ldphcl_sn
         ("coils", 72, 8),
         ("coils", 88, 8),
         ("holding", 1, 111),
-        ("holding", 427, 50),  # the dosing alarm times 40428/40430 through the timing
+        ("holding", 427, 58),  # the dosing alarm times 40428/40430 through the password
+        ("holding", 843, 14),  # the label
     ]
     assert pump.message_spacing == pytest.approx(0.1)
 
@@ -212,6 +214,105 @@ async def test_cl_range_coils_are_one_off_from_the_protocol(make_pump, ldphcl_sn
     assert value_text(values["cl_range_action"], device) == "Stop"
     await values["cl_range_action"].write(device, "Dose")  # tested live: coil 63 follows
     assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 63, False)]
+
+
+async def test_ma_outputs(make_pump, ldphcl_snapshot) -> None:
+    """As on the keypad 2026-10-16: all three 4/20 mA (coils 49, 60, 50), pH 14.00 to
+    0.00 (40124/40126), Cl 10.00 to 0.00 (40196/40198), temperature 99.9 to 0.0 °C
+    (40128/40130, which the protocol labels ch2)."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({123: 1400, 125: 0, 195: 1000, 197: 0, 127: 999, 129: 0})
+    pump = make_pump(registers, coils={49: True, 60: True, 50: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    texts = {k: value_text(v, device) for k, v in values.items() if "_ma_" in k}
+    assert texts == {
+        "ph_ma_mode": "4/20 mA",
+        "ph_ma_max": "14.0 pH",
+        "ph_ma_min": "0.0 pH",
+        "cl_ma_mode": "4/20 mA",
+        "cl_ma_max": "10.0 mg/L",
+        "cl_ma_min": "0.0 mg/L",
+        "temp_ma_mode": "4/20 mA",
+        "temp_ma_max": "99.9 °C",
+        "temp_ma_min": "0.0 °C",
+    }
+    await values["ph_ma_mode"].write(device, "0/20 mA")
+    await values["cl_ma_max"].write(device, 9.5)
+    await values["temp_ma_min"].write(device, 10.5)
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 49, False)]
+    assert pump.writes == [(195, 950), (129, 105)]
+    for key, bad in (("ph_ma_max", 14.01), ("cl_ma_min", -0.01), ("temp_ma_max", 100.0)):
+        with pytest.raises(ValueError):
+            await values[key].write(device, bad)
+
+
+async def test_data_logging(make_pump, ldphcl_snapshot) -> None:
+    """As on the keypad 2026-10-16: logging Enabled (coil 48), Time 08:15 (40530 = 815),
+    Every 01:45 (40532 = 145), both as hour * 100 + minute."""
+    registers = dict(ldphcl_snapshot)
+    registers.update({529: 815, 531: 145})
+    pump = make_pump(registers, coils={48: True, 54: True})
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert value_text(values["data_logging"], device) == "on"
+    assert value_text(values["log_start_time"], device) == "08:15"
+    assert value_text(values["log_interval"], device) == "01:45"
+    await values["log_start_time"].write(device, "23:59")
+    await values["log_interval"].write(device, time(0, 30))
+    await values["data_logging"].write(device, False)
+    assert pump.writes == [(529, 2359), (531, 30)]
+    assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 48, False)]
+    with pytest.raises(ValueError):
+        await values["log_interval"].write(device, "25:00")
+
+
+def test_entity_sections() -> None:
+    """The user's choice, 2026-10-16: the setpoint settings of the five outputs are controls;
+    the label, the PIN, the RTC and the 13 alarm coils (not standby) diagnostics, the PIN
+    and the RTC disabled by default; the probe voltages sensors; the rest as before."""
+    values = get_device_type("emec_ld").values
+    controls = {v.key for v in values if v.category == "control"}
+    prefixes = ("ph1_", "ph2_", "cl1_", "ph_relay_", "cl_relay_")
+    assert controls == {v.key for v in values if v.key.startswith(prefixes) and v.writable}
+    assert len(controls) == 32  # 6 per pulse output, 7 per relay
+    assert {v.key for v in values if v.category == "diagnostic" and v.feature == "label"} == {
+        "instrument_label",
+        "keypad_pin",
+    }
+    assert sorted(v.key for v in values if not v.enabled_by_default) == ["keypad_pin", "rtc"]
+    alarms = {v.key for v in values if v.feature == "alarms"}
+    diagnostic_alarms = {
+        v.key for v in values if v.feature == "alarms" and v.category == "diagnostic"
+    }
+    assert alarms - diagnostic_alarms == {"standby"} and len(diagnostic_alarms) == 13
+    assert all(v.group == "fast" for v in values if v.feature == "alarms")
+    assert {v.category for v in values if v.feature == "probe_voltages"} == {"measurement"}
+
+
+async def test_label_and_pin(make_pump, ldphcl_snapshot) -> None:
+    """Seen on the display 2026-10-16: the label's chr0 in each word's low byte, 2 lines
+    of 14, unused characters '-'; the keypad PIN (40542) is the number of a 4-digit PIN."""
+    registers = dict(ldphcl_snapshot)
+    label = r"+,-./09:;<=>?@AZ[\]^_`az".ljust(28, "-")  # as entered on the keypad
+    registers.update(
+        {843 + 2 * i: ord(label[2 * i + 1]) << 8 | ord(label[2 * i]) for i in range(14)}
+    )
+    registers[541] = 42
+    pump = make_pump(registers)
+    pump.slow_write_reply = True  # the gateway answers 0x0B, as it does to every write
+    device = await read(pump)
+    values = {v.key: v for v in get_device_type("emec_ld").values}
+    assert value_text(values["instrument_label"], device) == label.rstrip("-")
+    assert not values["instrument_label"].writable
+    assert value_text(values["keypad_pin"], device) == "0042"
+    assert not values["keypad_pin"].enabled_by_default
+    assert values["keypad_pin"].category == "diagnostic"
+    await values["keypad_pin"].write(device, "1234")
+    assert pump.writes[-1] == (541, 1234)
+    for bad in ("42", "12345", "12a4", "-123"):
+        with pytest.raises(ValueError):
+            await values["keypad_pin"].write(device, bad)
 
 
 async def test_probe_failure_action_only_while_a_time_is_set(make_pump, ldphcl_snapshot) -> None:

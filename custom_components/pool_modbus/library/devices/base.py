@@ -10,9 +10,10 @@ from typing import Any, Literal
 from modbus_connection import ModbusError, ModbusUnit
 from modbus_connection.model import Component
 
-type Category = Literal["measurement", "status", "setting", "diagnostic"]
-"""What kind of value it is: a measured quantity, a state, a device setting, or
-information about the device itself."""
+type Category = Literal["measurement", "status", "setting", "control", "diagnostic"]
+"""What kind of value it is: a measured quantity, a state, a device setting, a setting
+shown among the controls (one used in daily operation), or information about the device
+itself."""
 
 type ScanGroup = Literal["fast", "medium", "slow"]
 """How often a value is read. Each group has its own interval, set per device."""
@@ -23,6 +24,7 @@ _DEFAULT_GROUP: dict[Category, ScanGroup] = {
     "status": "fast",
     "measurement": "medium",
     "setting": "slow",
+    "control": "slow",
     "diagnostic": "slow",
 }
 
@@ -89,6 +91,13 @@ class Value:
 
     time_of_day: bool = False
     """A writable time of day (``datetime.time``); Home Assistant shows a time entity."""
+
+    enabled_by_default: bool = True
+    """False for a value Home Assistant creates disabled, to be switched on by hand."""
+
+    text_pattern: str | None = None
+    """A writable text: the regular expression its characters must match, and
+    ``maximum`` its length; Home Assistant shows a text entity."""
 
     @property
     def writable(self) -> bool:

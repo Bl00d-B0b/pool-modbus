@@ -8,8 +8,9 @@ and maps them to the wire. Register map and formats: docs/devices/emec_ld.md.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, time
 from enum import IntEnum
 from typing import Any
 
@@ -48,8 +49,8 @@ such block with its bits in reverse order (coil start + n is bit 7 - n), and a l
 read also shifts each byte's bits up by one and drops the top bit. Found 2026-10-15 with
 the alarms and configuration coils switched at the pump; with that rule every coil sits
 at the address the protocol gives (alarm coils: its number - 1)."""
-WRITABLE_COILS = frozenset({44, 51, 52, 53, 58, 59, 61, 62, 63, 75, 90})
-"""Coils whose writes were tested and are used."""
+WRITABLE_COILS = frozenset({44, 48, 49, 50, 51, 52, 53, 58, 59, 60, 61, 62, 63, 75, 90})
+"""Coils written by the library: tested, except the mA output modes (49, 50, 60)."""
 
 
 class EmecUnit:
@@ -157,6 +158,14 @@ class FlowMode(IntEnum):
 PH_RANGE = (0.0, 14.0)
 CL_RANGE = (0.0, 10.0)
 """mg/l, the chlorine working range in the controller's instruction manual."""
+MA_TEMP_RANGE = (0.0, 99.9)
+"""°C at the mA output's ends, as the keypad allows."""
+MA_MODES = ("0/20 mA", "4/20 mA")  # as the keypad writes them
+LABEL_WORDS = 14
+LABEL_PAD = "-"
+"""What the controller keeps in the unused characters (an unset label reads all '-')."""
+PIN_LENGTH = 4
+PIN_PATTERN = "[0-9]{4}"
 RATE_RANGE = (0, 180)
 """Pulses per minute; the controller's maximum."""
 SPEED_RANGE = (0, 99)
@@ -171,6 +180,29 @@ def _hundredths(low: float, high: float):
         return rounded
 
     return check
+
+
+def _tenths(low: float, high: float):
+    def check(value: Any) -> float:
+        rounded = round(float(value), 1)
+        if not low <= rounded <= high:
+            raise ValueError(f"{value} is outside {low} to {high}")
+        return rounded
+
+    return check
+
+
+def _hhmm(value: Any) -> int:
+    """hour * 100 + minute, as the controller stores its log times."""
+    if value != int(value) or not 0 <= value <= 2359 or value % 100 > 59:
+        raise ValueError(f"{value} is not a time as hour * 100 + minute")
+    return int(value)
+
+
+def _hhmm_time(raw: int | None) -> time | None:
+    if raw is None or raw > 2359 or raw % 100 > 59:
+        return None
+    return time(raw // 100, raw % 100)
 
 
 def _whole(low: int, high: int):
@@ -197,8 +229,9 @@ class EmecLD(Component):
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
     # the alarm block, always read whole, and the configuration coils
     # alarms; dosing alarm actions; out of range; priority; probe failure actions
-    # (51-63 as one range, so each block of 8 is read once)
-    coil_ranges = ((0, 13), (44, 44), (51, 63), (75, 75), (90, 90))
+    # (data logging 48, mA output modes 49-60 and out of range 51-63 as one range, so each
+    # block of 8 is read once)
+    coil_ranges = ((0, 13), (44, 44), (48, 63), (75, 75), (90, 90))
 
     # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
     no_ph_priority = coil(58, writable=True)
@@ -239,6 +272,36 @@ class EmecLD(Component):
     alarm_coil_12 = coil(11)  # probe fail ch1
     alarm_coil_13 = coil(12)  # probe fail ch2
     alarm_coil_14 = coil(13)  # standby
+
+    # mA outputs (the menu's "mA Outputs", the protocol's "mA Setpoint"; keypad
+    # 2026-10-16): per channel the range, 0 = 0/20 mA / 1 = 4/20 mA, and the readings at
+    # 20 mA (Max) and at 0 or 4 mA (Min). The protocol labels the temperature channel's
+    # Max/Min (40128/40130) "ch2"; the keypad shows them as the temperature's.
+    ma_ph_4_20 = coil(49, writable=True)
+    # Data logging (the menu's "Log Setup", keypad 2026-10-16: Enabled, Time 08:15, Every
+    # 01:45): on/off, the time logging starts and the interval, both hour * 100 + minute.
+    # The protocol's AM/PM coils 54/55 are for the USA format; this library reads the
+    # controller in Europe format (24 h), as for its clock.
+    log_on = coil(48, writable=True)
+    # Label (the instrument name set in "RS485 Setup", 40844-40870): 28 characters, two
+    # per value, chr0 in the low byte (the protocol's "chr0-chr1" ...; the display shows
+    # 2 lines of 14), unused ones '-'. Read only: the keypad's name editor keeps its own
+    # copy and writes it back on leaving, saved or not (see the device notes).
+    for _i in range(LABEL_WORDS):
+        locals()[f"label_{_i:02d}"] = integer(421 + _i, signed=False)
+    del _i
+    # Keypad password (40542): a 4-digit PIN, stored as the number (0042 reads 42).
+    password = integer(270, signed=False, writable=_whole(0, 9999))
+    log_start_raw = integer(264, signed=False, writable=_hhmm)  # 40530
+    log_interval_raw = integer(265, signed=False, writable=_hhmm)  # 40532
+    ma_cl_4_20 = coil(60, writable=True)
+    ma_temp_4_20 = coil(50, writable=True)
+    ma_ph_max = gauge(61, 0.01, writable=_hundredths(*PH_RANGE))  # 40124
+    ma_ph_min = gauge(62, 0.01, writable=_hundredths(*PH_RANGE))  # 40126
+    ma_cl_max = gauge(97, 0.01, writable=_hundredths(*CL_RANGE))  # 40196
+    ma_cl_min = gauge(98, 0.01, writable=_hundredths(*CL_RANGE))  # 40198
+    ma_temp_max = gauge(63, 0.1, writable=_tenths(*MA_TEMP_RANGE))  # 40128
+    ma_temp_min = gauge(64, 0.1, writable=_tenths(*MA_TEMP_RANGE))  # 40130
 
     # Timing (40520-40526): the measurement filter (tau), the feeding delay before
     # dosing resumes after flow or power returns, the flow sensor's time and mode.
@@ -650,6 +713,151 @@ def _range_values(channel: int) -> tuple[Value, ...]:
     )
 
 
+def _ma_values(key: str, symbol: str) -> tuple[Value, ...]:
+    """One mA output: its range and the readings at its ends, as the keypad shows them."""
+    if key == "temp":
+        unit, device_class, bounds, step = "°C", "temperature", MA_TEMP_RANGE, 0.1
+    else:
+        _, _, unit, device_class, bounds = _channel(1 if key == "ph" else 2)
+        step = 0.01
+    f = lambda name: f"ma_{key}_{name}"  # noqa: E731
+
+    def mode(device: EmecLD) -> str | None:
+        on = getattr(device, f("4_20"))
+        return None if on is None else MA_MODES[int(on)]
+
+    async def set_mode(device: EmecLD, label: str) -> None:
+        if label not in MA_MODES:
+            raise ValueError(f"{label!r} is not one of {', '.join(MA_MODES)}")
+        await write_if_changed(device, f("4_20"), label == MA_MODES[1])
+
+    def end(side: str, icon: str) -> Value:
+        return Value(
+            f"{key}_ma_{side}",
+            f"{symbol} mA Output {side.capitalize()}",
+            lambda d: getattr(d, f(side)),
+            unit,
+            category="setting",
+            device_class=device_class,
+            feature="ma_outputs",
+            write=lambda d, v: write_if_changed(d, f(side), v),
+            minimum=bounds[0],
+            maximum=bounds[1],
+            step=step,
+            number_mode="box",
+            icon=icon,
+        )
+
+    return (
+        Value(
+            f"{key}_ma_mode",
+            f"{symbol} mA Output Mode",
+            mode,
+            category="setting",
+            feature="ma_outputs",
+            write=set_mode,
+            options=MA_MODES,
+            icon="mdi:current-dc",
+        ),
+        end("max", "mdi:arrow-collapse-up"),
+        end("min", "mdi:arrow-collapse-down"),
+    )
+
+
+def _log_time(field: str):
+    async def write(device: EmecLD, value: time | str) -> None:
+        try:
+            at = time.fromisoformat(value) if isinstance(value, str) else value
+        except ValueError:
+            at = None
+        if not isinstance(at, time):
+            raise ValueError(f"{value!r} is not a time like 08:15")
+        await write_if_changed(device, field, at.hour * 100 + at.minute)
+
+    return write
+
+
+_LOG_VALUES = (
+    Value(
+        "data_logging",
+        "Data Logging",
+        lambda d: d.log_on,
+        binary=True,
+        category="setting",
+        feature="data_logging",
+        write=lambda d, on: write_if_changed(d, "log_on", bool(on)),
+        icon="mdi:database-clock",
+        icon_off="mdi:database-off-outline",
+    ),
+    Value(
+        "log_start_time",
+        "Log Start Time",
+        lambda d: _hhmm_time(d.log_start_raw),
+        category="setting",
+        feature="data_logging",
+        write=_log_time("log_start_raw"),
+        time_of_day=True,
+        icon="mdi:clock-start",
+    ),
+    Value(
+        "log_interval",
+        "Log Interval",
+        lambda d: _hhmm_time(d.log_interval_raw),
+        category="setting",
+        feature="data_logging",
+        write=_log_time("log_interval_raw"),
+        time_of_day=True,
+        icon="mdi:timer-sync-outline",
+    ),
+)
+
+
+def _label(device: EmecLD) -> str | None:
+    """The label without the '-' that fill its unused characters."""
+    words = [getattr(device, f"label_{i:02d}") for i in range(LABEL_WORDS)]
+    if None in words:
+        return None
+    text = "".join(chr(w & 0xFF) + chr(w >> 8) for w in words)  # chr0 in the low byte
+    return text.rstrip(LABEL_PAD)
+
+
+def _pin(device: EmecLD) -> str | None:
+    pin = device.password
+    return None if pin is None or pin > 9999 else f"{pin:0{PIN_LENGTH}d}"
+
+
+async def set_pin(device: EmecLD, text: str) -> None:
+    """Write the keypad PIN, four digits "0000"-"9999"."""
+    if not re.fullmatch(PIN_PATTERN, text):
+        raise ValueError(f"{text!r} is not a PIN of {PIN_LENGTH} digits")
+    await write_if_changed(device, "password", int(text))
+
+
+_LABEL_VALUES = (
+    Value(
+        "instrument_label",  # a writable text "label" until 2026-10-16
+        "Label",
+        _label,
+        category="diagnostic",
+        feature="label",
+        icon="mdi:label-outline",
+    ),
+    Value(
+        "keypad_pin",  # "password" (number) and "pin" ("Password" text) until 2026-10-16
+        "PIN",
+        _pin,
+        category="diagnostic",  # the user's choice, though writable
+        feature="label",
+        write=set_pin,
+        text_pattern=PIN_PATTERN,
+        minimum=PIN_LENGTH,
+        maximum=PIN_LENGTH,
+        enabled_by_default=False,
+        icon="mdi:form-textbox-password",
+    ),
+)
+
+
 def _priority(device: EmecLD) -> str | None:
     if device.no_ph_priority is None:
         return None
@@ -706,7 +914,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             f"{key}{output}_mode",
             f"{prefix} Dosing Mode",
             mode_of,
-            category="setting",
+            category="control",
             feature="dosing_settings",
             write=lambda d, label: set_dosing_mode(d, label, channel, output),
             options=tuple(mode.label for mode in PulseMode),
@@ -724,7 +932,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             lambda d: getattr(d, f("val1")),
             unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
-            category="setting",
+            category="control",
             device_class=device_class,
             feature="dosing_settings",
             write=writer("val1"),
@@ -740,7 +948,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             lambda d: getattr(d, f("val2")),
             unit,
             available=lambda d: mode_of(d) is not PulseMode.DISABLED,
-            category="setting",
+            category="control",
             device_class=device_class,
             feature="dosing_settings",
             write=writer("val2"),
@@ -756,7 +964,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             lambda d: getattr(d, f("perc1")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
-            category="setting",
+            category="control",
             feature="dosing_settings",
             write=lambda d, v: set_max_rate(d, v, channel, output),
             minimum=RATE_RANGE[0],
@@ -772,7 +980,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             lambda d: getattr(d, f("perc2")),
             "p/min",
             available=lambda d: mode_of(d) is PulseMode.PROPORTIONAL,
-            category="setting",
+            category="control",
             feature="dosing_settings",
             write=lambda d, v: set_min_rate(d, v, channel, output),
             minimum=RATE_RANGE[0],
@@ -788,7 +996,7 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
             lambda d: getattr(d, f("wait")),
             "min",
             available=lambda d: mode_of(d) is PulseMode.ON_OFF,
-            category="setting",
+            category="control",
             device_class="duration",
             feature="dosing_settings",
             write=writer("wait"),
@@ -833,7 +1041,7 @@ def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
             lambda d: getattr(d, f(field)),
             unit_,
             available=available,
-            category="setting",
+            category="control",
             device_class=dc,
             feature="dosing_settings",
             write=writer(field),
@@ -891,7 +1099,7 @@ def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
             f"{key}_relay_mode",
             f"{prefix} Dosing Mode",
             mode_of,
-            category="setting",
+            category="control",
             feature="dosing_settings",
             write=set_mode,
             options=tuple(mode.label for mode in RelayMode),
@@ -999,7 +1207,7 @@ VALUES = (
         "pH Probe Voltage",
         lambda d: d.probe_mv_ch1,
         "mV",
-        category="diagnostic",
+        category="measurement",
         scan_group="medium",
         device_class="voltage",
         feature="probe_voltages",
@@ -1010,7 +1218,7 @@ VALUES = (
         "Cl Probe Voltage",
         lambda d: d.probe_mv_ch2,
         "mV",
-        category="diagnostic",
+        category="measurement",
         scan_group="medium",
         device_class="voltage",
         feature="probe_voltages",
@@ -1023,6 +1231,7 @@ VALUES = (
         category="diagnostic",
         device_class="timestamp",
         feature="clock",
+        enabled_by_default=False,
         icon="mdi:clock-outline",
     ),
     *_output_values(1, 1),
@@ -1045,6 +1254,8 @@ VALUES = (
         "No Flow",
         lambda d: d.no_flow,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:water-off",
@@ -1055,6 +1266,8 @@ VALUES = (
         "Cl Tank Empty",
         lambda d: d.cl_tank_empty,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:cup-off-outline",
@@ -1065,6 +1278,8 @@ VALUES = (
         "pH Tank 1 Empty",
         lambda d: d.ph_tank_empty,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:cup-off-outline",
@@ -1076,6 +1291,8 @@ VALUES = (
         "pH Tank 2 Empty",
         lambda d: d.alarm_coil_02,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:cup-off-outline",
@@ -1086,6 +1303,8 @@ VALUES = (
         "pH Out of Range",
         lambda d: d.alarm_coil_05,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:alert-circle-outline",
@@ -1096,6 +1315,8 @@ VALUES = (
         "Cl Out of Range",
         lambda d: d.alarm_coil_06,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:alert-circle-outline",
@@ -1106,6 +1327,8 @@ VALUES = (
         "Cl Pulse Dosing Alarm",
         lambda d: d.alarm_coil_07,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:timer-alert-outline",
@@ -1116,6 +1339,8 @@ VALUES = (
         "Cl Relay Dosing Alarm",
         lambda d: d.alarm_coil_08,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:timer-alert-outline",
@@ -1126,6 +1351,8 @@ VALUES = (
         "pH Pulse 1 Dosing Alarm",
         lambda d: d.alarm_coil_09,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:timer-alert-outline",
@@ -1136,6 +1363,8 @@ VALUES = (
         "pH Relay Dosing Alarm",
         lambda d: d.alarm_coil_10,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:timer-alert-outline",
@@ -1146,6 +1375,8 @@ VALUES = (
         "pH Pulse 2 Dosing Alarm",
         lambda d: d.alarm_coil_11,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:timer-alert-outline",
@@ -1156,6 +1387,8 @@ VALUES = (
         "pH Probe Fail",
         lambda d: d.alarm_coil_12,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:flask-off-outline",
@@ -1166,6 +1399,8 @@ VALUES = (
         "Cl Probe Fail",
         lambda d: d.alarm_coil_13,
         binary=True,
+        category="diagnostic",
+        scan_group="fast",  # read with the states
         device_class="problem",
         feature="alarms",
         icon="mdi:flask-off-outline",
@@ -1248,6 +1483,11 @@ VALUES = (
     *_range_values(1),
     *_range_values(2),
     *_alarm_values("probe", "Probe Failure", "Cl", "cl", 100, "mdi:flask-off-outline"),
+    *_ma_values("ph", "pH"),
+    *_ma_values("cl", "Cl"),
+    *_ma_values("temp", "Temperature"),
+    *_LOG_VALUES,
+    *_LABEL_VALUES,
 )
 
 _DIVISORS = frozenset({1, 10, 100, 1000})
@@ -1270,6 +1510,9 @@ DEVICE_TYPE = DeviceType(
     features=(
         Feature("dosing_settings", "Dosing settings (pH and Cl pulse outputs, timing)"),
         Feature("alarms", "Alarms and standby (coils 1-16)"),
+        Feature("ma_outputs", "mA outputs"),
+        Feature("data_logging", "Data logging"),
+        Feature("label", "Label and PIN"),
         Feature("probe_voltages", "Probe voltages"),
         Feature("clock", "Clock"),
     ),

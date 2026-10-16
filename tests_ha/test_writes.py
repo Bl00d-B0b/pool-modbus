@@ -187,10 +187,11 @@ async def test_value_the_firmware_refuses(hass: HomeAssistant) -> None:
 
 async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> None:
     await add(hass, "emec_ld", fake_unit("emec_ld"))
-    # the out of range alarm's High and Low switches, per channel
+    # the out of range alarm's High and Low switches, per channel, and data logging
     assert sorted(hass.states.async_entity_ids(SWITCH_DOMAIN)) == [
         "switch.dosing_pump_cl_range_high",
         "switch.dosing_pump_cl_range_low",
+        "switch.dosing_pump_data_logging",
         "switch.dosing_pump_ph_range_high",
         "switch.dosing_pump_ph_range_low",
     ]
@@ -200,8 +201,13 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     # + the two relays' values and duty cycles (Proportional PWM: 4 each)
     # + the dosing alarm and probe failure times, two each (their Dose/Stop selects only
     # while a time is set)
-    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 23  # range values: all off
-    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 7  # 5 modes, flow, priority
+    # + the mA outputs' Max and Min, two per channel
+    assert len(hass.states.async_entity_ids(NUMBER_DOMAIN)) == 29  # range values: all off
+    # the PIN is a text, disabled by default; the label a read-only sensor
+    assert hass.states.async_entity_ids("text") == []
+    assert hass.states.get("sensor.dosing_pump_label") is not None
+    # 5 dosing modes, flow, priority, 3 mA output modes
+    assert len(hass.states.async_entity_ids(SELECT_DOMAIN)) == 10
 
 
 async def test_entity_shows_the_new_value_behind_a_caching_gateway(
