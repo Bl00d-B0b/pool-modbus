@@ -26,8 +26,7 @@ from .coordinator import (
     enabled_features,
 )
 from .entity import entity_id
-from .library import get_device_type, group_model, read_plan
-from .library.reader import describe_connection
+from .library import describe_connection, get_device_type, group_model, read_plan
 from .traffic import BusTraffic, RecordingUnit
 
 PLATFORMS: list[Platform] = [
@@ -47,7 +46,7 @@ PLATFORMS: list[Platform] = [
 RENAMED_KEYS = {
     "clock": "rtc",
     "sync_clock": "sync_rtc",
-    # EMEC pH pulse output 1 became "pH Relay 1" when output 2 was added (2026-10-14).
+    # EMEC pH pulse output 1 became "pH Relay 1" when output 2 was added.
     "pulse_rate_ph": "pulse_rate_ph_1",
     "ph_mode": "ph1_mode",
     "ph_max": "ph1_max",
@@ -57,20 +56,20 @@ RENAMED_KEYS = {
     "ph_pulse_speed": "ph1_pulse_speed",
     "pulse_rate_cl": "pulse_rate_cl_1",
     "start_delay": "no_flow",
-    "ph_tank_empty": "ph_tank_1_empty",  # "pH Tank Empty" until 2026-10-15
-    # the switching relays' values were "Max Value" / "Min Value" until 2026-10-15
+    "ph_tank_empty": "ph_tank_1_empty",  # "pH Tank Empty" in development versions
+    # the switching relays' values were "Max Value" / "Min Value" in development versions
     "ph_relay_max": "ph_relay_on",
     "ph_relay_min": "ph_relay_off",
     "cl_relay_max": "cl_relay_on",
     "cl_relay_min": "cl_relay_off",
-    "delay": "no_flow",  # named Delay for a few minutes on 2026-10-14, then back
+    "delay": "no_flow",  # briefly named Delay in a development version
     "start_delay_time": "feeding_delay",
 }
 """Value and action keys that were renamed: old key to new key."""
 
 OLD_NAMES: dict[str, tuple[str, ...]] = {
-    "data_logging": ("Data Logging",),  # until 2026-10-19
-    # The pulse outputs, named "pH Relay 1/2" and "Cl Relay" until 2026-10-14 (and
+    "data_logging": ("Data Logging",),  # in development versions
+    # The pulse outputs, named "pH Relay 1/2" and "Cl Relay" in development versions (and
     # earlier "pH ...", "pH Output 2 ...", "Cl Relay 1 ..."), now as on the controller.
     "pulse_rate_ph_1": ("pH Pulse Rate", "pH Relay 1 Pulse Rate"),
     "ph1_mode": ("pH Dosing Mode", "pH Relay 1 Dosing Mode"),
@@ -101,7 +100,7 @@ OLD_NAMES: dict[str, tuple[str, ...]] = {
     "cl1_max_rate": ("Cl Relay 1 Max Pulse Rate", "Cl Relay Max Pulse Rate", "Cl Pulse Max Rate"),
     "cl1_min_rate": ("Cl Relay 1 Min Pulse Rate", "Cl Relay Min Pulse Rate", "Cl Pulse Min Rate"),
     "cl1_pulse_speed": ("Cl Relay 1 Pulse Speed", "Cl Relay Pulse Speed"),
-    # The switching relays' on/off state, "pH Relay" / "Cl Relay" until 2026-10-14.
+    # The switching relays' on/off state, "pH Relay" / "Cl Relay" in development versions.
     "relay_ph": ("pH Relay",),
     "relay_cl": ("Cl Relay",),
     "no_flow": ("Start Delay", "Delay"),
@@ -122,7 +121,7 @@ ICONS_URL = f"/{DOMAIN}/pool_icons.js"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Serve the integration's icon set (``pool:``, drawn by script/make_pool_icons.py)
+    """Serve the integration's icon set (``pool:``)
     to the frontend; entities use its icons like Material Design ones. Without the
     frontend (tests, a headless setup) the entities still work, with the icon names."""
     http = getattr(hass, "http", None)

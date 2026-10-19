@@ -216,7 +216,7 @@ class DeviceType:
     name: str
     manufacturer: str
     models: tuple[str, ...]
-    """Models this type has been tested with."""
+    """Models of this type, the first one shown as the device's model."""
 
     create: Callable[[ModbusUnit, str | None], Component]
     """Build the device model on a unit; the second argument is the variant key."""

@@ -1,500 +1,464 @@
 # EMEC LD series
 
-Tested on an **LDPHCL with firmware 5.1.4**, connected through a Modbus
-TCP-to-RS-485 gateway. Registers are numbered as in EMEC's register list
-(`4xxxx`); the address is what a request sends.
+The EMEC LD series pH/chlorine controllers (dosing pumps), such as the
+**LDPHCL** (firmware 5.1.4). On an LDPHCL, channel 1 measures pH and channel 2
+free chlorine in mg/L. This page describes the device type as released in
+version 2026.10.0 of the Pool equipment integration (`pool_modbus`).
 
-## Communication
+Registers are numbered as in EMEC's Modbus protocol document (`4xxxx`); the
+wire address is the address a request sends.
 
-- Modbus RTU, 38400 8N1 on the tested unit.
-- At least 100 ms between requests; the library spaces them.
-- Function 03 reads up to 125 values per request, as EMEC's protocol
-  description allows; tested on the LDPHCL. Every value up to 41840 answers a
-  read. The library reads only the values it uses, in as few requests as that
-  allows: with every optional part on, three requests of holding registers,
-  40002–40222 (111 values), 40428–40542 (58) and 40844–40870 (14, the label),
-  and seven reads of 8 coils, from 0, 8, 40, 48, 56, 72 and 88 (see the coil
-  rule below). In Home Assistant each read group reads only its own values.
-- The firmware version is shown on the controller's display only; it cannot be
-  read over Modbus.
+## Setup
 
-## Addressing
+- Device type: EMEC LD series pH/Cl controller. Default name **Dosing pump**,
+  default Modbus ID 1.
+- Entity ids start with `dosing_pump`, followed by the device's optional entity
+  id prefix and the entity's name: `sensor.dosing_pump_ph_level`, or with prefix
+  `2` `sensor.dosing_pump_2_ph_level`. The ids below are for a device without
+  a prefix.
+- When a device is added, the integration reads it once and accepts it as an
+  EMEC LD only if both measurement divisors (40004, 40008) are 1, 10, 100 or 1000.
+- Modbus RTU on the controller's RS-485 port, directly or through a Modbus TCP
+  gateway. The integration keeps at least 100 ms between requests, as the
+  protocol document asks.
 
-The controller is byte-addressed. Every value takes two Modbus addresses and
-sits at an odd address:
+### Optional parts
 
-```
-address = register - 40001        (40002 -> 1, 40052 -> 51)
-```
+Each optional part can be switched off with its checkbox when the device is
+added or later in **Configure**. All are on by default. A part that is off has
+no entities and its registers and coils are not read.
 
-A read of N registers from an odd address returns the N values at
-`a, a+2, a+4, ...`. Reads must start at an odd address.
-
-The model numbers values by index, `index = (register - 40002) / 2`, and
-`EmecUnit` sends every read to `address = 2 * index + 1`.
-
-## Value formats
-
-| Format | Values | Decode |
+| Part | Checkbox | Entities |
 |---|---|---|
-| Plain 16-bit, signed | readings, divisors, temperature, probe mV, setpoints | as is, then scale |
-| One byte in the high half (low byte 0) | relay states, pulse rates | `word >> 8` |
-| Two bytes packed | clock | high byte, low byte |
+| Dosing settings | Read the dosing settings (outputs, alarms, timing) | the dosing modes and settings of the five outputs; timing, flow and priority; dosing alarm, probe failure and out of range settings |
+| Alarms and standby | Read the alarms and standby | Standby and the 13 alarm binary sensors |
+| mA outputs | Read the mA outputs | the mA output modes and ranges |
+| Data logging | Read the data logging settings | Logging Data, Log Start Time, Log Interval |
+| Label and PIN | Read the label and PIN | Label, PIN |
+| Probe voltages | Read probe voltages | pH Probe Voltage, Cl Probe Voltage |
+| Clock | Read the clock | RTC |
 
-A pulse rate reads `0xFF` for a single poll while the rate sits at zero; the
-model reports it as 0.
-
-## Register map
-
-| Register | Address | Index | Format | Meaning |
-|---|---|---|---|---|
-| 40002 | 1 | 0 | int16 | Channel 1 reading (pH ×100 on an LDPHCL) |
-| 40004 | 3 | 1 | uint16 | Channel 1 divisor: 1, 10, 100 or 1000 |
-| 40006 | 5 | 2 | int16 | Channel 2 reading (Cl mg/l ×100) |
-| 40008 | 7 | 3 | uint16 | Channel 2 divisor |
-| 40024 | 23 | 11 | high byte | Relay output, channel 2: 0 disabled, 1 on, 2 off |
-| 40026 | 25 | 12 | high byte | Pulse rate, channel 1 output IS1 (p/min) |
-| 40028 | 27 | 13 | high byte | Pulse rate, channel 1 output IS2 (p/min) |
-| 40030 | 29 | 14 | high byte | Pulse rate, channel 2 (p/min) |
-| 40032 | 31 | 15 | high byte | Relay output, channel 1: 0 disabled, 1 on, 2 off |
-| 40044 | 43 | 21 | packed | Clock: month (high), day (low) |
-| 40046 | 45 | 22 | packed | Clock: hour (high), year − 2000 (low) |
-| 40048 | 47 | 23 | packed | Clock: minute (low) |
-| 40052 | 51 | 25 | int16 | Temperature ×10 (°C) |
-| 40056 | 55 | 27 | int16 | Probe channel 1 (mV) |
-| 40058 | 57 | 28 | int16 | Probe channel 2 (mV) |
-| 40068–40078 | 67–77 | 33–38 | int16 | Channel 1 pulse output 1: val1, val2 (×100), perc1, perc2 (p/min), wait (min), mode |
-| 40140–40150 | 139–149 | 69–74 | int16 | Channel 1 pulse output 2: same layout |
-| 40154–40164 | 153–163 | 76–81 | int16 | Channel 2 pulse output: same layout |
-| 40082–40092 | 81–91 | 40–45 | int16 | Channel 1 switching relay: val1, val2 (×100), perc1, perc2 (% duty, or Ton/Toff in Fixed PWM), 40090 unused, mode at **40092** (tested; the protocol says 40090) |
-| 40212–40222 | 211–221 | 105–110 | int16 | Channel 2 switching relay: same layout, mode at **40222** (tested; the protocol says 40220) |
-| 40124, 40126 | 123, 125 | 61, 62 | int16 | mA output ch1 (pH): Max, Min (×100) |
-| 40128, 40130 | 127, 129 | 63, 64 | int16 | mA output ch3 (temperature): Max, Min (×10 °C; the protocol says ch2) |
-| 40196, 40198 | 195, 197 | 97, 98 | int16 | mA output ch2 (Cl): Max, Min (×100) |
-| 40530, 40532 | 529, 531 | 264, 265 | uint16 | Log start time, log interval: hour × 100 + minute |
-
-Pulse modes: 0 ON/OFF, 1 proportional, 2 disabled. In proportional mode the
-pulse rate moves linearly from `perc1` at `val1` to `perc2` at `val2`, rounded
-down, and stays at `perc1` beyond `val1`; this is a quick check that a decode
-is right. Verified live on 2026-10-14 by narrowing the bands around the
-readings: 40026 followed channel 1's pulse output 1 (3, 14 and 30 p/min at
-pH 7.47 for the bands 7.40–8.00, 7.00–8.00 and 7.00–7.40), 40030 followed
-channel 2 (3, 7 and 11 p/min at 0.46 mg/l for 0.60–0.00, 1.00–0.00 and
-1.00–0.40), and 40028 stayed 0 (that controller's second channel 1 output,
-40140–40150, is disabled). The controller recomputes a rate on its own cycle,
-so a new rate shows up to about 20 s after a change of the reading or the
-settings.
-
-The library reads the keypad PIN (40542) only with the "Label and PIN" part
-switched on (see below).
-
-### Not readable
-
-Found on the tested LDPHCL (firmware 5.1.4) on 2026-10-14 by changing a setting
-on the keypad while every readable register (wire 1–1839) and the coils were
-read before and after:
-
-- **Output Manager** (Auto, Off, or one output run manually for 0–99 min, as the
-  instruction manual describes): Auto and Off change no register or coil. A
-  manual run shows only through its effect, the output's pulse rate (150 p/min
-  for Man. Ch1 pH pulse1); its countdown is not readable.
-- **Countdown after flow returns, temperature probe millivolts, calibration
-  dates and calibration-fail flags** (all on the status screens): no register
-  holds them.
-- **41664–41840**: undocumented, random-looking values that did not change in any
-  of 17 scans between 2026-10-01 and 2026-10-14 (clock writes, format switches,
-  mode changes and dosing in between). A live watch of every value (43 full scans
-  in 150 s) changed only the pH reading, the clock's minute and the pH probe
-  voltage: no register counts seconds.
-- **Past 41840** (tested 2026-10-14): a read can start at most at 41836; one
-  starting at 41838 or higher gets no reply, even for one value. A read that
-  starts lower runs on past 41840, though: 125 values from 41836 reach 42084.
-  The 122 values 41842–42084 are random-looking like the block before them and
-  did not change in 35 reads over 75 s.
-
-### Clock and units format: not used
-
-The library reads the controller in Europe format only (temperature in °C × 10,
-the clock's month in the date word's high byte, a 24-hour hour). It never writes
-the clock setpoint or the format coils 45, 46 and 47; with USA format switched on
-at the keypad, its temperature and RTC are wrong or unknown. Found on the tested
-LDPHCL on 2026-10-14 and 2026-10-15:
-
-- **Clock setpoint** (41624–41628): a write is applied to the clock 10–60 s
-  later, field by field, and not in the layout the controller reports or the
-  protocol gives: day = 41624 high byte, month = 41626 low, hour = 41626 high,
-  minute = 41628 low. Day, month and hour are taken without a range check; a
-  minute of 61 was refused. There is no register for the seconds.
-- **The year cannot be set over Modbus**: every clock write sets the clock's year
-  to 2000 (2001 in USA format), whatever the year byte (41628 high) holds. Only
-  the keypad sets the year. The clock's own New Year rollover counts it up, but
-  the next write resets it. 41612–41622 also take writes (undocumented, read 0)
-  and do not set the year; 41630–41642 take none.
-- **Function 16** (3 registers from 41624) is stored byte by byte in the order
-  sent (high byte first, at consecutive byte addresses), while a function 06
-  write and every read put a register's low byte at its own address and the
-  high byte at the next. It does not make the controller apply the setpoint.
-- **Units format** (coil 47, the menu's Europe / USA): in USA format, switched on
-  the keypad, the temperature (40052) reads whole °F and the date word 40044
-  holds the day in its high byte and the month in its low byte; a time set on the
-  keypad is stored as a 12-hour hour, with the AM and PM flags in coils 45 and 46.
-- **A Modbus units switch is only half a switch**: a write of coil 47 changes the
-  flag, but neither the temperature (it kept reading °C × 10) nor the clock (the
-  date word stayed in Europe order). Like a write of coil 45 or 46, which changes
-  only its flag, it makes the controller apply its clock setpoint again, which
-  resets the year.
-
-## Values shown by this library
-
-Named as on an LDPHCL, where channel 1 is pH and channel 2 is free chlorine.
-The outputs are named as on the controller. Channel 1 has two pulse outputs and
-channel 2 one: **pH Pulse 1** ("CH1 PH PULSE 1", 40068–40078, rate 40026),
-**pH Pulse 2** ("CH1 PH PULSE 2", 40140–40150, rate 40028) and **Cl Pulse**
-("CH2 CL2 PULSE", 40154–40164, rate 40030), each with the same seven values:
-Rate, Dosing Mode, On Value, Off Value, On Rate, Off Rate and Pulse Speed (pH
-values in pH, Cl values in mg/l, the controller's unit; its display writes Cl₂).
-The dosing settings follow the output's working mode, as on the controller:
-
-- **On Value / Off Value** (val1, val2; "Max/Min Value" until 2026-10-15, ids
-  migrated): where the output switches on and off (the keypad's rows, e.g. pH 10.00
-  on, 7.70 off; Cl 0.00 on, 0.45 off); not used when the output is disabled.
-- **On Rate / Off Rate** (perc1, perc2; "Max/Min Rate" until 2026-10-15, ids
-  migrated): the rate at the On and at the Off Value; proportional mode only.
-- **Pulse Speed** (wait): ON/OFF mode only.
-
-Each channel also has a switching relay: **pH Relay** ("CH1 PH RELAY",
-40082–40092) and **Cl Relay** ("CH2 CL2 RELAY", 40212–40222), with Dosing Mode
-(Proportional PWM, ON/OFF, Fixed PWM, Disabled), On Value, Off Value and, in
-Proportional PWM only, Max/Min Duty Cycle: the share of a 100 s cycle the relay
-is on at each value (the instruction manual: 100 % = 100 s). Both relays also
-have **On Period** and **Off Period** (Fixed PWM only, 0–250 s, in the same
-registers as the duty cycles; the instruction manual's Ton, "ON period, during
-output activity", and Toff). Their on/off state is **pH Relay State** and
-**Cl Relay State** (40032, 40024).
-
-In Home Assistant a setting the current mode does not use has no entity, like
-in the controller's own menu. The entry creates the settings the modes use at
-setup and removes the registry entries of the others (and of keys earlier
-versions had); when a mode changes, the entry reloads and the entities follow,
-with the same entity ids. A mode chosen in Home Assistant reloads at once; one
-changed on the keypad is seen on two slow reads in a row first, so about 15 to
-30 s later. The values of a removed setting stay in the controller as the mode
-switch wrote them (see the order below), e.g. ON/OFF leaves the top rate at 100.
-
-On the tested controller output 2 is disabled, so only its Dosing Mode and
-Pulse Rate show a value.
-
-### Alarms and state (coils)
-
-The protocol's coil addresses are right; only the way the tested LDPHCL answers a
-coil read is unusual (found 2026-10-15 with alarms and settings switched at the
-pump): **read 8 coils from a multiple of 8, and the block comes back with its
-bits in reverse order**, coil start + n in bit 7 − n. A longer read also shifts
-each byte's bits up by one and drops the top bit, which hid the pH tank alarm in
-a read of 16 and put coil 58 at position 62 of a read of 128. The library reads
-coils that way (`COIL_READ`, `EmecUnit.read_coils`). The alarm coils sit at the
-protocol's number − 1 (it counts 01–14; the older edition 00–13); configuration
-coils (45–47, 58, …) at their number.
-
-| Protocol coil | Address | Shown as | Source |
-|---|---|---|---|
-| 01 Ch1 level1 | 0 | **pH Tank 1 Empty** (binary, `problem`; "pH Tank Empty" until 2026-10-15, id migrated) | tested 2026-10-15: pH tank's level sensor disconnected |
-| 02 Ch1 level2 | 1 | **pH Tank 2 Empty** (binary, `problem`) | not seen yet |
-| 03 Ch2 level | 2 | **Cl Tank Empty** (binary, `problem`) | tested 2026-10-15: the display showed "level Cl2 error" |
-| 04 Flow | 3 | **No Flow** (binary, `problem`): on while the controller sees no flow and holds dosing, outputs off | tested 2026-10-15 |
-| 05 Out of range alarm 1 | 4 | **pH Out of Range** (binary, `problem`) | not seen yet |
-| 06 Out of range alarm 2 | 5 | **Cl Out of Range** (binary, `problem`) | not seen yet |
-| 07 Dosing alarm ch2 (out IS) | 6 | **Cl Pulse Dosing Alarm** (binary, `problem`) | not seen yet |
-| 08 Dosing alarm ch2 (out relè) | 7 | **Cl Relay Dosing Alarm** (binary, `problem`) | not seen yet |
-| 09 Dosing alarm ch1 (out IS1) | 8 | **pH Pulse 1 Dosing Alarm** (binary, `problem`) | not seen yet |
-| 10 Dosing alarm ch1 (out relè) | 9 | **pH Relay Dosing Alarm** (binary, `problem`) | not seen yet |
-| 11 Dosing alarm ch1 (out IS2) | 10 | **pH Pulse 2 Dosing Alarm** (binary, `problem`) | not seen yet |
-| 12 Probe fail ch1 | 11 | **pH Probe Fail** (binary, `problem`) | not seen yet |
-| 13 Probe fail ch2 | 12 | **Cl Probe Fail** (binary, `problem`) | not seen yet |
-| 14 Stby | 13 | **Standby** (binary): on while the controller is held in standby, outputs off | tested 2026-10-15: filtration stopped |
-| Mode (priority) | 58 | **Priority** (select; written with function 05) | tested 2026-10-14 |
-
-Configuration coils seen on in reads of 8 on 2026-10-15: 46 (PM), 49, 50, 54, 58
-(No priority) and 60; 48 (log enable) was off.
-
-### Dosing alarm
-
-The menu's "Dosing alarm": per channel a time after which the controller raises
-the channel's dosing alarm, and what it then does. Found on the keypad
-2026-10-15 (pH 49 min, Cl 177 min, then each switched to Stop and pH to Off),
-as the protocol gives it:
-
-| | pH (ch1) | Cl (ch2) | Shown as |
-|---|---|---|---|
-| Time | 40428 (index 213) | 40430 (index 214) | **pH / Cl Dosing Alarm Time** (number, 0–999 min; 0 = off) |
-| Action | coil 44 | coil 59 | **pH / Cl Dosing Alarm Action** (select Dose / Stop, only while the time is above 0) |
-
-Off keeps the action: with pH set to Off, coil 44 stayed on (Stop). Writes tested
-2026-10-15 (each written, read back within 2 s, and restored): the dosing alarm
-and probe failure times with function 06, their actions (coils 44, 59, 75, 90)
-with function 05, also while the time is 0.
-
-### Out of range alarm
-
-The menu's "Min/Max" per channel, set on the keypad 2026-10-15 (pH High 8.76 and
-Low 6.34 on, 11 min, Stop; Cl High 3.21 on, Low off, 22 min, Dose). As the
-protocol gives it for pH; for Cl it is one off (Low is coil 62 and Dose/Stop coil 63, where
-it lists 63 and 64, both labelled ch1) and it lists no Cl time (found at 40456):
-
-| | pH (ch1) | Cl (ch2) | Shown as |
-|---|---|---|---|
-| High on | coil 51 | coil 61 | **pH / Cl Range High** (switch) |
-| High limit | 40438 | 40454 | **… Range High Value** (pH 0.10–14.0, Cl 0.1–10 mg/l; while High is on) |
-| Low on | coil 52 | coil 62 | **pH / Cl Range Low** (switch) |
-| Low limit | 40442 | 40458 | **… Range Low Value** (pH 0.0–13.9, Cl 0–9.9 mg/l; while Low is on) |
-| Time | 40440 | 40456 | **… Range Time** (0–99 min; while High or Low is on) |
-| Dose / Stop | coil 53 | coil 63 | **… Range Action** (select; while High or Low is on) |
-
-The out of range alarm itself shows as **pH / Cl Out of Range** (alarm coils 05, 06).
-Writes tested 2026-10-15: every one of these takes function 05 / 06 writes (each
-written, read back within about 1 s, and restored), as long as the Min/Max menu is
-closed on the keypad; while it was open, writes to coils 52 and 63 were ignored.
-
-### Probe failure
-
-The menu's "Probe failure", the same pattern (keypad 2026-10-15: pH 117 min
-Stop, Cl 104 min Dose); its times are 0 (off) or 100–999 min, and Home Assistant
-refuses 1–99:
-
-| | pH (ch1) | Cl (ch2) | Shown as |
-|---|---|---|---|
-| Time | 40444 (index 221) | 40446 (index 222) | **pH / Cl Probe Failure Time** (number; 0 = off, 100–999 min) |
-| Action | coil 75 | coil 90 | **pH / Cl Probe Failure Action** (select Dose / Stop, only while the time is set) |
-
-### mA outputs
-
-The menu's "mA Outputs", the protocol's "mA Setpoint", as on the keypad 2026-10-16 (all
-three 4/20 mA; pH 14.00 to 0.00, Cl 10.00 to 0.00 mg/l, temperature 99.9 to 0.0 °C).
-Max is the reading at 20 mA, Min the reading at 0 or 4 mA. The protocol labels the
-temperature channel's Max and Min "ch2"; the keypad shows 40128/40130 as the
-temperature's:
-
-| | pH (ch1) | Cl (ch2) | Temperature (ch3) | Shown as |
-|---|---|---|---|---|
-| Mode | coil 49 | coil 60 | coil 50 | **pH / Cl / Temperature mA Output Mode** (select 0/20 mA, 4/20 mA; coil on = 4/20) |
-| Max | 40124 (index 61) | 40196 (index 97) | 40128 (index 63) | **… mA Output Max** (pH 0–14, Cl 0–10 mg/l in 0.01 steps; °C 0–99.9 in 0.1 steps) |
-| Min | 40126 (index 62) | 40198 (index 98) | 40130 (index 64) | **… mA Output Min** (same ranges) |
-
-The menu's "Enable / Disable on alarm" per output has no coil or register in the
-protocol, so it is not shown. Writes to these settings are not tested yet.
-
-### Data logging
-
-The menu's "Log Setup", as on the keypad 2026-10-16 (Enabled, Time 08:15, Every 01:45);
-the controller showed each keypad change about a minute after it was saved:
-
-| Setting | Address | Shown as |
-|---|---|---|
-| Log on | coil 48 | **Logging Data** (switch; "Data Logging" until 2026-10-19) |
-| Start time | 40530 (index 264), hour × 100 + minute | **Log Start Time** (time, HH:MM; only while logging is on) |
-| Interval | 40532 (index 265), hour × 100 + minute | **Log Interval** (time, HH:MM, the keypad's "Every"; only while logging is on) |
-
-The protocol's coils 54 and 55 (log time AM / PM) belong to the USA format; this library
-reads the controller in Europe format (24 h), as for its clock, and does not use them.
-The menu's "Output" has no register in the protocol. The log records themselves are not
-readable over Modbus. Writes tested 2026-10-16 from Home Assistant: logging off, start
-00:00, interval 00:30 (the settings before the keypad test), each confirmed by reading back.
-
-### Label and PIN
-
-The instrument name ("RS485 Setup", the protocol's "Label", 40844–40870): 28 characters,
-two per value with chr0 in the **low** byte (seen on the display 2026-10-16, which shows
-them as 2 lines of 14), unused characters `-` (an unset label reads all `-`). The keypad
-offers only 0–9, A–Z, a–z and `+ , - . / : ; < = > ? @ [ \ ] ^ _` `` ` `` (the last is the
-backtick, 60 hex, which looks like an apostrophe on the display; read back from a label
-entered on the keypad), no space.
-
-The label is read only. A write over Modbus does not last: the keypad's name editor keeps
-its own copy and writes it back about a minute after the editor is left, saved or not
-(tested 2026-10-16: single writes of its values with function 06 and a write of all 14 with
-function 16, which the controller stores byte by byte in the order sent; both were undone
-by the editor).
-
-| Setting | Address | Shown as |
-|---|---|---|
-| Label | 40844–40870 (index 421–434) | **Label** (diagnostic sensor, shown without the trailing `-`) |
-| PIN | 40542 (index 270), the number | **PIN** (diagnostic text, 4 digits "0000"–"9999", 0042 is stored as 42; disabled by default; writes not tested) |
-
-### Timing, flow and priority
-
-| Register | Index | Shown as |
-|---|---|---|
-| 40520 | 259 | **Tau** (number, 0–30, writable): the controller's measurement filter setting, "Tau" in its menu; unit not documented |
-| 40522 | 260 | **Feeding Delay** (number, 0–60 min, writable): "Feeding delay" in the menu, how long dosing waits after flow or power returns |
-| 40524 | 261 | **Flow Time** (number, 0–99 min, writable): how long the flow contact must hold its new state before the controller acts on it; only with Reverse or Direct: switching to Disabled sets it to 0, on the keypad (2026-10-15) and from Home Assistant |
-| 40526 | 262 | **Flow Mode** (select, writable): Disabled (contact ignored), Reverse (N.O. contact), Direct (N.C. contact) |
-
-**Priority** (select, writable) is the menu's "Mode: No priority / pH priority",
-coil 58 (protocol: 0 = pH priority, 1 = no priority). It is written at address 58
-with function 05 and read from the read of 8 coils from 56 (bit 5, see the coil
-rule above): found on 2026-10-14 by switching it on the keypad, and a write of
-58 = on set the keypad back to No priority with no other coil changed. The
-controller gives no countdown of the wait after flow returns (every readable
-register was scanned during one on 2026-10-14 and none counted down); Home
-Assistant can compute it from the moment the flow contact closed and the Flow
-Time.
+The measurements (pH Level, Cl Level, Temperature), the pulse rates and the
+relay states belong to no optional part and always exist.
 
 ### Read groups
 
-In Home Assistant each value is read in one of three groups, and only while its
-optional part is on:
+Each value is read in one of three groups, each with its own polling interval
+set in Configure:
 
-- **Fast**: the relay states (40024, 40032), Standby and the other alarm coils
-  (addresses 0–13, read as two reads of 8 coils from 0 and 8).
-- **Medium**: the pH and Cl readings, the temperature, the pulse rates and the
-  probe voltages (40002–40058).
-- **Slow**: everything else: the RTC, the settings of the pulse outputs and
-  relays, the timing and flow values, Priority, the dosing alarm, out of range
-  and probe failure settings, the mA outputs, data logging, the label and the PIN.
+- **Fast**: the relay states, Standby and the alarm coils.
+- **Medium**: pH, Cl, temperature, the pulse rates and the probe voltages.
+- **Slow**: all settings, the RTC, the label and the PIN.
 
-Every group also reads both divisors (40004, 40008), so the fast group reads
-40004–40032 in one request plus the coils.
+Each group reads only its own values, and every group also reads both
+measurement divisors (40004, 40008) to check the reply (see Read checks).
 
-The tested LDPHCL now and then answers a read with zeros for a few seconds:
-divisors 0 (so no pH or Cl value), temperature 0.0 °C, probe voltages 0 mV and
-both relays "Disabled", while the next poll reads normally again. Seen four
-times in 12 hours on 2026-10-06, and under the YAML setup before. Sometimes only
-some values read 0: both probe voltages, or both relays, for one poll (twice in
-the 2 hours after the first fix). A measurement's divisor is never 0, so a read
-with a divisor at 0 is refused. A value that was not 0 and reads 0 (pH and Cl
-readings, temperature, probe voltages, relay states) is refused once
-and shown when the next poll reads 0 as well; a real 0, such as a probe voltage
-near 0 mV at pH 7.00, shows one poll later. Pulse rates are not checked, as they
-drop to 0 whenever dosing stops. A refused read keeps the values from the last
-good one.
+### Entity sections
 
-Optional parts, all on by default: **dosing settings** (the settings of the
-three pulse outputs and the two relays, the timing and flow values, Priority,
-the dosing alarm, out of range and probe failure settings), **alarms and
-standby** (the 14 alarm coils), **mA outputs**, **data logging**, **label and
-PIN**, **probe voltages** and **clock** (RTC). A part that is off is not read.
+Entities appear in Home Assistant's device page sections as follows:
 
-## Writing
+- **Sensor**: the measurements, pulse rates, relay states, probe voltages and
+  Standby (no entity category).
+- **Control**: the dosing modes and setpoint settings of the five outputs (no
+  entity category).
+- **Configuration**: all other writable settings.
+- **Diagnostic**: the 13 alarm binary sensors, the RTC, the Label and the PIN.
 
-The dosing settings of the three pulse outputs (40068–40078, 40140–40150 and
-40154–40164) and the two switching relays (40082–40092, 40212–40222), like
-every other writable value, are written one value per request with function
-06, at the value's odd wire address; coils are written with function 05. Each
-value is checked against its range first, not written when the controller
-already holds it, and confirmed by reading it back.
+All entities are enabled by default except **RTC** and **PIN**.
 
-The tested LDPHCL stores a written value but answers function 06 later than its
-Modbus TCP gateway waits (about 0.5 s), so the gateway replies with exception
-0x0B, "gateway target device failed to respond". The new value reads back
-within about 2 s, so the read-back, not the reply, decides whether a write
-worked.
+### Settings a mode does not use
 
-| Setting | pH Pulse 1 | pH Pulse 2 | Cl Pulse | Range |
-|---|---|---|---|---|
-| On Value, Off Value (val1, val2) | 40068, 40070 | 40140, 40142 | 40154, 40156 | 0.00–14.00 pH; 0.00–10.00 mg/l (the working ranges in the instruction manual) |
-| On Rate, Off Rate (perc1, perc2) | 40072, 40074 | 40144, 40146 | 40158, 40160 | 0–180 p/min |
-| Pulse Speed (wait) | 40076 | 40148 | 40162 | 0–99 min |
-| Dosing Mode | 40078 | 40150 | 40164 | ON/OFF, Proportional, Disabled |
+As in the controller's own menu, a setting the current working mode does not
+use has no entity (for example Pulse Speed while a pulse output is in
+Proportional mode). At setup the integration creates only the entities of the
+settings in use and removes the registry entries of the others. When the
+settings in use change, the entry reloads and the entities follow, with the
+same entity ids: at once after a write from Home Assistant, and after two slow
+reads in a row that agree for a change made on the keypad. The values of a
+setting without an entity stay stored in the controller.
 
-The timing values are written the same way: Tau (40520, 0–30), Feeding Delay
-(40522, 0–60 min), Flow Time (40524, 0–99 min) and Flow Mode (40526). Setting Flow Mode to
-Disabled makes the controller dose without flow, which its manual warns against.
+## Communication and addressing
 
-In proportional mode the controller doses from 0 p/min at one pH value to the
-set rate at the other, so setting one end's rate sets the other end's to 0:
-On Rate writes perc1, then perc2 = 0; Off Rate writes perc2, then
-perc1 = 0. A working mode is entered by writing its settings in this order,
-which is what the controller's own keypad does (watched on 2026-10-14: ON/OFF
-forces the top rate to 100 and keeps a set interval, giving a 0 interval
-1 minute; Proportional zeroes the interval and keeps the rates; Off also zeroes
-the interval (seen on the Cl output, ON/OFF with 3 min to Off) and changes
-nothing else; the same on all three outputs; the stored values show up to a
-minute after the keypad confirms them):
+### Functions
 
-| Mode | Writes, in order |
+| Function | Use |
 |---|---|
-| ON/OFF | perc1 = 100, perc2 = 0, wait = 1 only if it was 0, mode = 0 |
-| Proportional | wait = 0, mode = 1 |
-| Disabled | wait = 0, mode = 2 |
+| 03 Read holding registers | all values |
+| 06 Write single register | every writable value, one value per request |
+| 01 Read coils | alarm and configuration coils, always 8 at a time |
+| 05 Write single coil | the configuration coils 44, 48–53, 58–63, 75 and 90 only |
 
-Values the controller already holds are skipped. Writes to pH Pulse 1 were
-tested live (2026-10-05, and a mode round trip on 2026-10-14); pH Pulse 2 and Cl
-Pulse use the same code on registers of the same layout, but their writes have
-not been tried on a controller yet.
+The integration sends no function 16 or multi-coil writes to this device type.
 
-A switching relay's settings are written one value at a time, as the keypad
-changes them (watched on the pH relay on 2026-10-15; the Cl relay follows the
-same rules). A switch to ON/OFF or Disabled first writes perc1 = 100 and
-perc2 = 0 (the keypad changed Ton 231 to 100, and duty cycles 0/17 % to 100/0),
-then the mode; a switch to Proportional PWM or Fixed PWM writes only the mode.
-A duty cycle above 0 is written with the other then set to 0, as the keypad
-keeps one of the two at 0. On Period and Off Period (Fixed PWM's Ton and Toff,
-in the same registers) are written alone. The mode is at 40092 and 40222, not
-40090 and 40220 as the protocol says: 0 Proportional PWM, 1 ON/OFF, 2 Fixed
-PWM, 3 Disabled; 40090 read 0 in all four. Relay writes have not been tried
-live.
+### Byte addressing
 
-| Relay setting | pH Relay | Cl Relay | Range |
+The controller is byte-addressed: every value takes two addresses and sits at an
+odd wire address.
+
+```
+wire address = register - 40001         (40002 -> 1, 40052 -> 51)
+```
+
+A read of N registers from an odd wire address returns the N values at
+`a, a+2, a+4, ...`, so consecutive values of a read are two wire addresses
+apart. The integration numbers values by index, `index = (register - 40002) / 2`,
+and sends a request for index i to wire address `2 * i + 1`. A request reads up
+to 125 values.
+
+With every optional part on, a full read is three holding register reads and
+seven coil reads:
+
+| Read | Wire address, count | Registers or coils |
+|---|---|---|
+| Holding | 1, 111 | 40002–40222 |
+| Holding | 427, 58 | 40428–40542 |
+| Holding | 843, 14 | 40844–40870 (label) |
+| Coils | 0, 8 and 8, 8 | alarm coils 0–13 |
+| Coils | 40, 8 | 44 |
+| Coils | 48, 8 and 56, 8 | 48–63 |
+| Coils | 72, 8 | 75 |
+| Coils | 88, 8 | 90 |
+
+### Coil reads
+
+Coils are read 8 at a time, starting at a multiple of 8. The controller returns
+each block of 8 with its bits in reverse order: coil `start + n` is in bit
+`7 - n` of the reply. Coils are addressed as in the protocol document; the
+alarm coils sit at the document's alarm number − 1.
+
+### Writes
+
+Every write is checked and confirmed:
+
+1. The value is checked against its range; a value outside it is refused.
+2. The device is read (once more after 0.5 s if that read fails). If it already
+   holds the value, nothing is written.
+3. The value is written with function 06 (registers) or 05 (coils).
+4. The device is read every 0.25 s until it shows the new value, for up to 5 s;
+   otherwise the write fails with an error.
+
+A write that gets no reply (a gateway exception 0x0B, "gateway target device
+failed to respond", or a timeout) is decided by the read-back, since the
+controller can store a value after its gateway has stopped waiting. After every
+write all read groups are read again.
+
+### Value formats
+
+| Format | Values | Decode |
+|---|---|---|
+| 16-bit word | readings, divisors, temperature, probe voltages, setpoints | the word, then scaled |
+| One byte in the high half | relay states (40024, 40032), pulse rates (40026–40030) | `word >> 8` |
+| Two bytes packed | clock (40044–40048) | high byte and low byte |
+| Two characters | label (40844–40870) | first character in the low byte |
+
+The readings, temperature and probe voltages are signed (a probe voltage can be
+negative). The divisors, log times, PIN and label words are unsigned.
+A pulse rate that reads `0xFF` is shown as 0.
+
+### Read checks
+
+The controller now and then answers a read with zeros. The integration refuses
+a read in which a measurement divisor is 0. A value that was not 0 and reads 0
+(pH and Cl readings, temperature, probe voltages, relay states) is refused once
+and accepted if the next read also gives 0. Pulse rates are not checked, as
+they drop to 0 whenever dosing stops. A refused or failed read keeps the last
+values for up to 60 s before the entities become unavailable.
+
+## Measurements
+
+All are sensors with state class measurement, read with function 03 in the
+medium group, with no entity category.
+
+| Entity | Entity id | Register (wire) | Scaling, unit |
 |---|---|---|---|
-| On Value, Off Value (val1, val2) | 40082, 40084 | 40212, 40214 | 0.00–14.00 pH; 0.00–10.00 mg/l |
-| Max Duty Cycle, Min Duty Cycle (perc1, perc2) | 40086, 40088 | 40216, 40218 | 0–100 % |
-| On Period, Off Period (Ton, Toff; Fixed PWM) | 40086, 40088 | 40216, 40218 | 0–250 s |
-| Dosing Mode | 40092 | 40222 | Proportional PWM, ON/OFF, Fixed PWM, Disabled |
+| pH Level | `sensor.dosing_pump_ph_level` | 40002 reading (1), 40004 divisor (3) | reading / divisor; device class pH |
+| Cl Level | `sensor.dosing_pump_cl_level` | 40006 reading (5), 40008 divisor (7) | reading / divisor, mg/L |
+| Temperature | `sensor.dosing_pump_temperature` | 40052 (51) | ÷ 10, °C; device class temperature |
 
-## In Home Assistant
+The divisor is 1, 10, 100 or 1000.
 
-The setpoint settings of the five outputs (pH Pulse 1, pH Pulse 2, Cl Pulse, pH Relay,
-Cl Relay: dosing mode, values, rates, duty cycles, pulse speed, periods) are shown among
-the device's controls; the other settings are configuration entities. The label, the PIN,
-the RTC and the 13 alarms (all but Standby) are diagnostic; the PIN and the RTC are created
-disabled. The probe voltages are sensors.
+## Outputs
 
-| Entity | Type | Device class | Icon | Registers | Read |
+The controller has three pulse outputs and two switching relays, named as on
+the controller.
+
+### Pulse outputs
+
+| Output | Controller name | Settings registers (wire) | Rate register (wire) |
+|---|---|---|---|
+| pH Pulse 1 | CH1 PH PULSE 1 | 40068–40078 (67–77) | 40026 (25) |
+| pH Pulse 2 | CH1 PH PULSE 2 | 40140–40150 (139–149) | 40028 (27) |
+| Cl Pulse | CH2 CL2 PULSE | 40154–40164 (153–163) | 40030 (29) |
+
+Each output has these entities (shown for pH Pulse 1; the others use
+`ph_pulse_2` and `cl_pulse`):
+
+| Entity | Entity id | Platform | Register (pH Pulse 1 / pH Pulse 2 / Cl Pulse) | Range, unit | Exists |
 |---|---|---|---|---|---|
-| pH Level | Sensor | `ph` | `ph` | 40002–40004 | Medium |
-| Cl Level | Sensor, mg/L | | `flask-outline` | 40006–40008 | Medium |
-| Temperature | Sensor, °C | `temperature` | `thermometer` | 40052 | Medium |
-| pH Relay State, Cl Relay State | Sensors: On, Off, Disabled | `enum` | `pump` / `pump-off` | 40032, 40024 | Fast |
-| pH Pulse 1/2 Rate, Cl Pulse Rate | Sensors, p/min | | `pulse` | 40026, 40028, 40030 | Medium |
-| pH Probe Voltage, Cl Probe Voltage | Sensors, mV | `voltage` | `sine-wave` | 40056, 40058 | Medium |
-| RTC | Diagnostic sensor, disabled by default | `timestamp` | `clock-outline` | 40044–40048 | Slow |
-| pH Pulse 1/2 Dosing Mode, Cl Pulse Dosing Mode | Selects | | `toggle-switch-outline` (ON/OFF), `chart-line-variant` (Proportional), `cancel` (Disabled), `tune-variant` otherwise | 40078, 40150, 40164 | Slow |
-| pH Pulse 1/2 On Value, Off Value | Numbers (input box), 0.01 steps | `ph` | `gauge-full`, `gauge-empty` | 40068, 40070 / 40140, 40142 | Slow |
-| Cl Pulse On Value, Off Value | Numbers (input box), mg/L, 0–10, 0.01 steps | | `gauge-full`, `gauge-empty` | 40154, 40156 | Slow |
-| pH Pulse 1/2, Cl Pulse On Rate, Off Rate | Numbers (input box) | | `speedometer`, `speedometer-slow` | 40072, 40074 / 40144, 40146 / 40158, 40160 | Slow |
-| pH Pulse 1/2, Cl Pulse Pulse Speed | Numbers (input box), minutes | `duration` | `timer-cog-outline` | 40076 / 40148 / 40162 | Slow |
-| pH Relay Dosing Mode, Cl Relay Dosing Mode | Selects: Proportional PWM, ON/OFF, Fixed PWM, Disabled | | `chart-line-variant`, `toggle-switch-outline`, `square-wave`, `cancel` | 40092, 40222 | Slow |
-| pH Relay / Cl Relay On Value, Off Value ("Max/Min Value" until 2026-10-15, ids migrated) | Numbers (input box), 0.01 steps | `ph` (pH) | `toggle-switch-outline`, `toggle-switch-off-outline` | 40082, 40084 / 40212, 40214 | Slow |
-| pH Relay / Cl Relay Max Duty Cycle, Min Duty Cycle | Numbers (input box), % | | `speedometer`, `speedometer-slow` | 40086, 40088 / 40216, 40218 | Slow |
-| pH Relay / Cl Relay On Period, Off Period | Numbers (input box), 0–250 s, Fixed PWM only | `duration` | `timer-play-outline`, `timer-pause-outline` | 40086, 40088 / 40216, 40218 | Slow |
-| Standby | Binary sensor | | `pause-circle` / `play-circle` | coil address 13 | Fast |
-| pH Tank 2 Empty; pH, Cl Out of Range; Cl Pulse, Cl Relay, pH Pulse 1, pH Relay, pH Pulse 2 Dosing Alarm; pH, Cl Probe Fail | Diagnostic binary sensors (protocol's alarm list, untested) | `problem` | `cup-off-outline`, `alert-circle-outline`, `timer-alert-outline`, `flask-off-outline` (on) | coil addresses 1; 4, 5; 6, 7, 8, 9, 10; 11, 12 | Fast |
-| No Flow, Cl Tank Empty, pH Tank 1 Empty | Diagnostic binary sensors | `problem` | `water-off` / `water-check`, `cup-off-outline` / `cup-outline` | coil addresses 3, 2, 0 | Fast |
-| Feeding Delay | Number (input box), minutes | `duration` | `timer-cog-outline` | 40522 | Slow |
-| Tau | Number (input box), 0–30 | | `chart-bell-curve-cumulative` | 40520 | Slow |
-| Flow Time | Number (input box), minutes (Reverse or Direct only) | `duration` | `timer-sand-complete` | 40524 | Slow |
-| Flow Mode | Select: Disabled, Reverse, Direct | | `cancel`, `swap-horizontal`, `waves-arrow-right` | 40526 | Slow |
-| Priority | Select: No priority, pH priority | | `equal`, `sort-variant` | coil 58 | Slow |
-| pH / Cl Dosing Alarm Time | Numbers (input box), 0–999 min, 0 = off | `duration` | `timer-alert-outline` | 40428, 40430 | Slow |
-| pH / Cl Dosing Alarm Action | Selects: Dose, Stop (while the time is above 0) | | `play-circle-outline`, `stop-circle-outline` | coils 44, 59 | Slow |
-| pH / Cl Range High, Range Low | Switches | | `arrow-collapse-up`, `arrow-collapse-down` | coils 51, 52 / 61, 62 | Slow |
-| pH / Cl Range High Value, Range Low Value | Numbers (input box), 0.01 steps; pH, mg/L (while High or Low is on) | `ph` (pH) | `arrow-collapse-up`, `arrow-collapse-down` | 40438, 40442 / 40454, 40458 | Slow |
-| pH / Cl Range Time | Numbers (input box), 0–99 min (while High or Low is on) | `duration` | `timer-outline` | 40440, 40456 | Slow |
-| pH / Cl Range Action | Selects: Dose, Stop (while High or Low is on) | | `play-circle-outline`, `stop-circle-outline` | coils 53, 63 | Slow |
-| pH / Cl Probe Failure Time | Numbers (input box), 0 or 100–999 min | `duration` | `flask-off-outline` | 40444, 40446 | Slow |
-| pH / Cl Probe Failure Action | Selects: Dose, Stop (while the time is set) | | `play-circle-outline`, `stop-circle-outline` | coils 75, 90 | Slow |
-| pH / Cl / Temperature mA Output Mode | Selects: 0/20 mA, 4/20 mA | | `current-dc` | coils 49, 60, 50 | Slow |
-| pH / Cl / Temperature mA Output Max, Min | Numbers (input box); pH, mg/L, °C | `ph` (pH), `temperature` | `arrow-collapse-up`, `arrow-collapse-down` | 40124, 40126 / 40196, 40198 / 40128, 40130 | Slow |
-| Logging Data | Switch | | `database-clock` / `database-off-outline` | coil 48 | Slow |
-| Log Start Time, Log Interval | Times (HH:MM) | | `clock-start`, `timer-sync-outline` | 40530, 40532 | Slow |
-| Label | Diagnostic sensor | | `label-outline` | 40844–40870 | Slow |
-| PIN | Diagnostic text, exactly 4 digits, disabled by default | | `form-textbox-password` | 40542 | Slow |
+| pH Pulse 1 Rate | `sensor.dosing_pump_ph_pulse_1_rate` | sensor | 40026 / 40028 / 40030, high byte | p/min | always |
+| pH Pulse 1 Dosing Mode | `select.dosing_pump_ph_pulse_1_dosing_mode` | select | 40078 / 40150 / 40164 | ON/OFF (0), Proportional (1), Disabled (2) | always |
+| pH Pulse 1 On Value | `number.dosing_pump_ph_pulse_1_on_value` | number | 40068 / 40140 / 40154 | ÷ 100; pH 0–14, Cl 0–10 mg/L, step 0.01 | mode not Disabled |
+| pH Pulse 1 Off Value | `number.dosing_pump_ph_pulse_1_off_value` | number | 40070 / 40142 / 40156 | as On Value | mode not Disabled |
+| pH Pulse 1 On Rate | `number.dosing_pump_ph_pulse_1_on_rate` | number | 40072 / 40144 / 40158 | 0–180 p/min | Proportional |
+| pH Pulse 1 Off Rate | `number.dosing_pump_ph_pulse_1_off_rate` | number | 40074 / 40146 / 40160 | 0–180 p/min | Proportional |
+| pH Pulse 1 Pulse Speed | `number.dosing_pump_ph_pulse_1_pulse_speed` | number | 40076 / 40148 / 40162 | 0–99 min | ON/OFF |
 
-Entity ids follow the names: `select.dosing_pump_ph_pulse_1_dosing_mode`,
-`number.dosing_pump_ph_pulse_2_on_value`, `sensor.dosing_pump_cl_pulse_rate`,
-`select.dosing_pump_ph_relay_dosing_mode`, `sensor.dosing_pump_cl_relay_state`.
-Earlier versions named the pulse outputs "pH Relay 1/2" and "Cl Relay" (and,
-before that, "pH ...", "pH Output 2 ...", "Cl Relay 1 ...") and the relay states
-"pH Relay" / "Cl Relay"; an installation from before keeps its unique ids, and
-an entity still on the id made from an old name moves to the new id with its
-history and statistics.
+The Rate sensors are measurements in the medium group, with no optional part.
+The Dosing Mode selects and the numbers belong to the dosing settings, are read
+in the slow group and appear among the controls. The pH values have device
+class pH; Pulse Speed has device class duration.
+
+On Rate is the rate at the On Value and Off Rate the rate at the Off Value. In
+Proportional mode one end runs at 0 p/min, so setting one rate sets the other
+to 0: On Rate writes the On Rate, then Off Rate = 0; Off Rate writes the Off
+Rate, then On Rate = 0.
+
+A change of Dosing Mode writes these registers in this order, as the keypad
+does; values the controller already holds are skipped, and nothing is written
+if the output is already in that mode:
+
+| New mode | Writes, in order |
+|---|---|
+| ON/OFF | On Rate = 100, Off Rate = 0, Pulse Speed = 1 if it is 0, mode = 0 |
+| Proportional | Pulse Speed = 0, mode = 1 |
+| Disabled | Pulse Speed = 0, mode = 2 |
+
+### Switching relays
+
+| Output | Controller name | Settings registers (wire) | State register (wire) |
+|---|---|---|---|
+| pH Relay | CH1 PH RELAY | 40082–40088 (81–87), mode 40092 (91) | 40032 (31) |
+| Cl Relay | CH2 CL2 RELAY | 40212–40218 (211–217), mode 40222 (221) | 40024 (23) |
+
+Each relay has these entities (shown for pH Relay; the Cl Relay uses
+`cl_relay`):
+
+| Entity | Entity id | Platform | Register (pH Relay / Cl Relay) | Range, unit | Exists |
+|---|---|---|---|---|---|
+| pH Relay State | `sensor.dosing_pump_ph_relay_state` | sensor (enum) | 40032 / 40024, high byte | Disabled (0), On (1), Off (2) | always |
+| pH Relay Dosing Mode | `select.dosing_pump_ph_relay_dosing_mode` | select | 40092 / 40222 | Proportional PWM (0), ON/OFF (1), Fixed PWM (2), Disabled (3) | always |
+| pH Relay On Value | `number.dosing_pump_ph_relay_on_value` | number | 40082 / 40212 | ÷ 100; pH 0–14, Cl 0–10 mg/L, step 0.01 | mode not Disabled |
+| pH Relay Off Value | `number.dosing_pump_ph_relay_off_value` | number | 40084 / 40214 | as On Value | mode not Disabled |
+| pH Relay Max Duty Cycle | `number.dosing_pump_ph_relay_max_duty_cycle` | number | 40086 / 40216 | 0–100 % | Proportional PWM |
+| pH Relay Min Duty Cycle | `number.dosing_pump_ph_relay_min_duty_cycle` | number | 40088 / 40218 | 0–100 % | Proportional PWM |
+| pH Relay On Period | `number.dosing_pump_ph_relay_on_period` | number | 40086 / 40216 | 0–250 s | Fixed PWM |
+| pH Relay Off Period | `number.dosing_pump_ph_relay_off_period` | number | 40088 / 40218 | 0–250 s | Fixed PWM |
+
+The State sensors have no optional part and are read in the fast group. The
+other entities belong to the dosing settings, are read in the slow group and
+appear among the controls.
+
+The relay switches on at the On Value and off at the Off Value. The duty cycle
+is the share of the relay's 100 s cycle it is on, at the On Value (Max) and at
+the Off Value (Min). On Period and Off Period are Fixed PWM's on and off times;
+they use the same registers as the duty cycles.
+
+Writes:
+
+- A duty cycle above 0 is written, then the other duty cycle is set to 0. A duty
+  cycle of 0 is written alone. On Period and Off Period are written alone.
+- A change of Dosing Mode to ON/OFF or Disabled first writes Max Duty Cycle
+  (On Period) = 100 and Min Duty Cycle (Off Period) = 0, then the mode. A change
+  to Proportional PWM or Fixed PWM writes only the mode.
+
+## Alarms
+
+The alarm coils are read with function 01 (two reads of 8 coils, from 0 and
+from 8) in the fast group. All are binary sensors with device class problem,
+in the diagnostic section, except Standby, which has no device class and no
+entity category. They belong to the "Alarms and standby" part.
+
+| Entity | Entity id | Coil address | Protocol alarm |
+|---|---|---|---|
+| pH Tank 1 Empty | `binary_sensor.dosing_pump_ph_tank_1_empty` | 0 | 01 Ch1 level 1 |
+| pH Tank 2 Empty | `binary_sensor.dosing_pump_ph_tank_2_empty` | 1 | 02 Ch1 level 2 |
+| Cl Tank Empty | `binary_sensor.dosing_pump_cl_tank_empty` | 2 | 03 Ch2 level |
+| No Flow | `binary_sensor.dosing_pump_no_flow` | 3 | 04 Flow |
+| pH Out of Range | `binary_sensor.dosing_pump_ph_out_of_range` | 4 | 05 Out of range alarm 1 |
+| Cl Out of Range | `binary_sensor.dosing_pump_cl_out_of_range` | 5 | 06 Out of range alarm 2 |
+| Cl Pulse Dosing Alarm | `binary_sensor.dosing_pump_cl_pulse_dosing_alarm` | 6 | 07 Dosing alarm ch2 (out IS) |
+| Cl Relay Dosing Alarm | `binary_sensor.dosing_pump_cl_relay_dosing_alarm` | 7 | 08 Dosing alarm ch2 (out relay) |
+| pH Pulse 1 Dosing Alarm | `binary_sensor.dosing_pump_ph_pulse_1_dosing_alarm` | 8 | 09 Dosing alarm ch1 (out IS1) |
+| pH Relay Dosing Alarm | `binary_sensor.dosing_pump_ph_relay_dosing_alarm` | 9 | 10 Dosing alarm ch1 (out relay) |
+| pH Pulse 2 Dosing Alarm | `binary_sensor.dosing_pump_ph_pulse_2_dosing_alarm` | 10 | 11 Dosing alarm ch1 (out IS2) |
+| pH Probe Fail | `binary_sensor.dosing_pump_ph_probe_fail` | 11 | 12 Probe fail ch1 |
+| Cl Probe Fail | `binary_sensor.dosing_pump_cl_probe_fail` | 12 | 13 Probe fail ch2 |
+| Standby | `binary_sensor.dosing_pump_standby` | 13 | 14 Stby |
+
+No Flow is on while the controller sees no flow and holds dosing. Standby is on
+while the controller is held in standby, with its outputs off.
+
+## Alarm settings
+
+All belong to the dosing settings part, are read in the slow group and are
+configuration entities. Registers use functions 03/06, coils 01/05.
+
+### Dosing alarm
+
+A time per channel after which the controller raises the channel's dosing
+alarm, and what it then does.
+
+| Entity | Entity id | Platform | Register or coil (wire) | Range, options | Exists |
+|---|---|---|---|---|---|
+| pH Dosing Alarm Time | `number.dosing_pump_ph_dosing_alarm_time` | number | 40428 (427) | 0 = off, 1–999 min | always |
+| Cl Dosing Alarm Time | `number.dosing_pump_cl_dosing_alarm_time` | number | 40430 (429) | 0 = off, 1–999 min | always |
+| pH Dosing Alarm Action | `select.dosing_pump_ph_dosing_alarm_action` | select | coil 44 | Dose (off), Stop (on) | while the time is above 0 |
+| Cl Dosing Alarm Action | `select.dosing_pump_cl_dosing_alarm_action` | select | coil 59 | Dose (off), Stop (on) | while the time is above 0 |
+
+### Probe failure
+
+The same pattern, with times of 0 (off) or 100–999 min; 1–99 is refused.
+
+| Entity | Entity id | Platform | Register or coil (wire) | Range, options | Exists |
+|---|---|---|---|---|---|
+| pH Probe Failure Time | `number.dosing_pump_ph_probe_failure_time` | number | 40444 (443) | 0 = off, 100–999 min | always |
+| Cl Probe Failure Time | `number.dosing_pump_cl_probe_failure_time` | number | 40446 (445) | 0 = off, 100–999 min | always |
+| pH Probe Failure Action | `select.dosing_pump_ph_probe_failure_action` | select | coil 75 | Dose (off), Stop (on) | while the time is above 0 |
+| Cl Probe Failure Action | `select.dosing_pump_cl_probe_failure_action` | select | coil 90 | Dose (off), Stop (on) | while the time is above 0 |
+
+### Out of range
+
+Per channel a High and a Low limit, each switched on by its coil, and a time
+and action shared by both. Limits are stored × 100. Shown for pH; the Cl
+entities use `cl_range_…`.
+
+| Entity | Entity id | Platform | pH register or coil (wire) | Cl register or coil (wire) | Range, options | Exists |
+|---|---|---|---|---|---|---|
+| pH Range High | `switch.dosing_pump_ph_range_high` | switch | coil 51 | coil 61 | on/off | always |
+| pH Range High Value | `number.dosing_pump_ph_range_high_value` | number | 40438 (437) | 40454 (453) | pH 0.10–14.00; Cl 0.10–10.00 mg/L; step 0.01 | while High is on |
+| pH Range Low | `switch.dosing_pump_ph_range_low` | switch | coil 52 | coil 62 | on/off | always |
+| pH Range Low Value | `number.dosing_pump_ph_range_low_value` | number | 40442 (441) | 40458 (457) | pH 0.00–13.90; Cl 0.00–9.90 mg/L; step 0.01 | while Low is on |
+| pH Range Time | `number.dosing_pump_ph_range_time` | number | 40440 (439) | 40456 (455) | 0–99 min | while High or Low is on |
+| pH Range Action | `select.dosing_pump_ph_range_action` | select | coil 53 | coil 63 | Dose (off), Stop (on) | while High or Low is on |
+
+The alarm itself shows as pH Out of Range and Cl Out of Range (alarm coils 4
+and 5).
+
+## Timing, flow and priority
+
+All belong to the dosing settings part, are read in the slow group and are
+configuration entities.
+
+| Entity | Entity id | Platform | Register or coil (wire) | Range, options | Exists |
+|---|---|---|---|---|---|
+| Tau | `number.dosing_pump_tau` | number | 40520 (519) | 0–30, no unit | always |
+| Feeding Delay | `number.dosing_pump_feeding_delay` | number | 40522 (521) | 0–60 min | always |
+| Flow Time | `number.dosing_pump_flow_time` | number | 40524 (523) | 0–99 min | Flow Mode Reverse or Direct |
+| Flow Mode | `select.dosing_pump_flow_mode` | select | 40526 (525) | Disabled (0), Reverse (1, N.O. contact), Direct (2, N.C. contact) | always |
+| Priority | `select.dosing_pump_priority` | select | coil 58 | No priority (on), pH priority (off) | always |
+
+Tau is the controller's measurement filter setting. Feeding Delay is how long
+dosing waits after flow or power returns. Flow Time is how long the flow
+contact must hold its new state before the controller acts on it. Setting Flow
+Mode to Disabled first writes Flow Time = 0, then the mode; with Flow Mode
+Disabled the controller doses without flow.
+
+## mA outputs
+
+Per channel the output range and the readings at its ends: Max is the reading
+at 20 mA, Min the reading at 0 or 4 mA. All belong to the "mA outputs" part,
+are read in the slow group and are configuration entities.
+
+| Entity | Entity id | Platform | Register or coil (wire) | Scaling, range |
+|---|---|---|---|---|
+| pH mA Output Mode | `select.dosing_pump_ph_ma_output_mode` | select | coil 49 | 0/20 mA (off), 4/20 mA (on) |
+| pH mA Output Max | `number.dosing_pump_ph_ma_output_max` | number | 40124 (123) | ÷ 100, pH 0–14, step 0.01 |
+| pH mA Output Min | `number.dosing_pump_ph_ma_output_min` | number | 40126 (125) | ÷ 100, pH 0–14, step 0.01 |
+| Cl mA Output Mode | `select.dosing_pump_cl_ma_output_mode` | select | coil 60 | 0/20 mA (off), 4/20 mA (on) |
+| Cl mA Output Max | `number.dosing_pump_cl_ma_output_max` | number | 40196 (195) | ÷ 100, 0–10 mg/L, step 0.01 |
+| Cl mA Output Min | `number.dosing_pump_cl_ma_output_min` | number | 40198 (197) | ÷ 100, 0–10 mg/L, step 0.01 |
+| Temperature mA Output Mode | `select.dosing_pump_temperature_ma_output_mode` | select | coil 50 | 0/20 mA (off), 4/20 mA (on) |
+| Temperature mA Output Max | `number.dosing_pump_temperature_ma_output_max` | number | 40128 (127) | ÷ 10, 0–99.9 °C, step 0.1 |
+| Temperature mA Output Min | `number.dosing_pump_temperature_ma_output_min` | number | 40130 (129) | ÷ 10, 0–99.9 °C, step 0.1 |
+
+## Data logging
+
+All belong to the "Data logging" part, are read in the slow group and are
+configuration entities. The times are stored as hour × 100 + minute.
+
+| Entity | Entity id | Platform | Register or coil (wire) | Range | Exists |
+|---|---|---|---|---|---|
+| Logging Data | `switch.dosing_pump_logging_data` | switch | coil 48 | on/off | always |
+| Log Start Time | `time.dosing_pump_log_start_time` | time | 40530 (529) | 00:00–23:59 | while logging is on |
+| Log Interval | `time.dosing_pump_log_interval` | time | 40532 (531) | 00:00–23:59 | while logging is on |
+
+Log Start Time is the time logging starts, Log Interval the time between log
+records (the menu's "Every").
+
+## Label and PIN
+
+Both belong to the "Label and PIN" part, are read in the slow group and are
+diagnostic entities.
+
+| Entity | Entity id | Platform | Register (wire) | Format | Enabled by default |
+|---|---|---|---|---|---|
+| Label | `sensor.dosing_pump_label` | sensor (read only) | 40844–40870 (843–869) | 28 characters, 2 per register | yes |
+| PIN | `text.dosing_pump_pin` | text (password) | 40542 (541) | 4 digits "0000"–"9999", stored as the number | no |
+
+The label is the instrument name set in the controller's RS485 setup, shown on
+its display as 2 lines of 14 characters. Each register holds two characters,
+the first in the low byte; unused characters are `-` and the integration shows
+the label without the trailing `-`.
+
+The PIN is the keypad password. It is written with function 06 as the number
+(0042 is stored as 42); a stored value above 9999 shows as unknown. Its wire
+address is never written to the integration's bus traffic log.
+
+## Probe voltages
+
+Sensors with device class voltage and state class measurement, in the
+"Probe voltages" part, read in the medium group, no entity category.
+
+| Entity | Entity id | Register (wire) | Unit |
+|---|---|---|---|
+| pH Probe Voltage | `sensor.dosing_pump_ph_probe_voltage` | 40056 (55) | mV, signed |
+| Cl Probe Voltage | `sensor.dosing_pump_cl_probe_voltage` | 40058 (57) | mV, signed |
+
+## Clock
+
+| Entity | Entity id | Platform | Registers (wire) |
+|---|---|---|---|
+| RTC | `sensor.dosing_pump_rtc` | sensor, device class timestamp | 40044–40048 (43–47) |
+
+In the "Clock" part, read in the slow group, diagnostic, disabled by default.
+See Reading the clock below for the format.
+
+## Differences from the protocol document
+
+The integration relies on these points where the controller differs from
+EMEC's protocol document:
+
+- The relays' working mode is at 40092 (pH Relay) and 40222 (Cl Relay), not at
+  40090 and 40220.
+- The Cl out of range Low coil is 62 and its Dose/Stop coil 63; the document
+  prints 63 and 64.
+- The Cl out of range time is at 40456, which the document does not list.
+- The temperature mA output's Max and Min are 40128 and 40130, which the
+  document labels ch2.
+- The alarm coils sit at the document's alarm number − 1 (alarm 01 is coil
+  address 0, alarm 14 coil address 13).
+- The label's first character of each register is in the low byte.
+- Relay states and pulse rates are one byte in the high half of the register,
+  not 16-bit values.
+
+## Not included
+
+**Reading the clock.** The RTC is read from 40044–40048 (wire 43–47) in Europe
+format: 40044 holds the month (high byte) and day (low byte), 40046 the hour
+(high byte, 24 h) and the year − 2000 (low byte), 40048 the minute (low byte).
+The controller has no seconds over Modbus. The time is taken as local time; an
+invalid date shows as unknown. RTC is a diagnostic sensor, disabled by default.
+
+**Setting the clock** is not included. The controller's clock setpoint is
+41624–41628, but on firmware 5.1.4 every write through it resets the clock's
+year to 2000, which only the keypad can correct.
+
+**12/24 h and date format.** The AM/PM coils 45 and 46, the Europe/USA format
+coil 47 and the log time AM/PM coils 54 and 55 are not included. The
+integration reads the controller in Europe format: the date as day and month,
+the time in 24 h and the temperature in °C.
+
+**Not readable over Modbus.** The controller does not make these readable over
+Modbus, so they are not included: the log records, the firmware version, the
+temperature probe voltage, the output manager, the mA outputs' "enable/disable
+on alarm", the log's output setting and the compensation settings.

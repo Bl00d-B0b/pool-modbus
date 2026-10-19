@@ -1,4 +1,4 @@
-"""EMEC LD-series pH / chlorine controllers. Tested on an LDPHCL, firmware 5.1.4.
+"""EMEC LD-series pH / chlorine controllers, such as the LDPHCL (firmware 5.1.4).
 
 The controller is byte-addressed: a value sits at odd wire address
 ``register - 40001``, and a read from an odd address returns every second
@@ -43,13 +43,12 @@ def wire_address(index: int) -> int:
 
 
 COIL_READ = 8
-"""Coils are read 8 at a time from a multiple of 8: the tested controller answers each
+"""Coils are read 8 at a time from a multiple of 8: the controller answers each
 such block with its bits in reverse order (coil start + n is bit 7 - n), and a longer
-read also shifts each byte's bits up by one and drops the top bit. Found 2026-10-15 with
-the alarms and configuration coils switched at the pump; with that rule every coil sits
-at the address the protocol gives (alarm coils: its number - 1)."""
+read also shifts each byte's bits up by one and drops the top bit. With this rule every
+coil sits at the address the protocol gives (alarm coils: its number - 1)."""
 WRITABLE_COILS = frozenset({44, 48, 49, 50, 51, 52, 53, 58, 59, 60, 61, 62, 63, 75, 90})
-"""Coils written by the library: tested, except the mA output modes (49, 50, 60)."""
+"""The coils the integration writes; others are refused."""
 
 
 class EmecUnit:
@@ -57,7 +56,7 @@ class EmecUnit:
 
     Coils pass straight through. Values are written one per request (function
     06); coils with function 05, only those in ``WRITABLE_COILS``. Multi-register
-    and multi-coil writes are refused as untested.
+    and multi-coil writes are refused.
     """
 
     def __init__(self, unit: ModbusUnit) -> None:
@@ -88,13 +87,13 @@ class EmecUnit:
         raise NotImplementedError("EMEC LD controllers are written one value per request")
 
     async def write_coil(self, address: int, value: bool) -> None:
-        """Function 05; tested for the coils in ``WRITABLE_COILS`` only."""
+        """Function 05, for the coils in ``WRITABLE_COILS`` only."""
         if address not in WRITABLE_COILS:
-            raise NotImplementedError(f"coil {address}: only {sorted(WRITABLE_COILS)} were tested")
+            raise NotImplementedError(f"coil {address} is not written by this integration")
         await self._unit.write_coil(address, value)
 
     async def write_coils(self, address: int, values: list[bool]) -> None:
-        raise NotImplementedError("coil writes to EMEC LD controllers are untested")
+        raise NotImplementedError("multi-coil writes are not supported on EMEC LD controllers")
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._unit, name)
@@ -140,7 +139,7 @@ class RelayMode(IntEnum):
 DUTY_RANGE = (0, 100)
 """Percent of the 100 s PWM cycle the relay is on (the instruction manual: 100 % = 100 s)."""
 PWM_TIME_RANGE = (0, 250)
-"""Fixed PWM's Ton and Toff on the keypad (pH relay, 2026-10-15)."""
+"""Fixed PWM's Ton and Toff in seconds, as the keypad allows."""
 
 
 class FlowMode(IntEnum):
@@ -225,7 +224,7 @@ class EmecLD(Component):
     On an LDPHCL, channel 1 is pH and channel 2 is free chlorine in mg/l (Cl₂ on its display).
     """
 
-    max_span = 125  # values per read, as EMEC's protocol description allows; tested on an LDPHCL
+    max_span = 125  # values per read, as EMEC's protocol description allows
     register_ranges = ((0, 919),)  # every value up to 41840 answers a read
     # the alarm block, always read whole, and the configuration coils
     # alarms; dosing alarm actions; out of range; priority; probe failure actions
@@ -235,20 +234,19 @@ class EmecLD(Component):
 
     # Dosing priority (coil 58, the menu's "Mode"): on = no priority, off = pH first.
     no_ph_priority = coil(58, writable=True)
-    # Dosing alarm (the menu's "Dosing alarm", tested on the keypad 2026-10-15): a time per
+    # Dosing alarm (the menu's "Dosing alarm"): a time per
     # channel, 0 = off, 1-999 min, and what to do when it runs out, 0 Dose / 1 Stop.
     dosing_alarm_ph_stop = coil(44, writable=True)
     dosing_alarm_cl_stop = coil(59, writable=True)
-    # Probe failure (the menu's "Probe failure", keypad 2026-10-15): the same, with a time
+    # Probe failure (the menu's "Probe failure"): the same, with a time
     # of 0 = off or 100-999 min.
     probe_alarm_ph_stop = coil(75, writable=True)
     probe_alarm_cl_stop = coil(90, writable=True)
-    # Out of range alarm (the menu's "Min/Max", keypad 2026-10-15): per channel a High and
+    # Out of range alarm (the menu's "Min/Max"): per channel a High and
     # a Low limit, each switched on by its coil, and a time and Dose/Stop shared by both.
     # As the protocol gives them for pH; for Cl it is one off: Low is coil 62 and Dose/Stop
-    # coil 63 (it lists 63 and 64), and it lists no Cl time (found at 40456).
-    # All take writes (tested 2026-10-15 with the menu closed; with the Min/Max menu open
-    # on the keypad the controller ignored them).
+    # coil 63 (it lists 63 and 64), and it lists no Cl time (at 40456). The controller
+    # ignores these writes while the Min/Max menu is open on its keypad.
     range_ph_high_on = coil(51, writable=True)
     range_ph_low_on = coil(52, writable=True)
     range_ph_stop = coil(53, writable=True)
@@ -256,8 +254,8 @@ class EmecLD(Component):
     range_cl_low_on = coil(62, writable=True)
     range_cl_stop = coil(63, writable=True)
     # Alarm coils (function 01), numbered 01-14 as in the protocol, at address n - 1
-    # (see COIL_READ). Tested at the pump 2026-10-15: 01 pH tank (level 1) empty, 03 Cl
-    # tank empty, 04 no flow, 14 standby; the others as the protocol names them.
+    # (see COIL_READ): 01 pH tank (level 1) empty, 03 Cl tank empty, 04 no flow,
+    # 14 standby; the others as the protocol names them.
     alarm_coil_01 = coil(0)  # Ch1 level1: pH tank 1 empty
     alarm_coil_02 = coil(1)  # Ch1 level2: pH tank 2 empty
     alarm_coil_03 = coil(2)  # Ch2 level: Cl tank empty
@@ -273,13 +271,13 @@ class EmecLD(Component):
     alarm_coil_13 = coil(12)  # probe fail ch2
     alarm_coil_14 = coil(13)  # standby
 
-    # mA outputs (the menu's "mA Outputs", the protocol's "mA Setpoint"; keypad
-    # 2026-10-16): per channel the range, 0 = 0/20 mA / 1 = 4/20 mA, and the readings at
+    # mA outputs (the menu's "mA Outputs", the protocol's "mA Setpoint"): per channel the
+    # range, 0 = 0/20 mA / 1 = 4/20 mA, and the readings at
     # 20 mA (Max) and at 0 or 4 mA (Min). The protocol labels the temperature channel's
     # Max/Min (40128/40130) "ch2"; the keypad shows them as the temperature's.
     ma_ph_4_20 = coil(49, writable=True)
-    # Data logging (the menu's "Log Setup", keypad 2026-10-16: Enabled, Time 08:15, Every
-    # 01:45): on/off, the time logging starts and the interval, both hour * 100 + minute.
+    # Data logging (the menu's "Log Setup"): on/off, the time logging starts and the
+    # interval, both hour * 100 + minute.
     # The protocol's AM/PM coils 54/55 are for the USA format; this library reads the
     # controller in Europe format (24 h), as for its clock.
     log_on = coil(48, writable=True)
@@ -373,14 +371,14 @@ class EmecLD(Component):
     ch1_relay_val1 = gauge(40, 0.01, writable=_hundredths(*PH_RANGE))
     ch1_relay_val2 = gauge(41, 0.01, writable=_hundredths(*PH_RANGE))
     # perc1/perc2: the duty cycles in Proportional PWM, Ton/Toff (0-250) in Fixed PWM.
-    # The mode is at 40092, not the documented 40090 (which read 0 in every mode):
-    # tested on the keypad 2026-10-15, 0 Proportional PWM, 1 ON/OFF, 2 Fixed PWM, 3 Off.
+    # The mode is at 40092, not the documented 40090 (which reads 0 in every mode):
+    # 0 Proportional PWM, 1 ON/OFF, 2 Fixed PWM, 3 Off.
     ch1_relay_perc1 = integer(42, writable=_whole(*PWM_TIME_RANGE))
     ch1_relay_perc2 = integer(43, writable=_whole(*PWM_TIME_RANGE))
     ch1_relay_mode = enum(45, RelayMode, writable=RelayMode)
     ch2_relay_val1 = gauge(105, 0.01, writable=_hundredths(*CL_RANGE))
     ch2_relay_val2 = gauge(106, 0.01, writable=_hundredths(*CL_RANGE))
-    # The Cl relay follows the same rules (user, 2026-10-15): mode at 40222, not 40220.
+    # The Cl relay follows the same rules: mode at 40222, not 40220.
     ch2_relay_perc1 = integer(107, writable=_whole(*PWM_TIME_RANGE))
     ch2_relay_perc2 = integer(108, writable=_whole(*PWM_TIME_RANGE))
     ch2_relay_mode = enum(110, RelayMode, writable=RelayMode)
@@ -532,8 +530,8 @@ def _mode_steps(
     channel: int, output: int, mode: PulseMode, wait: int | None
 ) -> tuple[tuple[str, Any], ...]:
     """The writes the keypad makes for a mode: ON/OFF forces the top rate to 100 and
-    gives a 0 interval 1 minute; Proportional and Off zero the interval (seen on the
-    keypad 2026-10-14: ON/OFF with 3 min -> Off left 0). Values already held are skipped."""
+    gives a 0 interval 1 minute; Proportional and Off zero the interval. Values already
+    held are skipped."""
     f = lambda name: _field(channel, output, name)  # noqa: E731
     if mode is PulseMode.ON_OFF:
         interval = ((f("wait"), 1),) if not wait else ()
@@ -778,7 +776,7 @@ def _log_time(field: str):
 _LOG_VALUES = (
     Value(
         "data_logging",
-        "Logging Data",  # "Data Logging" until 2026-10-19; sorts next to the two times
+        "Logging Data",  # sorts next to the two times
         lambda d: d.log_on,
         binary=True,
         category="setting",
@@ -835,7 +833,7 @@ async def set_pin(device: EmecLD, text: str) -> None:
 
 _LABEL_VALUES = (
     Value(
-        "instrument_label",  # a writable text "label" until 2026-10-16
+        "instrument_label",
         "Label",
         _label,
         category="diagnostic",
@@ -843,7 +841,7 @@ _LABEL_VALUES = (
         icon="mdi:label-outline",
     ),
     Value(
-        "keypad_pin",  # "password" (number) and "pin" ("Password" text) until 2026-10-16
+        "keypad_pin",
         "PIN",
         _pin,
         category="diagnostic",  # the user's choice, though writable
@@ -878,7 +876,7 @@ async def set_flow_mode(device: EmecLD, label: str) -> None:
     if mode is None:
         raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in FlowMode)}")
     if mode is FlowMode.DISABLED:
-        # as the keypad does: Disabled sets the flow time to 0 (seen 2026-10-15)
+        # as the keypad does: Disabled sets the flow time to 0
         await write_if_changed(device, "flow_time", 0)
     await write_if_changed(device, "flow_mode", mode)
 
@@ -1010,15 +1008,15 @@ def _output_values(channel: int, output: int) -> tuple[Value, ...]:
     )
 
 
-def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
+def _relay_values(channel: int) -> tuple[Value, ...]:
     """The settings of a switching relay, "pH Relay" ("CH1 PH RELAY") or "Cl Relay"
     ("CH2 CL2 RELAY"): the two values, the duty cycle at each (Proportional PWM) and the
     mode. Its on/off state is the "... Relay State" sensor (40032, 40024).
 
-    ``tested`` (the pH relay, on the keypad 2026-10-15): Fixed PWM's Ton and Toff, in
-    the same registers as the duty cycles, a duty cycle written as the keypad keeps
-    them (one of the two at a time, the other set to 0), and a switch to ON/OFF or
-    Disabled that sets perc1 to 100 and perc2 to 0 first, as the keypad does."""
+    Fixed PWM's Ton and Toff sit in the same registers as the duty cycles. A duty cycle
+    is written as the keypad keeps them (one of the two at a time, the other set to 0),
+    and a switch to ON/OFF or Disabled sets perc1 to 100 and perc2 to 0 first, as the
+    keypad does."""
     symbol, key, unit, device_class, value_range = _channel(channel)
     prefix = f"{symbol} Relay"
     f = lambda name: f"ch{channel}_relay_{name}"  # noqa: E731
@@ -1029,8 +1027,8 @@ def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
         mode = next((m for m in RelayMode if m.label == label), None)
         if mode is None:
             raise ValueError(f"{label!r} is not one of {', '.join(m.label for m in RelayMode)}")
-        if tested and mode in (RelayMode.ON_OFF, RelayMode.DISABLED):
-            # as the keypad does on a switch to ON/OFF or Disabled (pH relay, 2026-10-15)
+        if mode in (RelayMode.ON_OFF, RelayMode.DISABLED):
+            # as the keypad does on a switch to ON/OFF or Disabled
             await write_if_changed(device, f("perc1"), 100)
             await write_if_changed(device, f("perc2"), 0)
         await write_if_changed(device, f("mode"), mode)
@@ -1062,39 +1060,37 @@ def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
             if not 0 <= value <= DUTY_RANGE[1]:
                 raise ValueError(f"{value} is not within {DUTY_RANGE[0]}-{DUTY_RANGE[1]} %")
             await write_if_changed(device, f(own), value)
-            if tested and value:
+            if value:
                 await write_if_changed(device, f(other), 0)
 
         return write
 
-    times = ()
-    if tested:
-        # The instruction manual's Ton ("ON period, during output activity") and Toff
-        # ("OFF period"), in seconds.
-        times = (
-            number(
-                "ton",
-                "On Period",
-                "perc1",
-                "s",
-                *PWM_TIME_RANGE,
-                1,
-                "mdi:timer-play-outline",
-                fixed,
-                "duration",
-            ),
-            number(
-                "toff",
-                "Off Period",
-                "perc2",
-                "s",
-                *PWM_TIME_RANGE,
-                1,
-                "mdi:timer-pause-outline",
-                fixed,
-                "duration",
-            ),
-        )
+    # The instruction manual's Ton ("ON period, during output activity") and Toff
+    # ("OFF period"), in seconds.
+    times = (
+        number(
+            "ton",
+            "On Period",
+            "perc1",
+            "s",
+            *PWM_TIME_RANGE,
+            1,
+            "mdi:timer-play-outline",
+            fixed,
+            "duration",
+        ),
+        number(
+            "toff",
+            "Off Period",
+            "perc2",
+            "s",
+            *PWM_TIME_RANGE,
+            1,
+            "mdi:timer-pause-outline",
+            fixed,
+            "duration",
+        ),
+    )
     return (
         Value(
             f"{key}_relay_mode",
@@ -1113,7 +1109,7 @@ def _relay_values(channel: int, tested: bool = False) -> tuple[Value, ...]:
             },
         ),
         # val1 is where the relay switches on, val2 where it switches off (the keypad's
-        # ON/OFF rows, user 2026-10-15: pH 6.55 on / 6.50 off, Cl 2.45 on / 2.50 off).
+        # ON/OFF rows, e.g. pH 6.55 on / 6.50 off, Cl 2.45 on / 2.50 off).
         number(
             "on",
             "On Value",
@@ -1238,8 +1234,8 @@ VALUES = (
     *_output_values(1, 1),
     *_output_values(1, 2),
     *_output_values(2, 1),
-    *_relay_values(1, tested=True),
-    *_relay_values(2, tested=True),
+    *_relay_values(1),
+    *_relay_values(2),
     # Alarm and state coils; the live-confirmed ones first, then the user's notes.
     Value(
         "standby",
@@ -1286,8 +1282,8 @@ VALUES = (
         icon="mdi:cup-off-outline",
         icon_off="mdi:cup-outline",
     ),
-    # The protocol's other alarm coils (see the alarm coil fields), untested.
-    Value(  # protocol coil 02 Ch1 level2; not seen yet
+    # The protocol's other alarm coils (see the alarm coil fields).
+    Value(  # protocol coil 02 Ch1 level2
         "ph_tank_2_empty",
         "pH Tank 2 Empty",
         lambda d: d.alarm_coil_02,
@@ -1299,7 +1295,7 @@ VALUES = (
         icon="mdi:cup-off-outline",
         icon_off="mdi:cup-outline",
     ),
-    Value(  # protocol coil 05 OUT OF RANGE ALARM1; not seen yet
+    Value(  # protocol coil 05 OUT OF RANGE ALARM1
         "ph_out_of_range",
         "pH Out of Range",
         lambda d: d.alarm_coil_05,
@@ -1311,7 +1307,7 @@ VALUES = (
         icon="mdi:alert-circle-outline",
         icon_off="mdi:check-circle-outline",
     ),
-    Value(  # protocol coil 06 OUT OF RANGE ALARM2; not seen yet
+    Value(  # protocol coil 06 OUT OF RANGE ALARM2
         "cl_out_of_range",
         "Cl Out of Range",
         lambda d: d.alarm_coil_06,
@@ -1323,7 +1319,7 @@ VALUES = (
         icon="mdi:alert-circle-outline",
         icon_off="mdi:check-circle-outline",
     ),
-    Value(  # protocol coil 07 Dosing Alarm ch2 (out IS); not seen yet
+    Value(  # protocol coil 07 Dosing Alarm ch2 (out IS)
         "cl_pulse_dosing_alarm",
         "Cl Pulse Dosing Alarm",
         lambda d: d.alarm_coil_07,
@@ -1335,7 +1331,7 @@ VALUES = (
         icon="mdi:timer-alert-outline",
         icon_off="mdi:timer-check-outline",
     ),
-    Value(  # protocol coil 08 Dosing Alarm ch2 (out relè); not seen yet
+    Value(  # protocol coil 08 Dosing Alarm ch2 (out relè)
         "cl_relay_dosing_alarm",
         "Cl Relay Dosing Alarm",
         lambda d: d.alarm_coil_08,
@@ -1347,7 +1343,7 @@ VALUES = (
         icon="mdi:timer-alert-outline",
         icon_off="mdi:timer-check-outline",
     ),
-    Value(  # protocol coil 09 Dosing Alarm ch1 (out IS1); not seen yet
+    Value(  # protocol coil 09 Dosing Alarm ch1 (out IS1)
         "ph_pulse_1_dosing_alarm",
         "pH Pulse 1 Dosing Alarm",
         lambda d: d.alarm_coil_09,
@@ -1359,7 +1355,7 @@ VALUES = (
         icon="mdi:timer-alert-outline",
         icon_off="mdi:timer-check-outline",
     ),
-    Value(  # protocol coil 10 Dosing Alarm ch1 (out relè); not seen yet
+    Value(  # protocol coil 10 Dosing Alarm ch1 (out relè)
         "ph_relay_dosing_alarm",
         "pH Relay Dosing Alarm",
         lambda d: d.alarm_coil_10,
@@ -1371,7 +1367,7 @@ VALUES = (
         icon="mdi:timer-alert-outline",
         icon_off="mdi:timer-check-outline",
     ),
-    Value(  # protocol coil 11 Dosing Alarm ch1 (out IS2); not seen yet
+    Value(  # protocol coil 11 Dosing Alarm ch1 (out IS2)
         "ph_pulse_2_dosing_alarm",
         "pH Pulse 2 Dosing Alarm",
         lambda d: d.alarm_coil_11,
@@ -1383,7 +1379,7 @@ VALUES = (
         icon="mdi:timer-alert-outline",
         icon_off="mdi:timer-check-outline",
     ),
-    Value(  # protocol coil 12 Probe fail ch1; not seen yet
+    Value(  # protocol coil 12 Probe fail ch1
         "ph_probe_fail",
         "pH Probe Fail",
         lambda d: d.alarm_coil_12,
@@ -1395,7 +1391,7 @@ VALUES = (
         icon="mdi:flask-off-outline",
         icon_off="mdi:flask-outline",
     ),
-    Value(  # protocol coil 13 Probe Fail ch2; not seen yet
+    Value(  # protocol coil 13 Probe Fail ch2
         "cl_probe_fail",
         "Cl Probe Fail",
         lambda d: d.alarm_coil_13,
@@ -1440,7 +1436,7 @@ VALUES = (
         "Flow Time",
         lambda d: d.flow_time,
         "min",
-        # the keypad shows the time only for Reverse and Direct (2026-10-15)
+        # the keypad shows the time only for Reverse and Direct
         available=lambda d: d.flow_mode not in (None, FlowMode.DISABLED),
         category="setting",
         device_class="duration",

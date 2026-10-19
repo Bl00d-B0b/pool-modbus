@@ -1,7 +1,7 @@
 """Supported device types, one module each.
 
 To add a device type, write a module in this package that defines a
-``DEVICE_TYPE`` and list it in ``_TYPES``. See CONTRIBUTING.md.
+``DEVICE_TYPE`` and list it in ``_TYPES``.
 """
 
 from __future__ import annotations

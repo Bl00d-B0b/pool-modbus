@@ -1,7 +1,6 @@
 """Modbus device models for pool equipment."""
 
-from .config import DeviceEntry, load_devices
-from .connection import ConnectionConfig, Transport
+from .connection import ConnectionConfig, Transport, describe_connection
 from .devices import (
     DEVICE_TYPES,
     SCAN_GROUPS,
@@ -18,7 +17,6 @@ from .devices import (
 )
 from .devices.reading import update_or_keep
 from .devices.scan import group_model, read_plan
-from .reader import DeviceResult, read_devices
 
 __version__ = "2026.10.0"
 
@@ -28,8 +26,6 @@ __all__ = [
     "Action",
     "ConnectionConfig",
     "Cover",
-    "DeviceEntry",
-    "DeviceResult",
     "DeviceType",
     "Feature",
     "ImplausibleReadError",
@@ -39,10 +35,9 @@ __all__ = [
     "Value",
     "Variant",
     "__version__",
+    "describe_connection",
     "get_device_type",
     "group_model",
-    "load_devices",
-    "read_devices",
     "read_plan",
     "update_or_keep",
 ]

@@ -79,3 +79,11 @@ class ConnectionConfig:
         if not self.host:
             raise ValueError(f"{self.transport} needs a host")
         return self.host
+
+
+def describe_connection(config: ConnectionConfig) -> str:
+    """The connection as text, e.g. "tcp 192.168.1.50:502"."""
+    if config.transport is Transport.SERIAL:
+        framing = f"{config.bytesize}{config.parity}{config.stopbits}"
+        return f"serial {config.serial_port} {config.baudrate} {framing}"
+    return f"{config.transport} {config.host}:{config.port}"
