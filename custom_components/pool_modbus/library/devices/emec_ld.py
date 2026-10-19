@@ -367,7 +367,7 @@ class EmecLD(Component):
     ch2_pulse1_mode = enum(81, PulseMode, writable=PulseMode)
 
     # Switching relays "CH1 PH RELAY" (40082-40090) and "CH2 CL2 RELAY" (40212-40220):
-    # val1, val2, the duty cycle (%) at each, mode. Ton/Toff of Fixed PWM are not mapped.
+    # val1, val2, the duty cycle (%) at each (Ton/Toff in Fixed PWM), mode.
     ch1_relay_val1 = gauge(40, 0.01, writable=_hundredths(*PH_RANGE))
     ch1_relay_val2 = gauge(41, 0.01, writable=_hundredths(*PH_RANGE))
     # perc1/perc2: the duty cycles in Proportional PWM, Ton/Toff (0-250) in Fixed PWM.
@@ -844,7 +844,7 @@ _LABEL_VALUES = (
         "keypad_pin",
         "PIN",
         _pin,
-        category="diagnostic",  # the user's choice, though writable
+        category="diagnostic",  # shown among diagnostics, though writable
         feature="label",
         write=set_pin,
         text_pattern=PIN_PATTERN,
@@ -1236,7 +1236,7 @@ VALUES = (
     *_output_values(2, 1),
     *_relay_values(1),
     *_relay_values(2),
-    # Alarm and state coils; the live-confirmed ones first, then the user's notes.
+    # Alarm and state coils.
     Value(
         "standby",
         "Standby",

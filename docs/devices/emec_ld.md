@@ -19,14 +19,17 @@ wire address is the address a request sends.
 - When a device is added, the integration reads it once and accepts it as an
   EMEC LD only if both measurement divisors (40004, 40008) are 1, 10, 100 or 1000.
 - Modbus RTU on the controller's RS-485 port, directly or through a Modbus TCP
-  gateway. The integration keeps at least 100 ms between requests, as the
+  gateway. When a serial device is added, the form offers 9600 baud, 8 data
+  bits, no parity and 1 stop bit; set the line settings the controller uses.
+  The integration keeps at least 100 ms between requests, as the
   protocol document asks.
 
 ### Optional parts
 
 Each optional part can be switched off with its checkbox when the device is
 added or later in **Configure**. All are on by default. A part that is off has
-no entities and its registers and coils are not read.
+no entities, and the regular polls read only the parts that are on (the read
+when a device is set up reads all of them).
 
 | Part | Checkbox | Entities |
 |---|---|---|
@@ -105,8 +108,8 @@ apart. The integration numbers values by index, `index = (register - 40002) / 2`
 and sends a request for index i to wire address `2 * i + 1`. A request reads up
 to 125 values.
 
-With every optional part on, a full read is three holding register reads and
-seven coil reads:
+The read when a device is set up reads every value, in three holding register
+reads and seven coil reads:
 
 | Read | Wire address, count | Registers or coils |
 |---|---|---|
@@ -118,6 +121,9 @@ seven coil reads:
 | Coils | 48, 8 and 56, 8 | 48–63 |
 | Coils | 72, 8 | 75 |
 | Coils | 88, 8 | 90 |
+
+The regular polls read per group (fast, medium, slow) only the registers and
+coils of that group's values, for the parts that are on.
 
 ### Coil reads
 
@@ -401,8 +407,9 @@ the first in the low byte; unused characters are `-` and the integration shows
 the label without the trailing `-`.
 
 The PIN is the keypad password. It is written with function 06 as the number
-(0042 is stored as 42); a stored value above 9999 shows as unknown. Its wire
-address is never written to the integration's bus traffic log.
+(0042 is stored as 42); a stored value above 9999 shows as unknown. In the
+integration's bus traffic log its value is written as 0 (the address is kept),
+in both debug lines and traffic warnings.
 
 ## Probe voltages
 
@@ -421,7 +428,12 @@ Sensors with device class voltage and state class measurement, in the
 | RTC | `sensor.dosing_pump_rtc` | sensor, device class timestamp | 40044–40048 (43–47) |
 
 In the "Clock" part, read in the slow group, diagnostic, disabled by default.
-See Reading the clock below for the format.
+
+The RTC is read in Europe format, as date and 24 h time: 40044 holds the month
+(high byte) and day (low byte), 40046 the hour (high byte, 24 h) and the
+year − 2000 (low byte), 40048 the minute (low byte). The controller has no
+seconds over Modbus. The time is taken as local time; an invalid date shows as
+unknown.
 
 ## Differences from the protocol document
 
@@ -443,12 +455,6 @@ EMEC's protocol document:
 
 ## Not included
 
-**Reading the clock.** The RTC is read from 40044–40048 (wire 43–47) in Europe
-format: 40044 holds the month (high byte) and day (low byte), 40046 the hour
-(high byte, 24 h) and the year − 2000 (low byte), 40048 the minute (low byte).
-The controller has no seconds over Modbus. The time is taken as local time; an
-invalid date shows as unknown. RTC is a diagnostic sensor, disabled by default.
-
 **Setting the clock** is not included. The controller's clock setpoint is
 41624–41628, but on firmware 5.1.4 every write through it resets the clock's
 year to 2000, which only the keypad can correct.
@@ -456,9 +462,18 @@ year to 2000, which only the keypad can correct.
 **12/24 h and date format.** The AM/PM coils 45 and 46, the Europe/USA format
 coil 47 and the log time AM/PM coils 54 and 55 are not included. The
 integration reads the controller in Europe format: the date as day and month,
-the time in 24 h and the temperature in °C.
+the time in 24 h and the temperature in °C. The clock has no seconds over
+Modbus.
+
+**Writing the label** is not included: the label is read only. The
+controller's name editor keeps its own copy and writes it back when its menu is
+left.
 
 **Not readable over Modbus.** The controller does not make these readable over
 Modbus, so they are not included: the log records, the firmware version, the
-temperature probe voltage, the output manager, the mA outputs' "enable/disable
-on alarm", the log's output setting and the compensation settings.
+temperature probe voltage, the output manager, the mA Outputs menu's Enable /
+Disable on alarm and the log's output setting.
+
+**Compensation.** The compensation settings are not included. Cl compensation
+by pH shows in coils 233 and 241, which the protocol document does not list;
+pH compensation by temperature is not readable over Modbus.

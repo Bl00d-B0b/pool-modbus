@@ -46,7 +46,7 @@ PLATFORMS: list[Platform] = [
 RENAMED_KEYS = {
     "clock": "rtc",
     "sync_clock": "sync_rtc",
-    # EMEC pH pulse output 1 became "pH Relay 1" when output 2 was added.
+    # Keys renamed in development versions, migrated at setup.
     "pulse_rate_ph": "pulse_rate_ph_1",
     "ph_mode": "ph1_mode",
     "ph_max": "ph1_max",

@@ -139,11 +139,6 @@ class PoolController(Component):
         return None if self.pool_open is None else not self.pool_open
 
     @property
-    def backwash_days_text(self) -> str | None:
-        """The days as written, e.g. "Friday", "Weekdays", "Every day" or "Off"."""
-        return _days(self.backwash_days_written)
-
-    @property
     def backwash_time_written(self) -> str | None:
         return _time(self.backwash_hour_written, self.backwash_minute_written)
 

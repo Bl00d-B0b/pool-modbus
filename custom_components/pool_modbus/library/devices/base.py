@@ -276,9 +276,6 @@ class DeviceType:
         """Whether an updated model is really this device type."""
         return True if self.identify is None else bool(self.identify(device))
 
-    def default_features(self) -> frozenset[str]:
-        return frozenset(f.key for f in self.features if f.default)
-
     def enabled_values(self, features: Iterable[str]) -> tuple[Value, ...]:
         """The values that exist with ``features`` switched on."""
         on = set(features)

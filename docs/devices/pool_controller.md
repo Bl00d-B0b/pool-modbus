@@ -10,6 +10,8 @@ and Modbus ID 1.
 
 - Modbus RTU, 38400 8N1, on a serial port or through a Modbus TCP connection
   (for example a Modbus TCP-to-RS-485 gateway).
+  When a serial device is added, the form offers 9600 baud, 8 data bits, no
+  parity and 1 stop bit; choose 38400 8N1.
 - Holding registers 40017–40040, sent as wire addresses 16–39 (address =
   register − 40001).
 - Function 03 reads. The whole map, addresses 16–39, fits in one request of 24
@@ -121,8 +123,9 @@ Values:
 ## Optional parts
 
 Each device has two optional parts, both on by default and switched in
-Configure. While a part is off, its entities do not exist and its registers are
-not read.
+Configure. While a part is off, its entities do not exist and the regular polls
+read only the parts that are on (the read when a device is set up reads all of
+them).
 
 - **Backwash schedule:** Backwash Monday … Sunday, Backwash Time, Saved Backwash
   Schedule.

@@ -11,7 +11,6 @@ from homeassistant.const import (
     PERCENTAGE,
     EntityCategory,
     UnitOfElectricPotential,
-    UnitOfRatio,
     UnitOfTemperature,
     UnitOfTime,
 )
@@ -30,7 +29,6 @@ UNITS: dict[str, str] = {
     "mV": UnitOfElectricPotential.MILLIVOLT,
     "min": UnitOfTime.MINUTES,
     "s": UnitOfTime.SECONDS,
-    "ppm": UnitOfRatio.PARTS_PER_MILLION,
 }
 
 

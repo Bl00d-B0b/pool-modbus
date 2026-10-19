@@ -1,16 +1,14 @@
 # Pool equipment (pool-modbus)
 
-A Home Assistant integration, and a Python library, for pool equipment that
-speaks Modbus: a pool controller, a heating thermostat and a pH/Cl dosing
-controller.
+A Home Assistant integration for pool equipment that speaks Modbus: a pool
+controller, a heating thermostat and a pH/Cl dosing controller.
 
 - Home Assistant name: **Pool equipment**, domain `pool_modbus`
 - Version: **2026.10.0**
 - Requires Home Assistant **2026.9.0** or later
 - Installs through [HACS](https://hacs.xyz/) as a custom repository
 
-Each device type is modelled as typed Python (registers, scaling, byte layout)
-and checked by tests against data recorded from real devices.
+Each device type is modelled as typed Python (registers, scaling, byte layout).
 
 ## Supported devices
 
@@ -63,8 +61,9 @@ equipment**. Each device is added on its own, with its own connection:
    - serial: serial port, baud rate, data bits, parity and stop bits;
    - **Modbus ID**, 1–247, offered as 1.
 
-   The integration reads the device before it saves anything and checks that
-   it answers like the chosen device type.
+   The integration reads the device before it saves anything. The T010 and the
+   EMEC LD must also answer as the chosen device type; the pool controller only
+   has to answer.
 3. **Reading**: the polling intervals and the optional parts to read (see
    [Configure](#configure)).
 
@@ -95,13 +94,14 @@ can be added a second time with a prefix of its own.
 - **Log the bus traffic around failures** (see [Debugging](#debugging)).
 
 Optional parts, each a checkbox, all on by default. A part that is off has no
-entities, and its registers are not read.
+entities, and the regular polls read only the parts that are on (the read when
+a device is set up reads all of them).
 
 | Device | Optional parts |
 |---|---|
-| Pool controller | Backwash schedule; clock |
+| Pool controller | Read the backwash schedule; Read the clock |
 | T010 thermostat | none |
-| EMEC LD | Dosing settings (pH and Cl pulse outputs, timing); alarms and standby; mA outputs; data logging settings; label and PIN; probe voltages; clock |
+| EMEC LD | Read the dosing settings (outputs, alarms, timing): the settings of the five outputs, the alarm settings, timing, flow and priority; Read the alarms and standby; Read the mA outputs; Read the data logging settings; Read the label and PIN; Read probe voltages; Read the clock |
 
 ## How values are read
 
@@ -144,7 +144,7 @@ controller has a cover and buttons for its commands.
   answer reads from a cache, so a written value can take a moment to show.
 - A write that gets no reply (a gateway exception 0x0B or a timeout) is decided
   by that read-back: if the device shows the new value, the write succeeded.
-  The EMEC LD answers writes later than its gateway waits.
+  The EMEC LD can answer writes later than a gateway waits.
 - Writes to one device run one at a time.
 
 The pool controller may not carry out a light toggle (it ignores the light
@@ -203,7 +203,15 @@ writes nothing. Home Assistant's system log shows only the last few messages of
 a kind, so download the full log (**Settings → System → Logs**) to keep them.
 
 The EMEC LD's keypad PIN never appears in the log: its value is written as 0
-in both debug lines and traffic warnings.
+in both debug lines and traffic warnings. The PIN entity's state is the PIN
+itself, so when you enable it, exclude it from the recorder:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - text.dosing_pump_pin
+```
 
 ## Safety
 
