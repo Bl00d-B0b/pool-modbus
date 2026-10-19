@@ -13,6 +13,7 @@ def test_all_device_types_are_registered() -> None:
 
 def test_manufacturers() -> None:
     assert DEVICE_TYPES["t010"].manufacturer == "Optika ir technologija"
+    assert DEVICE_TYPES["pool_controller"].manufacturer == "Optika ir technologija"
     assert DEVICE_TYPES["emec_ld"].manufacturer == "EMEC"
 
 

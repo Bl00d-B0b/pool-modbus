@@ -17,7 +17,7 @@ recorded from real hardware, so the decoding is right once and stays right.
 
 | Device type | Key | Status | Tested with |
 |---|---|---|---|
-| Pool controller (filtration, cover, light, water level) | `pool_controller` | Read and write | [register map](docs/devices/pool_controller.md) |
+| Pool controller (Optika ir technologija): filtration, cover, light, water level | `pool_controller` | Read and write | [register map](docs/devices/pool_controller.md) |
 | T010 pool thermostat (Optika ir technologija) | `t010` | Read and write | Firmware 1.7, [register map](docs/devices/t010.md) |
 | EMEC LD series pH/Cl controller | `emec_ld` | Read and write (dosing outputs and relays, flow, alarm, mA output and logging settings, PIN) | LDPHCL, firmware 5.1.4, [register map](docs/devices/emec_ld.md) |
 

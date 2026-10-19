@@ -1,7 +1,8 @@
 # Pool controller
 
-A controller for filtration, the filter valve (backwash), the pool cover, the
-pool light and the water level. Verified through a Modbus TCP-to-RS-485
+A controller by Optika ir technologija (also the maker of the T010 thermostat) for
+filtration, the filter valve (backwash), the pool cover, the pool light and the
+water level. Verified through a Modbus TCP-to-RS-485
 gateway; the register map comes from the controller's register sheet and was
 checked against live data.
 
