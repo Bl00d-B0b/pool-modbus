@@ -261,6 +261,10 @@ async def test_data_logging(make_pump, ldphcl_snapshot) -> None:
     await values["log_start_time"].write(device, "23:59")
     await values["log_interval"].write(device, time(0, 30))
     await values["data_logging"].write(device, False)
+    assert values["data_logging"].name == "Logging Data"
+    off = await read(make_pump(dict(ldphcl_snapshot)))  # logging off: no times
+    assert value_text(values["log_start_time"], off) == "unavailable"
+    assert value_text(values["log_interval"], off) == "unavailable"
     assert pump.writes == [(529, 2359), (531, 30)]
     assert [r for r in pump.requests if r[0] == "write_coil"] == [("write_coil", 48, False)]
     with pytest.raises(ValueError):

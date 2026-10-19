@@ -290,9 +290,9 @@ the controller showed each keypad change about a minute after it was saved:
 
 | Setting | Address | Shown as |
 |---|---|---|
-| Log on | coil 48 | **Data Logging** (switch) |
-| Start time | 40530 (index 264), hour × 100 + minute | **Log Start Time** (time, HH:MM) |
-| Interval | 40532 (index 265), hour × 100 + minute | **Log Interval** (time, HH:MM, the keypad's "Every") |
+| Log on | coil 48 | **Logging Data** (switch; "Data Logging" until 2026-10-19) |
+| Start time | 40530 (index 264), hour × 100 + minute | **Log Start Time** (time, HH:MM; only while logging is on) |
+| Interval | 40532 (index 265), hour × 100 + minute | **Log Interval** (time, HH:MM, the keypad's "Every"; only while logging is on) |
 
 The protocol's coils 54 and 55 (log time AM / PM) belong to the USA format; this library
 reads the controller in Europe format (24 h), as for its clock, and does not use them.
@@ -485,7 +485,7 @@ disabled. The probe voltages are sensors.
 | pH / Cl Probe Failure Action | Selects: Dose, Stop (while the time is set) | | `play-circle-outline`, `stop-circle-outline` | coils 75, 90 | Slow |
 | pH / Cl / Temperature mA Output Mode | Selects: 0/20 mA, 4/20 mA | | `current-dc` | coils 49, 60, 50 | Slow |
 | pH / Cl / Temperature mA Output Max, Min | Numbers (input box); pH, mg/L, °C | `ph` (pH), `temperature` | `arrow-collapse-up`, `arrow-collapse-down` | 40124, 40126 / 40196, 40198 / 40128, 40130 | Slow |
-| Data Logging | Switch | | `database-clock` / `database-off-outline` | coil 48 | Slow |
+| Logging Data | Switch | | `database-clock` / `database-off-outline` | coil 48 | Slow |
 | Log Start Time, Log Interval | Times (HH:MM) | | `clock-start`, `timer-sync-outline` | 40530, 40532 | Slow |
 | Label | Diagnostic sensor | | `label-outline` | 40844–40870 | Slow |
 | PIN | Diagnostic text, exactly 4 digits, disabled by default | | `form-textbox-password` | 40542 | Slow |

@@ -69,6 +69,7 @@ RENAMED_KEYS = {
 """Value and action keys that were renamed: old key to new key."""
 
 OLD_NAMES: dict[str, tuple[str, ...]] = {
+    "data_logging": ("Data Logging",),  # until 2026-10-19
     # The pulse outputs, named "pH Relay 1/2" and "Cl Relay" until 2026-10-14 (and
     # earlier "pH ...", "pH Output 2 ...", "Cl Relay 1 ..."), now as on the controller.
     "pulse_rate_ph_1": ("pH Pulse Rate", "pH Relay 1 Pulse Rate"),

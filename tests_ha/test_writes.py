@@ -191,7 +191,7 @@ async def test_a_device_gets_only_the_controls_it_has(hass: HomeAssistant) -> No
     assert sorted(hass.states.async_entity_ids(SWITCH_DOMAIN)) == [
         "switch.dosing_pump_cl_range_high",
         "switch.dosing_pump_cl_range_low",
-        "switch.dosing_pump_data_logging",
+        "switch.dosing_pump_logging_data",
         "switch.dosing_pump_ph_range_high",
         "switch.dosing_pump_ph_range_low",
     ]

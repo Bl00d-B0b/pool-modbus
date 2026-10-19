@@ -778,7 +778,7 @@ def _log_time(field: str):
 _LOG_VALUES = (
     Value(
         "data_logging",
-        "Data Logging",
+        "Logging Data",  # "Data Logging" until 2026-10-19; sorts next to the two times
         lambda d: d.log_on,
         binary=True,
         category="setting",
@@ -791,6 +791,7 @@ _LOG_VALUES = (
         "log_start_time",
         "Log Start Time",
         lambda d: _hhmm_time(d.log_start_raw),
+        available=lambda d: d.log_on is True,  # only while logging is on
         category="setting",
         feature="data_logging",
         write=_log_time("log_start_raw"),
@@ -801,6 +802,7 @@ _LOG_VALUES = (
         "log_interval",
         "Log Interval",
         lambda d: _hhmm_time(d.log_interval_raw),
+        available=lambda d: d.log_on is True,
         category="setting",
         feature="data_logging",
         write=_log_time("log_interval_raw"),
