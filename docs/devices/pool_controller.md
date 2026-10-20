@@ -2,7 +2,7 @@
 
 Pool controller by Optika ir technologija for filtration, the filter valve
 (backwash), the pool cover, the pool light and the water level. In the
-integration "Pool equipment" (domain `pool_modbus`, version 2026.10.0) it is the
+integration "Pool equipment" (domain `pool_modbus`, version 2026.10.1) it is the
 device type **Pool controller**; a new device is offered the name "Controller"
 and Modbus ID 1.
 

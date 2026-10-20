@@ -3,7 +3,7 @@
 The EMEC LD series pH/chlorine controllers (dosing pumps), such as the
 **LDPHCL** (firmware 5.1.4). On an LDPHCL, channel 1 measures pH and channel 2
 free chlorine in mg/L. This page describes the device type as released in
-version 2026.10.0 of the Pool equipment integration (`pool_modbus`).
+version 2026.10.1 of the Pool equipment integration (`pool_modbus`).
 
 Registers are numbered as in EMEC's Modbus protocol document (`4xxxx`); the
 wire address is the address a request sends.

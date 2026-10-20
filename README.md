@@ -4,7 +4,7 @@ A Home Assistant integration for pool equipment that speaks Modbus: a pool
 controller, a heating thermostat and a pH/Cl dosing controller.
 
 - Home Assistant name: **Pool equipment**, domain `pool_modbus`
-- Version: **2026.10.0**
+- Version: **2026.10.1**
 - Requires Home Assistant **2026.9.0** or later
 - Installs through [HACS](https://hacs.xyz/) as a custom repository
 
