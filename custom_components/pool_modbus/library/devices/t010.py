@@ -142,10 +142,30 @@ THERMOSTAT = Thermostat(
     icon_off="mdi:thermometer-off",
 )
 
-# The water temperature, heating on/off, the setpoint, whether it is heating and the
-# heating power are all the thermostat's: its current temperature, mode, target,
-# action and the heating_power attribute.
+# Heating on/off, whether it is heating and the heating power are the thermostat's:
+# its mode, action and the heating_power attribute. The water temperature and the
+# target are also plain sensors, for cards, graphs and long-term statistics; they come
+# from the thermostat's own read.
 VALUES = (
+    Value(
+        "water_temperature",
+        "Water Temperature",
+        lambda d: d.temperature,
+        "°C",
+        category="measurement",
+        scan_group="fast",  # read with the thermostat
+        device_class="temperature",
+        icon="mdi:pool-thermometer",
+    ),
+    Value(
+        "target_temperature",
+        "Target Temperature",
+        lambda d: d.setpoint,
+        "°C",
+        scan_group="fast",
+        device_class="temperature",
+        icon="mdi:thermometer-check",
+    ),
     Value(
         "delaying",
         "Heating Delay",

@@ -18,7 +18,7 @@ from .devices import (
 from .devices.reading import update_or_keep
 from .devices.scan import group_model, read_plan
 
-__version__ = "2026.10.1"
+__version__ = "2026.10.2"
 
 __all__ = [
     "DEVICE_TYPES",
